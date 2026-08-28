@@ -7,6 +7,7 @@ type Props = {
   latitude: number;
   longitude: number;
   heading?: number;
+  photoId?: string;
 };
 
 type StreetPhoto = {
@@ -31,7 +32,7 @@ type ApiResponse = {
   error?: string;
 };
 
-export default function StreetViewStage({ latitude, longitude }: Props) {
+export default function StreetViewStage({ latitude, longitude, photoId }: Props) {
   const sphereRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const [photos, setPhotos] = useState<StreetPhoto[]>([]);
@@ -46,9 +47,10 @@ export default function StreetViewStage({ latitude, longitude }: Props) {
     setPhotos([]);
     setIndex(0);
 
-    fetch(`/api/street-imagery?lat=${encodeURIComponent(latitude)}&lng=${encodeURIComponent(longitude)}`, {
-      signal: controller.signal,
-    })
+    const query = new URLSearchParams({ lat: String(latitude), lng: String(longitude) });
+    if (photoId) query.set('photoId', photoId);
+
+    fetch(`/api/street-imagery?${query.toString()}`, { signal: controller.signal })
       .then(async (response) => {
         const data = (await response.json()) as ApiResponse;
         if (!response.ok) throw new Error(data.error || 'Street imagery lookup failed.');
@@ -66,7 +68,7 @@ export default function StreetViewStage({ latitude, longitude }: Props) {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [latitude, longitude]);
+  }, [latitude, longitude, photoId]);
 
   const current = photos[index];
   const isSphere = useMemo(
@@ -105,7 +107,7 @@ export default function StreetViewStage({ latitude, longitude }: Props) {
       {loading && (
         <div className="map-error">
           <strong>Loading open street imagery…</strong>
-          <span>Searching KartaView near this location.</span>
+          <span>{photoId ? 'Loading the admin-approved KartaView starting frame.' : 'Searching KartaView near this location.'}</span>
         </div>
       )}
 
