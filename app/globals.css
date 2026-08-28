@@ -24,6 +24,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .primary:hover:not(:disabled) { filter: brightness(1.06); }
 .secondary:hover, .ghost:hover { border-color: rgba(255,255,255,.22); }
 
+.map-first-home { height: 100vh; overflow: hidden; }
+.home-map-stage { position: relative; height: calc(100vh - 72px); min-height: 560px; overflow: hidden; }
+.home-map-canvas, .home-map-canvas .guess-map-wrap { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border-radius: 0; }
+.home-map-canvas .map-hint { display: none; }
+.home-map-stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(6,9,7,.72) 0%, rgba(6,9,7,.24) 38%, rgba(6,9,7,.06) 65%, rgba(6,9,7,.22) 100%); z-index: 2; }
+.home-play-card { position: absolute; z-index: 3; left: clamp(24px, 6vw, 88px); top: 50%; transform: translateY(-50%); width: min(470px, calc(100vw - 48px)); padding: 30px; border: 1px solid rgba(255,255,255,.12); border-radius: 24px; background: rgba(11,14,12,.88); box-shadow: 0 26px 80px rgba(0,0,0,.38); backdrop-filter: blur(14px); }
+.home-play-card h1 { margin: 10px 0 12px; font-size: clamp(52px, 7vw, 84px); line-height: .95; letter-spacing: -.055em; }
+.home-play-card p { margin: 0 0 24px; color: var(--muted); font-size: 17px; line-height: 1.6; }
+.home-play-button { width: 100%; padding: 16px 20px; font-size: 17px; }
+.home-play-meta { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.home-play-meta span { padding: 7px 9px; border: 1px solid var(--line); border-radius: 999px; color: #c7d0c9; background: rgba(255,255,255,.035); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+
 .hero { max-width: 1000px; margin: 0 auto; padding: 90px 24px 56px; text-align: center; }
 .eyebrow { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .18em; }
 .hero h1 { margin: 18px 0; font-size: clamp(48px, 8vw, 88px); line-height: .98; letter-spacing: -.055em; }
@@ -88,4 +100,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .live-panorama { height: calc(100vh - 72px); min-height: 560px; }
   .live-guess-card { left: 12px; right: 12px; bottom: 12px; width: auto; }
   .guess-map-wrap { height: 210px; }
+  .home-map-stage { min-height: 520px; }
+  .home-play-card { left: 16px; right: 16px; bottom: 16px; top: auto; transform: none; width: auto; padding: 22px; }
+  .home-play-card h1 { font-size: 52px; }
 }
