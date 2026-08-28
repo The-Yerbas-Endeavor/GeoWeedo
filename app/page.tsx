@@ -46,9 +46,30 @@ export default function HomePage() {
     const featured = approved.filter((item) => item.sponsored).sort((a, b) => (b.sponsorPriority || 0) - (a.sponsorPriority || 0)).slice(0, 1);
     const organic = approved.filter((item) => !item.sponsored);
     const curated = [...featured, ...organic];
-    const demos = dispensaries.filter((item) => item.active);
-    const pool = curated.length >= 5 ? curated : [...curated, ...demos.filter((demo) => !curated.some((item) => item.id === demo.id))];
+    const starters = dispensaries.filter((item) => item.active);
+    const pool = curated.length >= 5 ? curated : [...curated, ...starters.filter((starter) => !curated.some((item) => item.id === starter.id))];
     return pool.slice(0, 5);
+  }, [approvedDispensaries]);
+
+  const homeLocations = useMemo(() => {
+    const merged = [...approvedDispensaries.filter((item) => item.active), ...dispensaries.filter((item) => item.active)];
+    const seen = new Set<string>();
+    return merged
+      .filter((item) => {
+        const key = item.slug || item.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        lat: item.latitude,
+        lng: item.longitude,
+        city: item.city,
+        region: item.region,
+        sponsored: item.sponsored,
+      }));
   }, [approvedDispensaries]);
 
   const current = rounds[round];
@@ -80,14 +101,14 @@ export default function HomePage() {
         <SiteHeader />
         <section className="home-map-stage">
           <div className="home-map-canvas">
-            <GuessMap guess={null} revealed={false} onGuess={() => {}} />
+            <GuessMap guess={null} revealed={false} onGuess={() => {}} browseMode locations={homeLocations} />
           </div>
           <div className="home-play-card">
             <div className="eyebrow">THE DISPENSARY GEOGRAPHY GAME</div>
             <h1>GeoWeedo</h1>
             <p>Explore a real dispensary location, read the clues, and pinpoint where you are.</p>
             <button className="primary home-play-button" onClick={beginGame}>Play GeoWeedo</button>
-            <div className="home-play-meta"><span>5 rounds</span><span>25,000 points</span><span>YERB rewards</span></div>
+            <div className="home-play-meta"><span>5 rounds</span><span>{homeLocations.length} map locations</span><span>YERB rewards</span></div>
           </div>
         </section>
       </main>
