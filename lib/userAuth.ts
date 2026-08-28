@@ -38,20 +38,22 @@ export function consumeWalletLoginChallenge(address: string) {
 export function createOrLoginUser(handle: string, address: string, userAgent?: string | null) {
   const db = getDatabase();
   const now = new Date();
+  const normalizedHandle = handle.trim();
   let user = db.prepare('SELECT * FROM users WHERE yerbas_address = ?').get(address) as any;
   if (!user) {
     const id = `user-${crypto.randomUUID()}`;
     db.prepare(`INSERT INTO users (id, username, display_name, yerbas_address, wallet_verified_at, reward_eligible, account_status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 1, 'active', ?, ?)`)
-      .run(id, handle || null, handle || null, address, now.toISOString(), now.toISOString(), now.toISOString());
+                VALUES (?, NULL, ?, ?, ?, 1, 'active', ?, ?)`)
+      .run(id, normalizedHandle || null, address, now.toISOString(), now.toISOString(), now.toISOString());
     const walletId = `wallet-${crypto.randomUUID()}`;
     db.prepare(`INSERT INTO wallets (id, user_id, currency, status, created_at, updated_at) VALUES (?, ?, 'YERB', 'active', ?, ?)`)
       .run(walletId, id, now.toISOString(), now.toISOString());
     user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   } else {
-    db.prepare(`UPDATE users SET username = COALESCE(NULLIF(?, ''), username), display_name = COALESCE(NULLIF(?, ''), display_name),
+    db.prepare(`UPDATE users SET display_name = COALESCE(NULLIF(?, ''), display_name),
                 wallet_verified_at = ?, reward_eligible = 1, last_login_at = ?, updated_at = ? WHERE id = ?`)
-      .run(handle, handle, now.toISOString(), now.toISOString(), now.toISOString(), user.id);
+      .run(normalizedHandle, now.toISOString(), now.toISOString(), now.toISOString(), user.id);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
   }
 
   const wallet = db.prepare('SELECT id FROM wallets WHERE user_id = ?').get(user.id) as any;
@@ -69,7 +71,13 @@ export function createOrLoginUser(handle: string, address: string, userAgent?: s
   return {
     token: rawToken,
     expires,
-    user: { id: user.id, handle: handle || user.username || 'Player', yerbasAddress: address, walletVerifiedAt: now.toISOString(), rewardEligible: true },
+    user: {
+      id: user.id,
+      handle: normalizedHandle || user.display_name || user.username || 'Player',
+      yerbasAddress: address,
+      walletVerifiedAt: now.toISOString(),
+      rewardEligible: true,
+    },
   };
 }
 
