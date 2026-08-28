@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import GuessMap, { LatLng } from '@/components/GuessMap';
+import SiteHeader from '@/components/SiteHeader';
 import StreetViewStage from '@/components/StreetViewStage';
 import { dispensaries, type Dispensary } from '@/data/dispensaries';
+import { DEFAULT_YERB_PER_POINT, yerbFromScore } from '@/lib/yerbasRewards';
 
 const MAX_SCORE = 5000;
 
@@ -14,11 +17,7 @@ function distanceKm(a: LatLng, b: LatLng) {
   const dLng = toRadians(b.lng - a.lng);
   const lat1 = toRadians(a.lat);
   const lat2 = toRadians(b.lat);
-
-  const haversine =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-
+  const haversine = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return radiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
@@ -52,6 +51,8 @@ export default function HomePage() {
 
   const current = rounds[round];
   const total = scores.reduce((sum, value) => sum + value, 0);
+  const completedTotal = total + (revealed && roundScore !== null ? roundScore : 0);
+  const estimatedYerb = yerbFromScore(completedTotal, DEFAULT_YERB_PER_POINT);
   const onGuess = useCallback((value: LatLng) => setGuess(value), []);
 
   const beginGame = () => {
@@ -86,15 +87,11 @@ export default function HomePage() {
   if (!started) {
     return (
       <main className="landing-shell">
-        <nav className="topbar">
-          <div className="brand"><span className="brand-pin">✦</span> GEOWEEDO</div>
-          <div className="nav-actions"><button className="ghost">How to play</button><button className="ghost">About</button></div>
-        </nav>
-
+        <SiteHeader />
         <section className="hero">
           <div className="eyebrow">THE DISPENSARY GEOGRAPHY GAME</div>
           <h1>How well do you know<br /><span>weed geography?</span></h1>
-          <p>Explore the surroundings, find the clues, and pinpoint the dispensary on the map.</p>
+          <p>Explore the surroundings, find the clues, pinpoint the dispensary, and build a score that can become eligible for YERB rewards.</p>
           <div className="hero-actions">
             <button className="primary" onClick={beginGame}>Play GeoWeedo</button>
             <button className="secondary" onClick={beginGame}>Daily Challenge</button>
@@ -102,7 +99,7 @@ export default function HomePage() {
           <div className="feature-row">
             <div><strong>5</strong><span>rounds per game</span></div>
             <div><strong>25K</strong><span>maximum score</span></div>
-            <div><strong>∞</strong><span>places to learn</span></div>
+            <div><strong>YERB</strong><span>skill-based reward layer</span></div>
           </div>
         </section>
 
@@ -116,6 +113,7 @@ export default function HomePage() {
             <span>LOOK AROUND</span>
             <h2>Every storefront tells a story.</h2>
             <p>Architecture, mountains, road markings, signs and neighboring businesses can all give the location away.</p>
+            <p><Link className="yerb-score" href="/rewards">See how YERB rewards work →</Link></p>
           </div>
         </section>
       </main>
@@ -128,7 +126,8 @@ export default function HomePage() {
         <div className="result-card">
           <div className="eyebrow">GAME COMPLETE</div>
           <h1>{total.toLocaleString()} <small>/ 25,000</small></h1>
-          <p>GeoWeedo 🌿</p>
+          <p className="yerb-score">Estimated eligible reward: {yerbFromScore(total, DEFAULT_YERB_PER_POINT)} YERB</p>
+          <p>Rewards are not automatically paid yet; wallet verification and anti-abuse checks come before on-chain payouts.</p>
           <div className="score-list">{scores.map((score, index) => <div key={index}><span>Round {index + 1}</span><strong>{score.toLocaleString()}</strong></div>)}</div>
           <button className="primary" onClick={beginGame}>Play again</button>
         </div>
@@ -141,9 +140,9 @@ export default function HomePage() {
   return (
     <main className="game-shell">
       <header className="game-header">
-        <div className="brand"><span className="brand-pin">✦</span> GEOWEEDO</div>
+        <Link className="brand brand-link" href="/"><span className="brand-pin">✦</span> GEOWEEDO</Link>
         <div className="round-meter">ROUND {round + 1} / {rounds.length}</div>
-        <div className="running-score">{total.toLocaleString()} pts</div>
+        <div className="running-score">{completedTotal.toLocaleString()} pts · <span className="yerb-score">~{estimatedYerb} YERB</span></div>
       </header>
 
       <section className="panorama-stage live-panorama">
@@ -159,12 +158,8 @@ export default function HomePage() {
 
           {!revealed ? (
             <div className="guess-actions">
-              <div className="guess-status">
-                {guess ? 'Pin placed — move it by clicking elsewhere.' : 'Place a pin where you think the dispensary is.'}
-              </div>
-              <button className="primary full" disabled={!guess} onClick={revealGuess}>
-                {guess ? 'Make Guess' : 'Place a Pin First'}
-              </button>
+              <div className="guess-status">{guess ? 'Pin placed — move it by clicking elsewhere.' : 'Place a pin where you think the dispensary is.'}</div>
+              <button className="primary full" disabled={!guess} onClick={revealGuess}>{guess ? 'Make Guess' : 'Place a Pin First'}</button>
             </div>
           ) : (
             <div className="reveal">
@@ -173,6 +168,7 @@ export default function HomePage() {
               <p>{current.city}, {current.region}</p>
               <div className="reveal-stat"><span>Distance</span><strong>{roundDistance === null ? '—' : roundDistance < 1 ? `${Math.round(roundDistance * 1000)} m` : `${roundDistance.toFixed(1)} km`}</strong></div>
               <div className="reveal-stat"><span>Score</span><strong>{roundScore?.toLocaleString() ?? '—'}</strong></div>
+              <div className="reveal-stat"><span>Estimated YERB</span><strong className="yerb-score">{roundScore === null ? '—' : yerbFromScore(roundScore, DEFAULT_YERB_PER_POINT)}</strong></div>
               <button className="primary full" onClick={nextRound}>{round + 1 === rounds.length ? 'See Results' : 'Next Round'}</button>
             </div>
           )}
