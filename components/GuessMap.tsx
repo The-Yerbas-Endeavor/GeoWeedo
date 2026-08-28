@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   LngLatBounds,
   Map as LibreMap,
@@ -55,7 +55,30 @@ function featureCoordinates(feature: MapGeoJSONFeature): [number, number] | null
   if (feature.geometry.type !== 'Point') return null;
   const coordinates = feature.geometry.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
-  return [Number(coordinates[0]), Number(coordinates[1])];
+  const lng = Number(coordinates[0]);
+  const lat = Number(coordinates[1]);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : null;
+}
+
+function validLocation(location: MapLocation) {
+  return Number.isFinite(location.lat) && Number.isFinite(location.lng)
+    && location.lat >= -90 && location.lat <= 90
+    && location.lng >= -180 && location.lng <= 180;
+}
+
+function locationData(locations: MapLocation[]) {
+  const features = locations.filter(validLocation).map((location) => ({
+    type: 'Feature' as const,
+    geometry: { type: 'Point' as const, coordinates: [location.lng, location.lat] as [number, number] },
+    properties: {
+      id: location.id,
+      name: location.name,
+      city: location.city || '',
+      region: location.region || '',
+      sponsored: Boolean(location.sponsored),
+    },
+  }));
+  return { type: 'FeatureCollection' as const, features };
 }
 
 export default function GuessMap({
@@ -73,10 +96,15 @@ export default function GuessMap({
   const revealedRef = useRef(revealed);
   const browseModeRef = useRef(browseMode);
   const onGuessRef = useRef(onGuess);
+  const locationsRef = useRef<MapLocation[]>(locations);
+  const fittedBrowseBoundsRef = useRef(false);
+  const [browseLoadedCount, setBrowseLoadedCount] = useState(0);
+  const [mapWarning, setMapWarning] = useState<string | null>(null);
 
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
   useEffect(() => { browseModeRef.current = browseMode; }, [browseMode]);
   useEffect(() => { onGuessRef.current = onGuess; }, [onGuess]);
+  useEffect(() => { locationsRef.current = locations; }, [locations]);
 
   useEffect(() => {
     if (!nodeRef.current || mapRef.current) return;
@@ -100,132 +128,156 @@ export default function GuessMap({
         boxZoom: true,
       });
 
+      mapRef.current = map;
       map.touchZoomRotate.disableRotation();
       map.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
-      map.on('load', () => map.resize());
+
+      const ensureBrowseLayers = () => {
+        if (!browseModeRef.current || !map.isStyleLoaded()) return;
+        const data = locationData(locationsRef.current);
+        let source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+        if (!source) {
+          map.addSource(LOCATION_SOURCE, {
+            type: 'geojson',
+            data,
+            cluster: true,
+            clusterMaxZoom: 12,
+            clusterRadius: 48,
+          });
+          source = map.getSource(LOCATION_SOURCE) as GeoJSONSource;
+        } else {
+          source.setData(data);
+        }
+
+        if (!map.getLayer(CLUSTER_LAYER)) {
+          map.addLayer({
+            id: CLUSTER_LAYER,
+            type: 'circle',
+            source: LOCATION_SOURCE,
+            filter: ['has', 'point_count'],
+            paint: {
+              'circle-color': '#2f8f46',
+              'circle-radius': ['step', ['get', 'point_count'], 18, 25, 23, 100, 29, 500, 35],
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#dff7e2',
+            },
+          });
+        }
+        if (!map.getLayer(CLUSTER_COUNT_LAYER)) {
+          map.addLayer({
+            id: CLUSTER_COUNT_LAYER,
+            type: 'symbol',
+            source: LOCATION_SOURCE,
+            filter: ['has', 'point_count'],
+            layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12 },
+            paint: { 'text-color': '#ffffff' },
+          });
+        }
+        if (!map.getLayer(POINT_LAYER)) {
+          map.addLayer({
+            id: POINT_LAYER,
+            type: 'circle',
+            source: LOCATION_SOURCE,
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+              'circle-color': ['case', ['boolean', ['get', 'sponsored'], false], '#f5c451', '#67d66e'],
+              'circle-radius': 7,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#102114',
+            },
+          });
+        }
+
+        setBrowseLoadedCount(data.features.length);
+        setMapWarning(null);
+
+        if (data.features.length && !fittedBrowseBoundsRef.current) {
+          const bounds = new LngLatBounds();
+          for (const feature of data.features) bounds.extend(feature.geometry.coordinates);
+          if (!bounds.isEmpty()) {
+            fittedBrowseBoundsRef.current = true;
+            map.fitBounds(bounds, { padding: 70, maxZoom: 5.5, duration: 500 });
+          }
+        }
+      };
+
+      map.on('load', () => {
+        map.resize();
+        ensureBrowseLayers();
+      });
+      map.on('styledata', ensureBrowseLayers);
       map.on('click', (event) => {
         if (browseModeRef.current || revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       });
+      map.on('click', CLUSTER_LAYER, async (event) => {
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        const clusterId = Number(feature?.properties?.cluster_id);
+        if (!feature || !Number.isFinite(clusterId)) return;
+        const coordinates = featureCoordinates(feature);
+        if (!coordinates) return;
+        const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+        if (!source) return;
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        map.easeTo({ center: coordinates, zoom });
+      });
+      map.on('click', POINT_LAYER, (event) => {
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        if (!feature) return;
+        const coordinates = featureCoordinates(feature);
+        if (!coordinates) return;
+        const properties = feature.properties || {};
+        const subtitle = [properties.city, properties.region].filter(Boolean).join(', ');
+        const text = subtitle ? `${properties.name}\n${subtitle}` : String(properties.name || 'Dispensary');
+        new Popup({ offset: 12 }).setLngLat(coordinates).setText(text).addTo(map);
+      });
+      for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
+        map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+      }
       map.on('error', (event) => {
-        console.warn('GeoWeedo map resource warning:', event.error?.message || event);
+        const message = event.error?.message || 'Map resource failed to load.';
+        console.warn('GeoWeedo map resource warning:', message);
+        if (!/tile/i.test(message)) setMapWarning(message);
       });
 
-      mapRef.current = map;
-      const resizeTimer = window.setTimeout(() => map.resize(), 250);
+      const resizeTimer = window.setTimeout(() => {
+        map.resize();
+        ensureBrowseLayers();
+      }, 250);
       return () => {
         window.clearTimeout(resizeTimer);
         map.remove();
         mapRef.current = null;
       };
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Map initialization failed.';
+      setMapWarning(message);
       console.error('GeoWeedo map initialization failed:', error);
     }
   }, []);
 
   useEffect(() => {
+    locationsRef.current = locations;
     const map = mapRef.current;
     if (!map || !browseMode) return;
-
-    const applyLocations = () => {
-      const features = locations
-        .filter((location) => Number.isFinite(location.lat) && Number.isFinite(location.lng))
-        .map((location) => ({
-          type: 'Feature' as const,
-          geometry: { type: 'Point' as const, coordinates: [location.lng, location.lat] },
-          properties: {
-            id: location.id,
-            name: location.name,
-            city: location.city || '',
-            region: location.region || '',
-            sponsored: Boolean(location.sponsored),
-          },
-        }));
-
-      const data = { type: 'FeatureCollection' as const, features };
-      const existing = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
-      if (existing) {
-        existing.setData(data);
-      } else {
-        map.addSource(LOCATION_SOURCE, {
-          type: 'geojson',
-          data,
-          cluster: true,
-          clusterMaxZoom: 12,
-          clusterRadius: 48,
-        });
-        map.addLayer({
-          id: CLUSTER_LAYER,
-          type: 'circle',
-          source: LOCATION_SOURCE,
-          filter: ['has', 'point_count'],
-          paint: {
-            'circle-color': '#2f8f46',
-            'circle-radius': ['step', ['get', 'point_count'], 18, 25, 23, 100, 29, 500, 35],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#dff7e2',
-          },
-        });
-        map.addLayer({
-          id: CLUSTER_COUNT_LAYER,
-          type: 'symbol',
-          source: LOCATION_SOURCE,
-          filter: ['has', 'point_count'],
-          layout: {
-            'text-field': ['get', 'point_count_abbreviated'],
-            'text-size': 12,
-          },
-          paint: { 'text-color': '#ffffff' },
-        });
-        map.addLayer({
-          id: POINT_LAYER,
-          type: 'circle',
-          source: LOCATION_SOURCE,
-          filter: ['!', ['has', 'point_count']],
-          paint: {
-            'circle-color': ['case', ['boolean', ['get', 'sponsored'], false], '#f5c451', '#67d66e'],
-            'circle-radius': 7,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#102114',
-          },
-        });
-
-        map.on('click', CLUSTER_LAYER, async (event) => {
-          const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
-          const clusterId = Number(feature?.properties?.cluster_id);
-          if (!feature || !Number.isFinite(clusterId)) return;
-          const coordinates = featureCoordinates(feature);
-          if (!coordinates) return;
-          const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource;
-          const zoom = await source.getClusterExpansionZoom(clusterId);
-          map.easeTo({ center: coordinates, zoom });
-        });
-
-        map.on('click', POINT_LAYER, (event) => {
-          const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
-          if (!feature) return;
-          const coordinates = featureCoordinates(feature);
-          if (!coordinates) return;
-          const properties = feature.properties || {};
-          const subtitle = [properties.city, properties.region].filter(Boolean).join(', ');
-          const text = subtitle ? `${properties.name}\n${subtitle}` : String(properties.name || 'Dispensary');
-          new Popup({ offset: 12 }).setLngLat(coordinates).setText(text).addTo(map);
-        });
-
-        for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
-          map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
-          map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+    const data = locationData(locations);
+    const apply = () => {
+      const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData(data);
+      setBrowseLoadedCount(data.features.length);
+      if (data.features.length && !fittedBrowseBoundsRef.current) {
+        const bounds = new LngLatBounds();
+        for (const feature of data.features) bounds.extend(feature.geometry.coordinates);
+        if (!bounds.isEmpty()) {
+          fittedBrowseBoundsRef.current = true;
+          map.fitBounds(bounds, { padding: 70, maxZoom: 5.5, duration: 500 });
         }
       }
-
-      if (features.length) {
-        const bounds = new LngLatBounds();
-        features.forEach((feature) => bounds.extend(feature.geometry.coordinates as [number, number]));
-        if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 70, maxZoom: 5.5, duration: 500 });
-      }
     };
-
-    if (map.isStyleLoaded()) applyLocations(); else map.once('load', applyLocations);
+    if (map.isStyleLoaded() && map.getSource(LOCATION_SOURCE)) apply();
+    else map.once('idle', apply);
   }, [browseMode, locations]);
 
   useEffect(() => {
@@ -283,6 +335,8 @@ export default function GuessMap({
         tabIndex={0}
         aria-label={browseMode ? 'GeoWeedo dispensary location map' : 'Interactive open-source guessing map'}
       />
+      {browseMode && <div className="map-data-status">{browseLoadedCount.toLocaleString()} locations loaded</div>}
+      {mapWarning && <div className="map-data-warning">Map warning: {mapWarning}</div>}
       {browseMode
         ? <div className="map-hint">Drag to pan · scroll/pinch to zoom · click clusters or locations</div>
         : !revealed && <div className="map-hint">Drag to pan · scroll/pinch to zoom · click to place your guess</div>}
