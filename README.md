@@ -12,27 +12,53 @@ GeoWeedo is a dispensary geography guessing game inspired by location-guessing g
 - Interactive 360 panorama rendering when KartaView supplies spherical imagery
 - Step-through sequence navigation for ordinary street-level photos
 - Click-to-place and move guesses
-- Real Haversine distance calculation
-- Distance-based scoring up to 5,000 points per round
-- Reveal map with guess, actual location, and connecting line
-- Cached server-side KartaView lookups to reduce public API traffic
-- Daily Challenge entry point
-- Typed dispensary data model with demo seed locations
-- Responsive dark map/game UI
+- Real Haversine distance calculation and scoring
+- Admin dispensary imagery-validation workflow
+- Admin-selected starting frame per approved dispensary
+- Runtime approved game pool with activate/deactivate controls
+- Address lookup through a server-side OpenStreetMap Nominatim proxy
+- GeoWeedo-hosted imagery provider field reserved for fallback coverage
 
 ## Zero-Google stack
 
-GeoWeedo v0.2 does not require a Google Maps API key, Google Cloud project, or Google billing account.
+GeoWeedo does not require a Google Maps API key, Google Cloud project, or Google billing account.
 
-The guessing map uses MapLibre GL JS with the OpenFreeMap public style. Street-level imagery uses KartaView's public read API. KartaView coverage is crowdsourced and therefore less complete than Google Street View, so rounds should only become active after imagery coverage is verified.
+The guessing map uses MapLibre GL JS with the OpenFreeMap public style. Street-level imagery uses KartaView's public read API. KartaView coverage is crowdsourced and therefore less complete than Google Street View, so real dispensaries are admitted to gameplay only after an admin reviews and approves a starting image.
 
-When KartaView reports spherical/360 imagery, GeoWeedo renders it through the open-source Photo Sphere Viewer. Otherwise, players can move forward and backward through the nearby KartaView image sequence.
+## Admin imagery validation
 
-No environment variable is required for this stack.
+The admin workflow lives at:
+
+```text
+/admin/dispensaries
+```
+
+Set a strong server-side secret in `.env.local`:
+
+```env
+GEOWEEDO_ADMIN_SECRET=replace_with_a_long_random_value
+```
+
+The workflow is:
+
+1. Enter the real dispensary name and address.
+2. Resolve coordinates with the admin-only OpenStreetMap address search, or enter coordinates manually.
+3. Search KartaView near the storefront.
+4. Step through the returned sequence or inspect a 360 view.
+5. Choose the exact starting frame.
+6. Approve it.
+7. The dispensary is saved as verified and active and becomes eligible for the live game pool.
+8. It can later be deactivated without deleting the validation record.
+
+Approved records are stored in `data/runtime/dispensaries.json`. That directory is gitignored so normal `git pull` and rebuilds do not overwrite production approvals. The current runtime JSON store is intentionally simple for the first production layer; the Prisma schema is already extended so these records can later move into PostgreSQL without redesigning the imagery model.
+
+The public Nominatim service is used only for deliberate admin-triggered address searches through a server proxy with caching and an identifying User-Agent. Do not turn it into autocomplete or bulk geocoding.
 
 ## Development
 
 ```bash
+cp .env.example .env.local
+nano .env.local
 npm install
 npm run dev
 ```
@@ -49,18 +75,13 @@ npm run build
 sudo systemctl restart geoweedo
 ```
 
+The systemd service should continue to run as the `geo` user so it can create and update `data/runtime/dispensaries.json`.
+
 ## Next implementation layer
 
-1. Replace demo coordinates with curated real dispensaries that have verified KartaView or GeoWeedo-hosted imagery.
-2. Add an admin imagery-validation workflow that searches KartaView before activating a dispensary.
-3. Add a GeoWeedo-hosted imagery fallback for important dispensaries without KartaView coverage.
-4. Move dispensaries into PostgreSQL/PostGIS.
-5. Add deterministic Daily Challenge generation and leaderboard persistence.
-6. Add difficulty modes: Easy, Normal, Hard, and No Move.
-7. Store an imagery provider and starting frame/panorama reference per dispensary so live rounds never depend on an unverified nearest-image search.
-
-## Dispensary record
-
-The model supports identity, coordinates, locality, website/photo metadata, panorama placement, recreational/medical flags, verification, and active status.
-
-The current demo records are placeholders. Before a real dispensary is admitted to the live game pool, GeoWeedo should verify that its street imagery exists, is close enough to the storefront, and provides a fair playable starting view.
+1. Add GeoWeedo-hosted imagery upload/storage for important dispensaries without KartaView coverage.
+2. Add CSV/import review queue for batches of candidate dispensaries.
+3. Migrate the runtime approval store to PostgreSQL/PostGIS once the curation workflow is stable.
+4. Add deterministic Daily Challenge generation and leaderboard persistence.
+5. Add difficulty modes: Easy, Normal, Hard, and No Move.
+6. Add admin users/roles instead of the initial shared admin secret.
