@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dispensary {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  latitude       Float
+  longitude      Float
+  streetAddress  String?
+  city           String
+  region         String
+  country        String
+  website        String?
+  photoUrl       String?
+  panoramaId     String?
+  heading        Float?
+  recreational   Boolean  @default(false)
+  medical        Boolean  @default(false)
+  verified       Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  rounds         Round[]
+}
+
+model Game {
+  id          String   @id @default(cuid())
+  mode        String   @default("standard")
+  dailyKey    String?
+  totalScore  Int      @default(0)
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  rounds      Round[]
+}
+
+model Round {
+  id            String     @id @default(cuid())
+  gameId        String
+  dispensaryId  String
+  roundNumber   Int
+  guessLat      Float?
+  guessLon      Float?
+  distanceKm    Float?
+  score         Int?
+  createdAt     DateTime   @default(now())
+
+  game          Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  dispensary    Dispensary @relation(fields: [dispensaryId], references: [id])
+
+  @@unique([gameId, roundNumber])
+}
