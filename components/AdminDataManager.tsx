@@ -31,7 +31,7 @@ export default function AdminDataManager() {
   }
 
   async function upload() {
-    if (!file) return setStatus('Choose a CSV file first.');
+    if (!file) return setStatus('Choose a CSV or JSON file first.');
     setBusy(true);
     try {
       const form = new FormData();
@@ -49,9 +49,7 @@ export default function AdminDataManager() {
     setBusy(true);
     try {
       const response = await fetch('/api/admin/candidates/fetch-official', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preset: 'oregon-olcc' }),
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ preset: 'oregon-olcc' }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Oregon OLCC fetch failed.');
@@ -59,6 +57,27 @@ export default function AdminDataManager() {
       await load();
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Oregon OLCC fetch failed.'); }
     finally { setBusy(false); }
+  }
+
+  function useCaliforniaPreset() {
+    setSource('california-dcc');
+    setSourceUrl('https://www.cannabis.ca.gov/resources/search-for-licensed-business/');
+    setSourceLicense('California Department of Cannabis Control official license data');
+    setStatus('California DCC preset selected. Import a current DCC license export; storefront Retailer (Type 10) records are the primary GeoWeedo candidates.');
+  }
+
+  function useNevadaPreset() {
+    setSource('nevada-ccb');
+    setSourceUrl('https://ccb.nv.gov/list-of-licensees/');
+    setSourceLicense('Nevada Cannabis Compliance Board official license data');
+    setStatus('Nevada CCB preset selected. Import the current active-license or licensed-retail export.');
+  }
+
+  function useWashingtonPreset() {
+    setSource('washington-lcb');
+    setSourceUrl('https://lcb.wa.gov/records/frequently-requested-lists');
+    setSourceLicense('Washington State Liquor and Cannabis Board official licensing data');
+    setStatus('Washington LCB preset selected. Import the current cannabis retailer/license export.');
   }
 
   function review(item: Candidate) {
@@ -79,22 +98,23 @@ export default function AdminDataManager() {
         <div className="admin-panel">
           <h2>1. Admin access</h2>
           <div className="field-row"><input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="GEOWEEDO_ADMIN_SECRET" /><button onClick={() => load().catch((e) => setStatus(e.message))}>Unlock</button></div>
-          <h2>2. Import licensing CSV</h2>
+          <h2>2. Import licensing CSV / JSON</h2>
           <div className="admin-form">
-            <select value={source} onChange={(e) => setSource(e.target.value)}><option value="official-license-registry">Official license registry</option><option value="state-open-data">State open data</option><option value="business-supplied">Business supplied</option><option value="weedmaps-authorized">Weedmaps authorized/API</option></select>
+            <select value={source} onChange={(e) => setSource(e.target.value)}><option value="official-license-registry">Official license registry</option><option value="california-dcc">California DCC</option><option value="oregon-olcc">Oregon OLCC</option><option value="nevada-ccb">Nevada CCB</option><option value="washington-lcb">Washington LCB</option><option value="state-open-data">Other state open data</option><option value="business-supplied">Business supplied</option><option value="weedmaps-authorized">Weedmaps authorized/API</option></select>
             <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Official source URL" />
             <input value={sourceLicense} onChange={(e) => setSourceLicense(e.target.value)} placeholder="Source/license note" />
-            <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             <button className="primary" disabled={busy || !secret || !file} onClick={upload}>Import candidates</button>
           </div>
-          <p className="admin-help">The importer recognizes common name/address/city/state/latitude/longitude/license columns and preserves source provenance. Every row stays a candidate until imagery is validated.</p>
+          <p className="admin-help">The importer recognizes common business/name/address/city/state/latitude/longitude/license fields in CSV or JSON and preserves source provenance. Every record stays a candidate until imagery is validated.</p>
         </div>
         <div className="admin-panel">
-          <h2>Official source workflow</h2>
+          <h2>Official source presets</h2>
+          <div className="source-note"><strong>California · DCC</strong><span>DCC's daily license search is the authoritative check. Prioritize active Type 10 storefront retailer licenses for playable locations.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
           <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy || !secret} onClick={fetchOregon}>Fetch Oregon OLCC retailers now</button></div>
-          <div className="source-note"><strong>Nevada</strong><span>Cannabis Compliance Board active-license and licensed-retail exports can be downloaded and imported as CSV.</span></div>
-          <div className="source-note"><strong>Washington</strong><span>Liquor and Cannabis Board licensing/open-data exports can be imported through the CSV workflow.</span></div>
-          <p className="admin-help">Direct feeds and uploaded regulator exports both enter the same candidate queue. Review imagery before anything becomes playable. Do not scrape Weedmaps public listings.</p>
+          <div className="source-note"><strong>Nevada · CCB</strong><span>Cannabis Compliance Board active-license and licensed-retail exports.</span><button className="secondary" onClick={useNevadaPreset}>Use Nevada CCB preset</button></div>
+          <div className="source-note"><strong>Washington · LCB</strong><span>Liquor and Cannabis Board cannabis retailer/licensing exports.</span><button className="secondary" onClick={useWashingtonPreset}>Use Washington LCB preset</button></div>
+          <p className="admin-help">Direct feeds and uploaded regulator exports enter the same candidate queue. Review imagery before anything becomes playable. Do not scrape Weedmaps public listings.</p>
         </div>
       </section>
       <section className="admin-panel approved-list">
