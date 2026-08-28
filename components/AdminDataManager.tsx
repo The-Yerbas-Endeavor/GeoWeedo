@@ -15,7 +15,7 @@ export default function AdminDataManager() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceLicense, setSourceLicense] = useState('official public data');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [status, setStatus] = useState('Unlock to import an official licensing CSV.');
+  const [status, setStatus] = useState('Unlock to import official licensing data.');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { const saved = sessionStorage.getItem('geoweedo-admin-secret'); if (saved) setSecret(saved); }, []);
@@ -45,6 +45,22 @@ export default function AdminDataManager() {
     finally { setBusy(false); }
   }
 
+  async function fetchOregon() {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/admin/candidates/fetch-official', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset: 'oregon-olcc' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Oregon OLCC fetch failed.');
+      setStatus(`Oregon OLCC: fetched ${data.fetched} retailer rows and added ${data.added} new candidates. ${data.total} candidates are queued.`);
+      await load();
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Oregon OLCC fetch failed.'); }
+    finally { setBusy(false); }
+  }
+
   function review(item: Candidate) {
     sessionStorage.setItem('geoweedo-candidate-draft', JSON.stringify(item));
     window.location.href = '/admin/dispensaries';
@@ -57,7 +73,7 @@ export default function AdminDataManager() {
 
   return (
     <main className="admin-shell">
-      <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Official data import</h1></div><div className="admin-links"><a href="/admin/dispensaries">Imagery validator</a><a href="/admin/sponsorships">Sponsorships</a><a href="/">Game</a></div></header>
+      <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Official data import</h1></div><div className="admin-links"><a href="/admin/dispensaries">Imagery validator</a><a href="/admin/rewards">Rewards</a><a href="/admin/sponsorships">Sponsorships</a><a href="/">Game</a></div></header>
       <div className="admin-status">{status}</div>
       <section className="admin-grid">
         <div className="admin-panel">
@@ -75,10 +91,10 @@ export default function AdminDataManager() {
         </div>
         <div className="admin-panel">
           <h2>Official source workflow</h2>
-          <div className="source-note"><strong>Oregon</strong><span>OLCC Marijuana Businesses and Endorsements / Oregon Open Data.</span></div>
-          <div className="source-note"><strong>Nevada</strong><span>Cannabis Compliance Board active license list and licensed retail locations.</span></div>
-          <div className="source-note"><strong>Washington</strong><span>Liquor and Cannabis Board cannabis licensing/open-data exports.</span></div>
-          <p className="admin-help">Download the regulator's current CSV/export, import it here, then review candidates one at a time. Do not scrape Weedmaps public listings.</p>
+          <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy || !secret} onClick={fetchOregon}>Fetch Oregon OLCC retailers now</button></div>
+          <div className="source-note"><strong>Nevada</strong><span>Cannabis Compliance Board active-license and licensed-retail exports can be downloaded and imported as CSV.</span></div>
+          <div className="source-note"><strong>Washington</strong><span>Liquor and Cannabis Board licensing/open-data exports can be imported through the CSV workflow.</span></div>
+          <p className="admin-help">Direct feeds and uploaded regulator exports both enter the same candidate queue. Review imagery before anything becomes playable. Do not scrape Weedmaps public listings.</p>
         </div>
       </section>
       <section className="admin-panel approved-list">
