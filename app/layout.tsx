@@ -3,10 +3,11 @@ import '@photo-sphere-viewer/core/index.css';
 import './globals.css';
 import './open-stack.css';
 import './admin.css';
+import './site.css';
 
 export const metadata = {
   title: 'GeoWeedo',
-  description: 'Guess the dispensary. Own the map.',
+  description: 'Guess the dispensary. Own the map. Earn YERB.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
