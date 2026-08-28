@@ -14,7 +14,13 @@ export async function POST(request: NextRequest) {
   if (existing?.address) return NextResponse.json({ address: existing.address, existing: true });
 
   try {
-    const address = String(await yerbasRpc<string>('getnewaddress', [`geoweedo:${user.walletId}`]));
+    let address: string;
+    try {
+      address = String(await yerbasRpc<string>('getnewaddress', [`geoweedo:${user.walletId}`]));
+    } catch {
+      // Older Yerbas/Bitcoin-derived wallets may not accept a label parameter.
+      address = String(await yerbasRpc<string>('getnewaddress', []));
+    }
     const now = new Date().toISOString();
     db.prepare(`INSERT INTO wallet_addresses (id, wallet_id, address, address_type, label, active, created_at)
                 VALUES (?, ?, ?, 'deposit', ?, 1, ?)`)
