@@ -1,5 +1,7 @@
+import 'server-only';
+
 import crypto from 'crypto';
-import { readRuntimeJson, writeRuntimeJson } from '@/lib/runtimeStore';
+import { getDatabase } from '@/lib/sqlite';
 
 export type DispensaryCandidate = {
   id: string;
@@ -24,29 +26,88 @@ export type DispensaryCandidate = {
   updatedAt: string;
 };
 
-const FILE = 'dispensary-candidates.json';
-export async function listCandidates() { return readRuntimeJson<DispensaryCandidate[]>(FILE, []); }
+function optionalString(value: unknown) { return value == null || value === '' ? undefined : String(value); }
+function optionalNumber(value: unknown) { return value == null ? undefined : Number(value); }
+function fingerprint(row: Pick<DispensaryCandidate, 'name' | 'streetAddress' | 'city' | 'region'>) {
+  return `${row.name}|${row.streetAddress || ''}|${row.city || ''}|${row.region || ''}`.trim().toLowerCase();
+}
+
+function rowToCandidate(row: Record<string, unknown>): DispensaryCandidate {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    streetAddress: optionalString(row.street_address),
+    city: optionalString(row.city),
+    region: optionalString(row.region),
+    country: optionalString(row.country),
+    latitude: optionalNumber(row.latitude),
+    longitude: optionalNumber(row.longitude),
+    website: optionalString(row.website),
+    licenseNumber: optionalString(row.license_number),
+    dataSource: String(row.data_source),
+    sourceUrl: optionalString(row.source_url),
+    sourceLicense: optionalString(row.source_license),
+    status: String(row.status) as DispensaryCandidate['status'],
+    imageryStatus: String(row.imagery_status || 'unchecked') as NonNullable<DispensaryCandidate['imageryStatus']>,
+    imageryCount: optionalNumber(row.imagery_count),
+    imageryCheckedAt: optionalString(row.imagery_checked_at),
+    imageryMessage: optionalString(row.imagery_message),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export async function listCandidates() {
+  return (getDatabase().prepare('SELECT * FROM dispensary_candidates ORDER BY updated_at DESC').all() as Record<string, unknown>[]).map(rowToCandidate);
+}
 
 export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 'status' | 'createdAt' | 'updatedAt'>[]) {
-  const items = await listCandidates();
+  const db = getDatabase();
   const now = new Date().toISOString();
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO dispensary_candidates (
+      id,fingerprint,name,street_address,city,region,country,latitude,longitude,website,
+      license_number,data_source,source_url,source_license,status,imagery_status,
+      imagery_count,imagery_checked_at,imagery_message,created_at,updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+
   let added = 0;
   for (const row of rows) {
-    const fingerprint = `${row.name}|${row.streetAddress || ''}|${row.city || ''}|${row.region || ''}`.toLowerCase();
-    const duplicate = items.some((item) => `${item.name}|${item.streetAddress || ''}|${item.city || ''}|${item.region || ''}`.toLowerCase() === fingerprint);
-    if (duplicate || !row.name.trim()) continue;
-    items.push({ ...row, id: `candidate-${crypto.randomUUID()}`, status: 'candidate', imageryStatus: row.imageryStatus || 'unchecked', createdAt: now, updatedAt: now });
-    added++;
+    if (!row.name?.trim()) continue;
+    const result = insert.run(
+      `candidate-${crypto.randomUUID()}`, fingerprint(row), row.name.trim(), row.streetAddress ?? null,
+      row.city ?? null, row.region ?? null, row.country ?? null, row.latitude ?? null, row.longitude ?? null,
+      row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
+      row.sourceLicense ?? null, 'candidate', row.imageryStatus || 'unchecked', row.imageryCount ?? null,
+      row.imageryCheckedAt ?? null, row.imageryMessage ?? null, now, now,
+    );
+    added += Number(result.changes);
   }
-  await writeRuntimeJson(FILE, items);
-  return { added, total: items.length };
+
+  const count = db.prepare('SELECT COUNT(*) AS count FROM dispensary_candidates').get() as { count: number } | undefined;
+  return { added, total: Number(count?.count ?? 0) };
 }
 
 export async function updateCandidate(id: string, patch: Partial<DispensaryCandidate>) {
-  const items = await listCandidates();
-  const index = items.findIndex((item) => item.id === id);
-  if (index < 0) return null;
-  items[index] = { ...items[index], ...patch, id: items[index].id, updatedAt: new Date().toISOString() };
-  await writeRuntimeJson(FILE, items);
-  return items[index];
+  const db = getDatabase();
+  const currentRow = db.prepare('SELECT * FROM dispensary_candidates WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!currentRow) return null;
+  const current = rowToCandidate(currentRow);
+  const next: DispensaryCandidate = { ...current, ...patch, id: current.id, updatedAt: new Date().toISOString() };
+
+  db.prepare(`
+    UPDATE dispensary_candidates SET
+      fingerprint=?,name=?,street_address=?,city=?,region=?,country=?,latitude=?,longitude=?,website=?,
+      license_number=?,data_source=?,source_url=?,source_license=?,status=?,imagery_status=?,imagery_count=?,
+      imagery_checked_at=?,imagery_message=?,updated_at=? WHERE id=?
+  `).run(
+    fingerprint(next), next.name, next.streetAddress ?? null, next.city ?? null, next.region ?? null,
+    next.country ?? null, next.latitude ?? null, next.longitude ?? null, next.website ?? null,
+    next.licenseNumber ?? null, next.dataSource, next.sourceUrl ?? null, next.sourceLicense ?? null,
+    next.status, next.imageryStatus || 'unchecked', next.imageryCount ?? null, next.imageryCheckedAt ?? null,
+    next.imageryMessage ?? null, next.updatedAt, id,
+  );
+
+  return next;
 }
