@@ -14,7 +14,6 @@ const emptyForm = {
 };
 
 export default function AdminDispensaryManager() {
-  const [secret, setSecret] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [photos, setPhotos] = useState<StreetPhoto[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -22,14 +21,12 @@ export default function AdminDispensaryManager() {
   const [hostedFile, setHostedFile] = useState<File | null>(null);
   const [hosted360, setHosted360] = useState(false);
   const [saved, setSaved] = useState<SavedDispensary[]>([]);
-  const [status, setStatus] = useState('Enter the admin secret to begin.');
+  const [status, setStatus] = useState('Loading imagery validator…');
   const [busy, setBusy] = useState(false);
   const sphereRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
 
   useEffect(() => {
-    const remembered = sessionStorage.getItem('geoweedo-admin-secret');
-    if (remembered) setSecret(remembered);
     try {
       const draftRaw = sessionStorage.getItem('geoweedo-candidate-draft');
       if (draftRaw) {
@@ -43,6 +40,7 @@ export default function AdminDispensaryManager() {
         sessionStorage.removeItem('geoweedo-candidate-draft');
       }
     } catch {}
+    loadSaved().catch((error) => setStatus(error.message));
   }, []);
 
   const selected = photos[selectedIndex];
@@ -51,17 +49,26 @@ export default function AdminDispensaryManager() {
   useEffect(() => {
     viewerRef.current?.destroy(); viewerRef.current = null;
     if (!selected || !isSphere || !sphereRef.current) return;
-    viewerRef.current = new Viewer({ container: sphereRef.current, panorama: selected.imageUrl, navbar: ['zoom', 'move', 'fullscreen'], defaultYaw: ((selected.heading || 0) * Math.PI) / 180 });
+    viewerRef.current = new Viewer({
+      container: sphereRef.current,
+      panorama: selected.imageUrl,
+      navbar: ['zoom', 'move', 'fullscreen'],
+      defaultYaw: ((selected.heading || 0) * Math.PI) / 180,
+      mousemove: true,
+      mousewheel: true,
+      mousewheelCtrlKey: false,
+      touchmoveTwoFingers: false,
+    });
     return () => { viewerRef.current?.destroy(); viewerRef.current = null; };
   }, [selected, isSphere]);
 
-  const headers = { 'x-geoweedo-admin': secret };
-
   async function loadSaved() {
-    sessionStorage.setItem('geoweedo-admin-secret', secret);
-    const response = await fetch('/api/admin/dispensaries', { headers }); const data = await response.json();
+    const response = await fetch('/api/admin/dispensaries', { cache: 'no-store' });
+    if (response.status === 401) { window.location.href = '/admin/login'; return; }
+    const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Admin access failed.');
-    setSaved(data.dispensaries || []); setStatus('Admin unlocked. Enter a dispensary and validate its imagery.');
+    setSaved(data.dispensaries || []);
+    setStatus((current) => current.startsWith('Candidate loaded') ? current : 'Imagery validator ready.');
   }
 
   async function geocode() {
@@ -69,7 +76,9 @@ export default function AdminDispensaryManager() {
     if (!query) return setStatus('Enter an address first.');
     setBusy(true);
     try {
-      const response = await fetch(`/api/admin/geocode?q=${encodeURIComponent(query)}`, { headers }); const data = await response.json();
+      const response = await fetch(`/api/admin/geocode?q=${encodeURIComponent(query)}`);
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Address lookup failed.');
       const hit = data.results?.[0]; if (!hit) throw new Error('No OpenStreetMap address match found.');
       setForm((current) => ({ ...current, latitude: String(hit.lat), longitude: String(hit.lng), city: current.city || hit.city || '', region: current.region || hit.region || '', country: current.country || hit.country || 'USA' }));
@@ -99,7 +108,9 @@ export default function AdminDispensaryManager() {
     setBusy(true);
     try {
       const body = new FormData(); body.set('file', hostedFile); body.set('slug', form.name);
-      const response = await fetch('/api/admin/imagery/upload', { method: 'POST', headers, body }); const data = await response.json();
+      const response = await fetch('/api/admin/imagery/upload', { method: 'POST', body });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Image upload failed.');
       const photo: StreetPhoto = { id: data.photoId, lat, lng, heading: 0, fieldOfView: hosted360 ? 360 : 0, projection: hosted360 ? 'SPHERE' : 'FLAT', imageUrl: data.imageUrl, sequenceId: 'geoweedo', sequenceIndex: 0 };
       setImageryProvider('geoweedo'); setPhotos([photo]); setSelectedIndex(0);
@@ -113,11 +124,12 @@ export default function AdminDispensaryManager() {
     setBusy(true);
     try {
       const response = await fetch('/api/admin/dispensaries', {
-        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, latitude: Number(form.latitude), longitude: Number(form.longitude), imageryProvider,
           imageryPhotoId: selected.id, imagerySequenceId: selected.sequenceId, imageryLatitude: selected.lat, imageryLongitude: selected.lng,
           imageryHeading: selected.heading, imageryFieldOfView: selected.fieldOfView, imageryProjection: selected.projection, imageryUrl: selected.imageUrl, active: true }),
       });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Approval failed.');
       setStatus(`${data.dispensary.name} approved with ${imageryProvider === 'geoweedo' ? 'GeoWeedo-hosted' : 'KartaView'} imagery.`);
       setForm(emptyForm); setPhotos([]); setSelectedIndex(0); setHostedFile(null); setHosted360(false); setImageryProvider('kartaview'); await loadSaved();
@@ -126,32 +138,37 @@ export default function AdminDispensaryManager() {
   }
 
   async function toggle(item: SavedDispensary) {
-    const response = await fetch('/api/admin/dispensaries', { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, active: !item.active }) });
+    const response = await fetch('/api/admin/dispensaries', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, active: !item.active }) });
+    if (response.status === 401) { window.location.href = '/admin/login'; return; }
     if (response.ok) await loadSaved();
+  }
+
+  async function logout() {
+    await fetch('/api/admin/auth/logout', { method: 'POST' });
+    window.location.href = '/admin/login';
   }
 
   return (
     <main className="admin-shell">
-      <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Dispensary imagery validation</h1></div><div className="admin-links"><a href="/admin/data">Data import</a><a href="/admin/sponsorships">Sponsorships</a><a href="/">Game</a></div></header>
+      <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Dispensary imagery validation</h1></div><div className="admin-links"><a href="/admin/data">Data import</a><a href="/admin/rewards">Rewards</a><a href="/admin/sponsorships">Sponsorships</a><a href="/admin/withdrawals">Withdrawals</a><a href="/">Game</a><button className="ghost" onClick={logout}>Log out</button></div></header>
       <div className="admin-status">{status}</div>
       <section className="admin-grid">
         <div className="admin-panel">
-          <h2>1. Admin access</h2><div className="field-row"><input type="password" placeholder="GEOWEEDO_ADMIN_SECRET" value={secret} onChange={(e) => setSecret(e.target.value)} /><button onClick={() => loadSaved().catch((e) => setStatus(e.message))}>Unlock</button></div>
-          <h2>2. Dispensary</h2><div className="admin-form">
+          <h2>Dispensary</h2><div className="admin-form">
             <input placeholder="Dispensary name" value={form.name} onChange={(e) => setForm({...form, name:e.target.value})} />
             <input placeholder="Street address" value={form.streetAddress} onChange={(e) => setForm({...form, streetAddress:e.target.value})} />
             <div className="field-row"><input placeholder="City" value={form.city} onChange={(e) => setForm({...form, city:e.target.value})} /><input placeholder="State / region" value={form.region} onChange={(e) => setForm({...form, region:e.target.value})} /></div>
             <div className="field-row"><input placeholder="Country" value={form.country} onChange={(e) => setForm({...form, country:e.target.value})} /><input placeholder="Website (optional)" value={form.website} onChange={(e) => setForm({...form, website:e.target.value})} /></div>
             <div className="field-row"><select value={form.dataSource} onChange={(e) => setForm({...form, dataSource:e.target.value})}><option value="manual">Manual / business supplied</option><option value="state-registry">Official license registry</option><option value="open-data">Compatible open data</option><option value="weedmaps-authorized">Weedmaps authorized/API</option></select><input placeholder="Source URL (optional)" value={form.sourceUrl} onChange={(e) => setForm({...form, sourceUrl:e.target.value})} /></div>
             <input placeholder="Source license / permission note (optional)" value={form.sourceLicense} onChange={(e) => setForm({...form, sourceLicense:e.target.value})} />
-            <button onClick={geocode} disabled={busy || !secret}>Find coordinates from address</button>
+            <button onClick={geocode} disabled={busy}>Find coordinates from address</button>
             <div className="field-row"><input placeholder="Latitude" value={form.latitude} onChange={(e) => setForm({...form, latitude:e.target.value})} /><input placeholder="Longitude" value={form.longitude} onChange={(e) => setForm({...form, longitude:e.target.value})} /></div>
             <div className="check-row"><label><input type="checkbox" checked={form.recreational} onChange={(e) => setForm({...form, recreational:e.target.checked})} /> Recreational</label><label><input type="checkbox" checked={form.medical} onChange={(e) => setForm({...form, medical:e.target.checked})} /> Medical</label></div>
-            <button className="primary" onClick={checkCoverage} disabled={busy || !secret}>Check KartaView coverage</button>
-            <div className="hosted-upload"><strong>Or use GeoWeedo-hosted imagery</strong><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setHostedFile(e.target.files?.[0] || null)} /><label><input type="checkbox" checked={hosted360} onChange={(e) => setHosted360(e.target.checked)} /> Equirectangular 360° panorama</label><button onClick={uploadHosted} disabled={busy || !secret || !hostedFile}>Upload hosted image</button></div>
+            <button className="primary" onClick={checkCoverage} disabled={busy}>Check KartaView coverage</button>
+            <div className="hosted-upload"><strong>Or use GeoWeedo-hosted imagery</strong><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setHostedFile(e.target.files?.[0] || null)} /><label><input type="checkbox" checked={hosted360} onChange={(e) => setHosted360(e.target.checked)} /> Equirectangular 360° panorama</label><button onClick={uploadHosted} disabled={busy || !hostedFile}>Upload hosted image</button></div>
           </div>
         </div>
-        <div className="admin-panel preview-panel"><h2>3. Validate starting imagery</h2>{!selected ? <div className="empty-preview">No imagery selected yet.</div> : <><div className="admin-imagery">{isSphere ? <div ref={sphereRef} className="admin-sphere" /> : <img src={selected.imageUrl} alt="Selected starting frame" />}</div>{photos.length > 1 && <div className="frame-controls"><button onClick={() => setSelectedIndex(Math.max(0, selectedIndex - 1))} disabled={selectedIndex===0}>← Previous</button><strong>{selectedIndex + 1} / {photos.length}</strong><button onClick={() => setSelectedIndex(Math.min(photos.length - 1, selectedIndex + 1))} disabled={selectedIndex>=photos.length-1}>Next →</button></div>}<div className="frame-meta"><span>{imageryProvider === 'geoweedo' ? 'GeoWeedo hosted' : 'KartaView'}</span><span>Photo {selected.id}</span><span>{isSphere ? '360° imagery' : `${selected.fieldOfView || 'standard'}° FOV`}</span></div><button className="primary full" onClick={approve} disabled={busy}>Approve this starting frame</button></>}</div>
+        <div className="admin-panel preview-panel"><h2>Validate starting imagery</h2>{!selected ? <div className="empty-preview">No imagery selected yet.</div> : <><div className="admin-imagery">{isSphere ? <div ref={sphereRef} className="admin-sphere" /> : <img src={selected.imageUrl} alt="Selected starting frame" />}</div>{photos.length > 1 && <div className="frame-controls"><button onClick={() => setSelectedIndex(Math.max(0, selectedIndex - 1))} disabled={selectedIndex===0}>← Previous</button><strong>{selectedIndex + 1} / {photos.length}</strong><button onClick={() => setSelectedIndex(Math.min(photos.length - 1, selectedIndex + 1))} disabled={selectedIndex>=photos.length-1}>Next →</button></div>}<div className="frame-meta"><span>{imageryProvider === 'geoweedo' ? 'GeoWeedo hosted' : 'KartaView'}</span><span>Photo {selected.id}</span><span>{isSphere ? '360° imagery' : `${selected.fieldOfView || 'standard'}° FOV`}</span></div><button className="primary full" onClick={approve} disabled={busy}>Approve this starting frame</button></>}</div>
       </section>
       <section className="admin-panel approved-list"><h2>Approved game pool</h2>{saved.length === 0 ? <p>No approved real dispensaries yet.</p> : saved.map((item) => <div className="approved-row" key={item.id}><div><strong>{item.name}</strong><span>{item.city}, {item.region} · {item.imageryProvider} · {item.dataSource || 'manual'}</span></div><button onClick={() => toggle(item)}>{item.active ? 'Deactivate' : 'Activate'}</button></div>)}</section>
       <p className="admin-attribution">Address search © OpenStreetMap contributors. KartaView imagery © contributors. GeoWeedo-hosted images must be supplied with permission for game use.</p>
