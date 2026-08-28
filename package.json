@@ -1,12 +1,14 @@
 {
   "name": "geoweedo",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "db:init": "node --experimental-strip-types scripts/init-db.mjs",
+    "admin:create": "node --experimental-strip-types scripts/create-admin.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
   },
