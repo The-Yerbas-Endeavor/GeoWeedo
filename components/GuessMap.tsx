@@ -51,6 +51,13 @@ const CLUSTER_LAYER = 'browse-clusters';
 const CLUSTER_COUNT_LAYER = 'browse-cluster-count';
 const POINT_LAYER = 'browse-points';
 
+function featureCoordinates(feature: MapGeoJSONFeature): [number, number] | null {
+  if (feature.geometry.type !== 'Point') return null;
+  const coordinates = feature.geometry.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  return [Number(coordinates[0]), Number(coordinates[1])];
+}
+
 export default function GuessMap({
   guess,
   actual = null,
@@ -187,19 +194,21 @@ export default function GuessMap({
           const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
           const clusterId = Number(feature?.properties?.cluster_id);
           if (!feature || !Number.isFinite(clusterId)) return;
+          const coordinates = featureCoordinates(feature);
+          if (!coordinates) return;
           const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource;
           const zoom = await source.getClusterExpansionZoom(clusterId);
-          const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
           map.easeTo({ center: coordinates, zoom });
         });
 
         map.on('click', POINT_LAYER, (event) => {
           const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
-          if (!feature || feature.geometry.type !== 'Point') return;
+          if (!feature) return;
+          const coordinates = featureCoordinates(feature);
+          if (!coordinates) return;
           const properties = feature.properties || {};
           const subtitle = [properties.city, properties.region].filter(Boolean).join(', ');
           const text = subtitle ? `${properties.name}\n${subtitle}` : String(properties.name || 'Dispensary');
-          const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
           new Popup({ offset: 12 }).setLngLat(coordinates).setText(text).addTo(map);
         });
 
