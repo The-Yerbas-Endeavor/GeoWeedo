@@ -1,6 +1,6 @@
 {
   "name": "geoweedo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@photo-sphere-viewer/core": "5.15.1",
+    "maplibre-gl": "6.3.0",
     "next": "14.2.15",
     "react": "18.3.1",
     "react-dom": "18.3.1"
