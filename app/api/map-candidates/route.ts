@@ -4,8 +4,8 @@ import { listCandidates } from '@/lib/candidateStore';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const candidates = (await listCandidates())
-    .filter((item) => item.status !== 'rejected')
+  const all = (await listCandidates()).filter((item) => item.status !== 'rejected');
+  const candidates = all
     .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
     .map((item) => ({
       id: item.id,
@@ -21,7 +21,17 @@ export async function GET() {
       mapCandidate: true,
     }));
 
-  return NextResponse.json({ candidates }, {
+  const states = new Set(all.map((item) => item.region).filter(Boolean));
+
+  return NextResponse.json({
+    candidates,
+    stats: {
+      total: all.length,
+      mapped: candidates.length,
+      missingCoordinates: Math.max(0, all.length - candidates.length),
+      states: states.size,
+    },
+  }, {
     headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
   });
 }
