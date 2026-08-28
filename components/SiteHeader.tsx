@@ -1,17 +1,15 @@
-import Link from 'next/link';
-
 export default function SiteHeader() {
   return (
-    <nav className="topbar site-topbar">
-      <Link className="brand brand-link" href="/">
+    <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
+      <a className="brand brand-link" href="/">
         <span className="brand-pin">✦</span> GEOWEEDO
-      </Link>
+      </a>
       <div className="nav-actions">
-        <Link className="ghost nav-link" href="/how-to-play">How to play</Link>
-        <Link className="ghost nav-link" href="/rewards">YERB rewards</Link>
-        <Link className="ghost nav-link" href="/for-dispensaries">For dispensaries</Link>
-        <Link className="ghost nav-link" href="/about">About</Link>
-        <Link className="primary nav-link" href="/account">Account</Link>
+        <a className="ghost nav-link" href="/how-to-play">How to play</a>
+        <a className="ghost nav-link" href="/rewards">YERB rewards</a>
+        <a className="ghost nav-link" href="/for-dispensaries">For dispensaries</a>
+        <a className="ghost nav-link" href="/about">About</a>
+        <a className="primary nav-link" href="/account">Account</a>
       </div>
     </nav>
   );
