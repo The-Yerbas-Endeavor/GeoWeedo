@@ -76,18 +76,19 @@ export default function HomePage() {
 
   if (!started) {
     return (
-      <main className="landing-shell">
+      <main className="landing-shell map-first-home">
         <SiteHeader />
-        <section className="hero">
-          <div className="eyebrow">THE DISPENSARY GEOGRAPHY GAME</div>
-          <h1>How well do you know<br /><span>weed geography?</span></h1>
-          <p>Explore the surroundings, find the clues, pinpoint the dispensary, and build a score that can become eligible for YERB rewards.</p>
-          <div className="hero-actions"><button className="primary" onClick={beginGame}>Play GeoWeedo</button><button className="secondary" onClick={beginGame}>Daily Challenge</button></div>
-          <div className="feature-row"><div><strong>5</strong><span>rounds per game</span></div><div><strong>25K</strong><span>maximum score</span></div><div><strong>YERB</strong><span>skill-based reward layer</span></div></div>
-        </section>
-        <section className="preview-card">
-          <div className="street-preview"><div className="preview-overlay">OPEN STREET IMAGERY</div><div className="road-line" /><div className="storefront">DISPENSARY?</div></div>
-          <div className="preview-copy"><span>LOOK AROUND</span><h2>Every storefront tells a story.</h2><p>Architecture, mountains, road markings, signs and neighboring businesses can all give the location away.</p><p><a className="yerb-score" href="/rewards">See how YERB rewards work →</a></p></div>
+        <section className="home-map-stage">
+          <div className="home-map-canvas">
+            <GuessMap guess={null} revealed={false} onGuess={() => {}} />
+          </div>
+          <div className="home-play-card">
+            <div className="eyebrow">THE DISPENSARY GEOGRAPHY GAME</div>
+            <h1>GeoWeedo</h1>
+            <p>Explore a real dispensary location, read the clues, and pinpoint where you are.</p>
+            <button className="primary home-play-button" onClick={beginGame}>Play GeoWeedo</button>
+            <div className="home-play-meta"><span>5 rounds</span><span>25,000 points</span><span>YERB rewards</span></div>
+          </div>
         </section>
       </main>
     );
