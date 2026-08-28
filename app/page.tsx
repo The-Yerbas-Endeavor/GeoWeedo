@@ -9,6 +9,20 @@ import { DEFAULT_YERB_PER_POINT, yerbFromScore } from '@/lib/yerbasRewards';
 
 const MAX_SCORE = 5000;
 
+type PublicMapCandidate = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  city?: string;
+  region?: string;
+  country?: string;
+  dataSource?: string;
+  status?: string;
+  imageryStatus?: string;
+  mapCandidate?: boolean;
+};
+
 function distanceKm(a: LatLng, b: LatLng) {
   const radiusKm = 6371.0088;
   const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -33,12 +47,18 @@ export default function HomePage() {
   const [roundDistance, setRoundDistance] = useState<number | null>(null);
   const [roundScore, setRoundScore] = useState<number | null>(null);
   const [approvedDispensaries, setApprovedDispensaries] = useState<Dispensary[]>([]);
+  const [mapCandidates, setMapCandidates] = useState<PublicMapCandidate[]>([]);
 
   useEffect(() => {
     fetch('/api/dispensaries', { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Failed to load approved dispensaries.')))
       .then((data) => setApprovedDispensaries(Array.isArray(data.dispensaries) ? data.dispensaries : []))
       .catch(() => setApprovedDispensaries([]));
+
+    fetch('/api/map-candidates', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Failed to load map candidates.')))
+      .then((data) => setMapCandidates(Array.isArray(data.candidates) ? data.candidates : []))
+      .catch(() => setMapCandidates([]));
   }, []);
 
   const rounds = useMemo(() => {
@@ -52,16 +72,8 @@ export default function HomePage() {
   }, [approvedDispensaries]);
 
   const homeLocations = useMemo(() => {
-    const merged = [...approvedDispensaries.filter((item) => item.active), ...dispensaries.filter((item) => item.active)];
-    const seen = new Set<string>();
-    return merged
-      .filter((item) => {
-        const key = item.slug || item.id;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
-      })
-      .map((item) => ({
+    const merged = [
+      ...approvedDispensaries.filter((item) => item.active).map((item) => ({
         id: item.id,
         name: item.name,
         lat: item.latitude,
@@ -69,8 +81,38 @@ export default function HomePage() {
         city: item.city,
         region: item.region,
         sponsored: item.sponsored,
-      }));
-  }, [approvedDispensaries]);
+        approved: true,
+      })),
+      ...mapCandidates.map((item) => ({
+        id: item.id,
+        name: item.name,
+        lat: item.latitude,
+        lng: item.longitude,
+        city: item.city || '',
+        region: item.region || '',
+        sponsored: false,
+        approved: false,
+      })),
+      ...dispensaries.filter((item) => item.active).map((item) => ({
+        id: item.id,
+        name: item.name,
+        lat: item.latitude,
+        lng: item.longitude,
+        city: item.city,
+        region: item.region,
+        sponsored: item.sponsored,
+        approved: false,
+      })),
+    ];
+
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      const key = `${item.name}|${item.lat.toFixed(5)}|${item.lng.toFixed(5)}`.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return Number.isFinite(item.lat) && Number.isFinite(item.lng);
+    });
+  }, [approvedDispensaries, mapCandidates]);
 
   const current = rounds[round];
   const total = scores.reduce((sum, value) => sum + value, 0);
