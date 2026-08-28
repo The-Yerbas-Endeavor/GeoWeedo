@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries, saveApprovedDispensary, setDispensaryActive } from '@/lib/dispensaryStore';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  if (!expected) return false;
-  return request.headers.get('x-geoweedo-admin') === expected;
-}
 
 function invalid(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   return NextResponse.json({ dispensaries: await readApprovedDispensaries() });
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
   if (!body) return invalid('Invalid JSON body.');
@@ -69,7 +64,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!body?.id || typeof body.active !== 'boolean') return invalid('id and active are required.');
   const updated = await setDispensaryActive(String(body.id), body.active);
