@@ -2,6 +2,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import '@photo-sphere-viewer/core/index.css';
 import './globals.css';
 import './open-stack.css';
+import './admin.css';
 
 export const metadata = {
   title: 'GeoWeedo',
