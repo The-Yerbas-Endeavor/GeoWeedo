@@ -53,6 +53,12 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       return invalid(error instanceof Error ? error.message : 'KartaView imagery could not be quality-verified.');
     }
+  } else {
+    const projection = String(body.imageryProjection || '').toUpperCase();
+    const fov = num(body.imageryFieldOfView);
+    if (projection !== 'SPHERE' && projection !== 'EQUIRECTANGULAR' && fov < 300) {
+      return invalid('GeoWeedo-hosted gameplay imagery must be a true 360° / equirectangular panorama. Flat one-off images are not playable.');
+    }
   }
 
   const saved = await saveApprovedDispensary({
