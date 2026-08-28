@@ -11,12 +11,23 @@ import {
 } from 'maplibre-gl';
 
 export type LatLng = { lat: number; lng: number };
+export type MapLocation = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  city?: string;
+  region?: string;
+  sponsored?: boolean;
+};
 
 type Props = {
   guess: LatLng | null;
   actual?: LatLng | null;
   revealed?: boolean;
   onGuess: (guess: LatLng) => void;
+  locations?: MapLocation[];
+  browseMode?: boolean;
 };
 
 // Keep gameplay independent of a remote style JSON. This tiny MapLibre style
@@ -26,9 +37,7 @@ const GAME_STYLE: StyleSpecification = {
   sources: {
     osm: {
       type: 'raster',
-      tiles: [
-        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ],
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       tileSize: 256,
       attribution: '© OpenStreetMap contributors',
       maxzoom: 19,
@@ -45,15 +54,25 @@ const GAME_STYLE: StyleSpecification = {
   ],
 };
 
-export default function GuessMap({ guess, actual = null, revealed = false, onGuess }: Props) {
+export default function GuessMap({
+  guess,
+  actual = null,
+  revealed = false,
+  onGuess,
+  locations = [],
+  browseMode = false,
+}: Props) {
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LibreMap | null>(null);
   const guessMarkerRef = useRef<Marker | null>(null);
   const actualMarkerRef = useRef<Marker | null>(null);
+  const locationMarkersRef = useRef<Marker[]>([]);
   const revealedRef = useRef(revealed);
+  const browseModeRef = useRef(browseMode);
   const onGuessRef = useRef(onGuess);
 
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+  useEffect(() => { browseModeRef.current = browseMode; }, [browseMode]);
   useEffect(() => { onGuessRef.current = onGuess; }, [onGuess]);
 
   useEffect(() => {
@@ -73,7 +92,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
       map.on('load', () => map.resize());
       map.on('click', (event) => {
-        if (revealedRef.current) return;
+        if (browseModeRef.current || revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       });
 
@@ -87,6 +106,8 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
       const resizeTimer = window.setTimeout(() => map.resize(), 250);
       return () => {
         window.clearTimeout(resizeTimer);
+        locationMarkersRef.current.forEach((marker) => marker.remove());
+        locationMarkersRef.current = [];
         map.remove();
         mapRef.current = null;
       };
@@ -94,6 +115,33 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
       console.error('GeoWeedo map initialization failed:', error);
     }
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    locationMarkersRef.current.forEach((marker) => marker.remove());
+    locationMarkersRef.current = [];
+    if (!browseMode || locations.length === 0) return;
+
+    const bounds = new LngLatBounds();
+    for (const location of locations) {
+      if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) continue;
+      const subtitle = [location.city, location.region].filter(Boolean).join(', ');
+      const popupText = subtitle ? `${location.name}\n${subtitle}` : location.name;
+      const marker = new Marker({ color: location.sponsored ? '#f5c451' : '#67d66e' })
+        .setLngLat([location.lng, location.lat])
+        .setPopup(new Popup({ offset: 18 }).setText(popupText))
+        .addTo(map);
+      locationMarkersRef.current.push(marker);
+      bounds.extend([location.lng, location.lat]);
+    }
+
+    if (!bounds.isEmpty()) {
+      const fit = () => map.fitBounds(bounds, { padding: 80, maxZoom: 6, duration: 500 });
+      if (map.isStyleLoaded()) fit(); else map.once('load', fit);
+    }
+  }, [browseMode, locations]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -145,8 +193,10 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
 
   return (
     <div className="guess-map-wrap">
-      <div ref={nodeRef} className="guess-map-canvas" aria-label="Interactive open-source guessing map" />
-      {!guess && !revealed && <div className="map-hint">Click anywhere on the map to place your guess</div>}
+      <div ref={nodeRef} className="guess-map-canvas" aria-label={browseMode ? 'GeoWeedo dispensary location map' : 'Interactive open-source guessing map'} />
+      {browseMode
+        ? <div className="map-hint">Explore GeoWeedo dispensary locations</div>
+        : !guess && !revealed && <div className="map-hint">Click anywhere on the map to place your guess</div>}
     </div>
   );
 }
