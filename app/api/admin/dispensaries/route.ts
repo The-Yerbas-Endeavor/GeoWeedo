@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
     latitude,
     longitude,
     website: String(body.website || '').trim() || undefined,
+    dataSource: String(body.dataSource || 'manual').trim() || 'manual',
+    sourceUrl: String(body.sourceUrl || '').trim() || undefined,
+    sourceLicense: String(body.sourceLicense || '').trim() || undefined,
     recreational: Boolean(body.recreational),
     medical: Boolean(body.medical),
     imageryProvider: body.imageryProvider === 'geoweedo' ? 'geoweedo' : 'kartaview',
@@ -57,6 +60,8 @@ export async function POST(request: NextRequest) {
     imageryFieldOfView: Number.isFinite(Number(body.imageryFieldOfView)) ? Number(body.imageryFieldOfView) : undefined,
     imageryProjection: String(body.imageryProjection || '').trim() || undefined,
     imageryUrl: String(body.imageryUrl),
+    priorityWeight: Number.isFinite(Number(body.priorityWeight)) ? Math.max(0, Math.floor(Number(body.priorityWeight))) : undefined,
+    sponsoredUntil: String(body.sponsoredUntil || '').trim() || undefined,
     active: body.active !== false,
   });
 
