@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listRewards, queueReward, updateReward } from '@/lib/rewardStore';
+import { listRewards, queueReward, updateReward, type RewardEntry } from '@/lib/rewardStore';
 import { listPlayers } from '@/lib/playerStore';
 
 function authorized(request: NextRequest) {
@@ -28,8 +28,8 @@ export async function PATCH(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!body?.id) return NextResponse.json({ error: 'Reward id is required.' }, { status: 400 });
-  const patch: Record<string, unknown> = {};
-  if (['pending','held','paid','failed'].includes(body.status)) patch.status = body.status;
+  const patch: Partial<RewardEntry> = {};
+  if (['pending','held','paid','failed'].includes(body.status)) patch.status = body.status as RewardEntry['status'];
   if (body.txid !== undefined) patch.txid = String(body.txid).trim() || undefined;
   if (body.error !== undefined) patch.error = String(body.error).trim() || undefined;
   if (body.status === 'paid') patch.paidAt = new Date().toISOString();
