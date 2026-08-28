@@ -16,18 +16,23 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(amountYerb) || amountYerb <= 0) return NextResponse.json({ error: 'Enter a valid withdrawal amount.' }, { status: 400 });
 
   const amountAtomic = Math.round(amountYerb * ATOMIC);
-  const db = getDatabase();
-  const posted = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'posted'").get(user.walletId) as any;
-  const held = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'held'").get(user.walletId) as any;
-  const available = Number(posted?.amount || 0) + Number(held?.amount || 0);
-  if (amountAtomic > available) return NextResponse.json({ error: 'Insufficient available YERB balance.' }, { status: 400 });
+  if (!Number.isSafeInteger(amountAtomic) || amountAtomic <= 0) return NextResponse.json({ error: 'Withdrawal amount is outside the supported range.' }, { status: 400 });
 
+  const db = getDatabase();
   const now = new Date().toISOString();
   const withdrawalId = `wd-${crypto.randomUUID()}`;
   const holdId = `ledger-${crypto.randomUUID()}`;
 
   db.exec('BEGIN IMMEDIATE');
   try {
+    const posted = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'posted'").get(user.walletId) as any;
+    const held = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'held'").get(user.walletId) as any;
+    const available = Number(posted?.amount || 0) + Number(held?.amount || 0);
+    if (amountAtomic > available) {
+      db.exec('ROLLBACK');
+      return NextResponse.json({ error: 'Insufficient available YERB balance.' }, { status: 400 });
+    }
+
     db.prepare(`INSERT INTO wallet_ledger (id, wallet_id, entry_type, amount_atomic, status, reference_type, reference_id, memo, created_at)
                 VALUES (?, ?, 'withdrawal_hold', ?, 'held', 'withdrawal', ?, ?, ?)`)
       .run(holdId, user.walletId, -amountAtomic, withdrawalId, `Withdrawal hold to ${destination}`, now);
@@ -36,9 +41,9 @@ export async function POST(request: NextRequest) {
       .run(withdrawalId, user.walletId, destination, amountAtomic, now, holdId);
     db.exec('COMMIT');
   } catch (error) {
-    db.exec('ROLLBACK');
+    try { db.exec('ROLLBACK'); } catch {}
     throw error;
   }
 
-  return NextResponse.json({ id: withdrawalId, status: 'requested', amountYerb, destinationAddress: destination }, { status: 201 });
+  return NextResponse.json({ id: withdrawalId, status: 'requested', amountYerb: amountAtomic / ATOMIC, destinationAddress: destination }, { status: 201 });
 }
