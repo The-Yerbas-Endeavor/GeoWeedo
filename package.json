@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:init": "node --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "node --experimental-strip-types scripts/create-admin.mjs",
+    "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
   },
