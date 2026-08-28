@@ -1,31 +1,458 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LngLatBounds, Map as LibreMap, Marker, NavigationControl, Popup, type GeoJSONSource, type MapGeoJSONFeature, type StyleSpecification } from 'maplibre-gl';
+import {
+  LngLatBounds,
+  Map as LibreMap,
+  Marker,
+  NavigationControl,
+  Popup,
+  type GeoJSONSource,
+  type MapGeoJSONFeature,
+  type StyleSpecification,
+} from 'maplibre-gl';
 
-export type LatLng={lat:number;lng:number};
-export type MapLocation={id:string;name:string;lat:number;lng:number;city?:string;region?:string;sponsored?:boolean;approved?:boolean;imageryReady?:boolean;source?:string};
-type Props={guess:LatLng|null;actual?:LatLng|null;revealed?:boolean;onGuess:(guess:LatLng)=>void;locations?:MapLocation[];browseMode?:boolean};
-const GAME_STYLE:StyleSpecification={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap contributors',maxzoom:19}},layers:[{id:'osm',type:'raster',source:'osm',minzoom:0,maxzoom:19}]};
-const LOCATION_SOURCE='browse-locations',CLUSTER_LAYER='browse-clusters',CLUSTER_COUNT_LAYER='browse-cluster-count',POINT_LAYER='browse-points',LABEL_LAYER='browse-labels';
-function featureCoordinates(feature:MapGeoJSONFeature):[number,number]|null{if(feature.geometry.type!=='Point')return null;const c=feature.geometry.coordinates;if(!Array.isArray(c)||c.length<2)return null;const lng=Number(c[0]),lat=Number(c[1]);return Number.isFinite(lat)&&Number.isFinite(lng)?[lng,lat]:null;}
-function validLocation(location:MapLocation){return Number.isFinite(location.lat)&&Number.isFinite(location.lng)&&location.lat>=-90&&location.lat<=90&&location.lng>=-180&&location.lng<=180;}
-function locationData(locations:MapLocation[]){return{type:'FeatureCollection' as const,features:locations.filter(validLocation).map(location=>({type:'Feature' as const,geometry:{type:'Point' as const,coordinates:[location.lng,location.lat] as [number,number]},properties:{id:location.id,name:location.name,city:location.city||'',region:location.region||'',sponsored:Boolean(location.sponsored),approved:Boolean(location.approved),imageryReady:Boolean(location.imageryReady),source:location.source||''}}))};}
-function fitLocations(map:LibreMap,locations:MapLocation[],maxZoom=5.5){const good=locations.filter(validLocation);if(!good.length)return;const bounds=new LngLatBounds();for(const item of good)bounds.extend([item.lng,item.lat]);if(!bounds.isEmpty())map.fitBounds(bounds,{padding:70,maxZoom,duration:500});}
+export type LatLng = { lat: number; lng: number };
+export type MapLocation = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  city?: string;
+  region?: string;
+  sponsored?: boolean;
+  approved?: boolean;
+  imageryReady?: boolean;
+  source?: string;
+};
 
-export default function GuessMap({guess,actual=null,revealed=false,onGuess,locations=[],browseMode=false}:Props){
- const nodeRef=useRef<HTMLDivElement|null>(null),mapRef=useRef<LibreMap|null>(null),guessMarkerRef=useRef<Marker|null>(null),actualMarkerRef=useRef<Marker|null>(null),userMarkerRef=useRef<Marker|null>(null),hoverPopupRef=useRef<Popup|null>(null);
- const revealedRef=useRef(revealed),browseModeRef=useRef(browseMode),onGuessRef=useRef(onGuess),locationsRef=useRef<MapLocation[]>(locations),fittedBrowseBoundsRef=useRef(false);
- const [browseLoadedCount,setBrowseLoadedCount]=useState(0),[mapWarning,setMapWarning]=useState<string|null>(null),[search,setSearch]=useState(''),[region,setRegion]=useState('all'),[locating,setLocating]=useState(false),[selectedLocation,setSelectedLocation]=useState<MapLocation|null>(null);
- const regions=useMemo(()=>Array.from(new Set(locations.map(item=>item.region).filter((value):value is string=>Boolean(value)))).sort((a,b)=>a.localeCompare(b)),[locations]);
- const filteredLocations=useMemo(()=>{const q=search.trim().toLowerCase();return locations.filter(item=>{if(region!=='all'&&item.region!==region)return false;if(!q)return true;return `${item.name} ${item.city||''} ${item.region||''}`.toLowerCase().includes(q);});},[locations,region,search]);
- useEffect(()=>{revealedRef.current=revealed;},[revealed]);useEffect(()=>{browseModeRef.current=browseMode;},[browseMode]);useEffect(()=>{onGuessRef.current=onGuess;},[onGuess]);useEffect(()=>{locationsRef.current=filteredLocations;},[filteredLocations]);
- useEffect(()=>{if(!nodeRef.current||mapRef.current)return;try{const map=new LibreMap({container:nodeRef.current,style:GAME_STYLE,center:[-98,39],zoom:2.6,minZoom:1,maxZoom:19,attributionControl:{},dragRotate:false,pitchWithRotate:false,scrollZoom:true,dragPan:true,doubleClickZoom:true,keyboard:true,touchZoomRotate:true,boxZoom:true});mapRef.current=map;map.touchZoomRotate.disableRotation();map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'top-right');
- const ensureBrowseLayers=()=>{if(!browseModeRef.current||!map.isStyleLoaded())return;const data=locationData(locationsRef.current);let source=map.getSource(LOCATION_SOURCE) as GeoJSONSource|undefined;if(!source){map.addSource(LOCATION_SOURCE,{type:'geojson',data,cluster:true,clusterMaxZoom:12,clusterRadius:48});source=map.getSource(LOCATION_SOURCE) as GeoJSONSource;}else source.setData(data);if(!map.getLayer(CLUSTER_LAYER))map.addLayer({id:CLUSTER_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['has','point_count'],paint:{'circle-color':'#2f8f46','circle-radius':['step',['get','point_count'],18,25,23,100,29,500,35],'circle-stroke-width':2,'circle-stroke-color':'#dff7e2'}});if(!map.getLayer(CLUSTER_COUNT_LAYER))map.addLayer({id:CLUSTER_COUNT_LAYER,type:'symbol',source:LOCATION_SOURCE,filter:['has','point_count'],layout:{'text-field':['get','point_count_abbreviated'],'text-size':12},paint:{'text-color':'#fff'}});if(!map.getLayer(POINT_LAYER))map.addLayer({id:POINT_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['!', ['has','point_count']],paint:{'circle-color':['case',['boolean',['get','sponsored'],false],'#f5c451','#67d66e'],'circle-radius':['interpolate',['linear'],['zoom'],5,6,12,8,18,10],'circle-stroke-width':2,'circle-stroke-color':'#102114'}});if(!map.getLayer(LABEL_LAYER))map.addLayer({id:LABEL_LAYER,type:'symbol',source:LOCATION_SOURCE,minzoom:10,filter:['!', ['has','point_count']],layout:{'text-field':['get','name'],'text-size':11,'text-offset':[0,1.4],'text-anchor':'top','text-optional':true},paint:{'text-color':'#f4f7f4','text-halo-color':'#102114','text-halo-width':1.5}});setBrowseLoadedCount(data.features.length);setMapWarning(null);if(data.features.length&&!fittedBrowseBoundsRef.current){fittedBrowseBoundsRef.current=true;fitLocations(map,locationsRef.current);}};
- map.on('load',()=>{map.resize();ensureBrowseLayers();});map.on('styledata',ensureBrowseLayers);map.on('click',event=>{if(browseModeRef.current||revealedRef.current)return;onGuessRef.current({lat:event.lngLat.lat,lng:event.lngLat.lng});});map.on('click',CLUSTER_LAYER,async event=>{setSelectedLocation(null);const feature=event.features?.[0] as MapGeoJSONFeature|undefined,clusterId=Number(feature?.properties?.cluster_id);if(!feature||!Number.isFinite(clusterId))return;const coordinates=featureCoordinates(feature),source=map.getSource(LOCATION_SOURCE) as GeoJSONSource|undefined;if(!coordinates||!source)return;map.easeTo({center:coordinates,zoom:await source.getClusterExpansionZoom(clusterId)});});map.on('click',POINT_LAYER,event=>{const feature=event.features?.[0] as MapGeoJSONFeature|undefined;if(!feature)return;const coordinates=featureCoordinates(feature),id=String(feature.properties?.id||'');if(!coordinates)return;const item=locationsRef.current.find(location=>location.id===id);if(item)setSelectedLocation(item);hoverPopupRef.current?.remove();map.easeTo({center:coordinates,zoom:Math.max(map.getZoom(),12),duration:450});});
- map.on('mouseenter',POINT_LAYER,event=>{map.getCanvas().style.cursor='pointer';const feature=event.features?.[0] as MapGeoJSONFeature|undefined,coordinates=feature?featureCoordinates(feature):null;if(!feature||!coordinates)return;const p=feature.properties||{},subtitle=[p.city,p.region].filter(Boolean).join(', ');hoverPopupRef.current?.remove();hoverPopupRef.current=new Popup({closeButton:false,closeOnClick:false,offset:10}).setLngLat(coordinates).setText(subtitle?`${p.name} — ${subtitle}`:String(p.name||'Dispensary')).addTo(map);});map.on('mouseleave',POINT_LAYER,()=>{map.getCanvas().style.cursor='';hoverPopupRef.current?.remove();hoverPopupRef.current=null;});map.on('mouseenter',CLUSTER_LAYER,event=>{map.getCanvas().style.cursor='pointer';const feature=event.features?.[0] as MapGeoJSONFeature|undefined,coordinates=feature?featureCoordinates(feature):null;if(!feature||!coordinates)return;hoverPopupRef.current?.remove();hoverPopupRef.current=new Popup({closeButton:false,closeOnClick:false,offset:12}).setLngLat(coordinates).setText(`${feature.properties?.point_count||''} locations — click to zoom`).addTo(map);});map.on('mouseleave',CLUSTER_LAYER,()=>{map.getCanvas().style.cursor='';hoverPopupRef.current?.remove();hoverPopupRef.current=null;});map.on('error',event=>{const message=event.error?.message||'Map resource failed to load.';console.warn('GeoWeedo map resource warning:',message);if(!/tile/i.test(message))setMapWarning(message);});const timer=window.setTimeout(()=>{map.resize();ensureBrowseLayers();},250);return()=>{window.clearTimeout(timer);hoverPopupRef.current?.remove();userMarkerRef.current?.remove();map.remove();mapRef.current=null;};}catch(error){const message=error instanceof Error?error.message:'Map initialization failed.';setMapWarning(message);}},[]);
- useEffect(()=>{locationsRef.current=filteredLocations;const map=mapRef.current;if(!map||!browseMode)return;const data=locationData(filteredLocations);const apply=()=>{const source=map.getSource(LOCATION_SOURCE) as GeoJSONSource|undefined;if(!source)return;source.setData(data);setBrowseLoadedCount(data.features.length);if(data.features.length)fitLocations(map,filteredLocations,search||region!=='all'?9:5.5);};if(map.isStyleLoaded()&&map.getSource(LOCATION_SOURCE))apply();else map.once('idle',apply);},[browseMode,filteredLocations,region,search]);
- useEffect(()=>{const map=mapRef.current;if(!map)return;guessMarkerRef.current?.remove();actualMarkerRef.current?.remove();if(map.getLayer('guess-line'))map.removeLayer('guess-line');if(map.getSource('guess-line'))map.removeSource('guess-line');if(guess)guessMarkerRef.current=new Marker({color:'#67d66e'}).setLngLat([guess.lng,guess.lat]).addTo(map);if(revealed&&actual){actualMarkerRef.current=new Marker({color:'#f4f7f4'}).setLngLat([actual.lng,actual.lat]).addTo(map);}},[guess,actual,revealed]);
- const resetView=()=>{const map=mapRef.current;if(!map)return;setSearch('');setRegion('all');setSelectedLocation(null);fitLocations(map,locations.length?locations:[{id:'us',name:'USA',lat:39,lng:-98}],5.5);};const locateMe=()=>{if(!navigator.geolocation){setMapWarning('Location services are not available in this browser.');return;}setLocating(true);navigator.geolocation.getCurrentPosition(position=>{setLocating(false);const map=mapRef.current;if(!map)return;const lng=position.coords.longitude,lat=position.coords.latitude;userMarkerRef.current?.remove();userMarkerRef.current=new Marker({color:'#fff'}).setLngLat([lng,lat]).setPopup(new Popup({offset:14}).setText('You are here')).addTo(map);map.easeTo({center:[lng,lat],zoom:11,duration:700});},error=>{setLocating(false);setMapWarning(error.message||'Could not determine your location.');},{timeout:8000,maximumAge:300000});};
- return <div className="guess-map-wrap"><div ref={nodeRef} className="guess-map-canvas" tabIndex={0}/>{browseMode&&<div className="map-browser-tools"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search dispensary or city"/><select value={region} onChange={e=>setRegion(e.target.value)}><option value="all">All states</option>{regions.map(value=><option key={value}>{value}</option>)}</select><button onClick={locateMe} disabled={locating}>{locating?'Locating…':'Near me'}</button><button onClick={resetView}>Show all</button></div>}{browseMode&&selectedLocation&&<aside className="map-location-card"><button className="map-location-close" onClick={()=>setSelectedLocation(null)} aria-label="Close location details">×</button><div className="map-location-eyebrow">{selectedLocation.sponsored?'FEATURED LOCATION':selectedLocation.approved?'GEOWEEDO LOCATION':'MAP LOCATION'}</div><h3>{selectedLocation.name}</h3><p>{[selectedLocation.city,selectedLocation.region].filter(Boolean).join(', ')||'Location details pending'}</p><div className="map-location-badges">{selectedLocation.approved&&<span>✓ Approved</span>}{selectedLocation.imageryReady&&<span>◉ Imagery ready</span>}{selectedLocation.sponsored&&<span>★ Sponsored</span>}{!selectedLocation.approved&&<span>Browse only</span>}</div><dl><div><dt>Coordinates</dt><dd>{selectedLocation.lat.toFixed(5)}, {selectedLocation.lng.toFixed(5)}</dd></div>{selectedLocation.source&&<div><dt>Source</dt><dd>{selectedLocation.source}</dd></div>}<div><dt>Gameplay</dt><dd>{selectedLocation.approved&&selectedLocation.imageryReady?'Eligible':'Not yet eligible'}</dd></div></dl><button className="map-location-focus" onClick={()=>mapRef.current?.easeTo({center:[selectedLocation.lng,selectedLocation.lat],zoom:16,duration:600})}>Zoom to location</button></aside>}{browseMode&&<div className="map-data-status">{browseLoadedCount.toLocaleString()} / {locations.filter(validLocation).length.toLocaleString()} locations</div>}{mapWarning&&<div className="map-data-warning">Map warning: {mapWarning}</div>}{browseMode?<div className="map-hint">Drag to pan · wheel/pinch to zoom · click a location for details</div>:!revealed&&<div className="map-hint">Drag to pan · scroll/pinch to zoom · click to place your guess</div>}</div>;
+type Props = {
+  guess: LatLng | null;
+  actual?: LatLng | null;
+  revealed?: boolean;
+  onGuess: (guess: LatLng) => void;
+  locations?: MapLocation[];
+  browseMode?: boolean;
+};
+
+const GAME_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm', minzoom: 0, maxzoom: 19 }],
+};
+
+const LOCATION_SOURCE = 'browse-locations';
+const CLUSTER_LAYER = 'browse-clusters';
+const CLUSTER_COUNT_LAYER = 'browse-cluster-count';
+const POINT_LAYER = 'browse-points';
+const LABEL_LAYER = 'browse-labels';
+
+function featureCoordinates(feature: MapGeoJSONFeature): [number, number] | null {
+  if (feature.geometry.type !== 'Point') return null;
+  const coordinates = feature.geometry.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const lng = Number(coordinates[0]);
+  const lat = Number(coordinates[1]);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : null;
+}
+
+function validLocation(location: MapLocation) {
+  return Number.isFinite(location.lat) && Number.isFinite(location.lng)
+    && location.lat >= -90 && location.lat <= 90
+    && location.lng >= -180 && location.lng <= 180;
+}
+
+function locationData(locations: MapLocation[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: locations.filter(validLocation).map((location) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [location.lng, location.lat] as [number, number] },
+      properties: {
+        id: location.id,
+        name: location.name,
+        city: location.city || '',
+        region: location.region || '',
+        sponsored: Boolean(location.sponsored),
+        approved: Boolean(location.approved),
+        imageryReady: Boolean(location.imageryReady),
+        source: location.source || '',
+      },
+    })),
+  };
+}
+
+function fitLocations(map: LibreMap, locations: MapLocation[], maxZoom = 5.5) {
+  const good = locations.filter(validLocation);
+  if (!good.length) return;
+  const bounds = new LngLatBounds();
+  for (const item of good) bounds.extend([item.lng, item.lat]);
+  if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 70, maxZoom, duration: 500 });
+}
+
+export default function GuessMap({ guess, actual = null, revealed = false, onGuess, locations = [], browseMode = false }: Props) {
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<LibreMap | null>(null);
+  const guessMarkerRef = useRef<Marker | null>(null);
+  const actualMarkerRef = useRef<Marker | null>(null);
+  const userMarkerRef = useRef<Marker | null>(null);
+  const hoverPopupRef = useRef<Popup | null>(null);
+  const revealedRef = useRef(revealed);
+  const browseModeRef = useRef(browseMode);
+  const onGuessRef = useRef(onGuess);
+  const locationsRef = useRef<MapLocation[]>(locations);
+  const fittedBrowseBoundsRef = useRef(false);
+
+  const [browseLoadedCount, setBrowseLoadedCount] = useState(0);
+  const [mapWarning, setMapWarning] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [region, setRegion] = useState('all');
+  const [locating, setLocating] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null);
+  const [browserOpen, setBrowserOpen] = useState(true);
+
+  const regions = useMemo(
+    () => Array.from(new Set(locations.map((item) => item.region).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)),
+    [locations],
+  );
+
+  const filteredLocations = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return locations.filter((item) => {
+      if (region !== 'all' && item.region !== region) return false;
+      if (!query) return true;
+      return `${item.name} ${item.city || ''} ${item.region || ''}`.toLowerCase().includes(query);
+    });
+  }, [locations, region, search]);
+
+  const browseList = useMemo(
+    () => [...filteredLocations].sort((a, b) => {
+      const regionCompare = (a.region || '').localeCompare(b.region || '');
+      if (regionCompare) return regionCompare;
+      const cityCompare = (a.city || '').localeCompare(b.city || '');
+      return cityCompare || a.name.localeCompare(b.name);
+    }),
+    [filteredLocations],
+  );
+
+  useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+  useEffect(() => { browseModeRef.current = browseMode; }, [browseMode]);
+  useEffect(() => { onGuessRef.current = onGuess; }, [onGuess]);
+  useEffect(() => { locationsRef.current = filteredLocations; }, [filteredLocations]);
+
+  const focusLocation = (item: MapLocation, zoom = 14) => {
+    setSelectedLocation(item);
+    setBrowserOpen(true);
+    mapRef.current?.easeTo({ center: [item.lng, item.lat], zoom: Math.max(mapRef.current.getZoom(), zoom), duration: 550 });
+  };
+
+  useEffect(() => {
+    if (!nodeRef.current || mapRef.current) return;
+    try {
+      const map = new LibreMap({
+        container: nodeRef.current,
+        style: GAME_STYLE,
+        center: [-98, 39],
+        zoom: 2.6,
+        minZoom: 1,
+        maxZoom: 19,
+        attributionControl: {},
+        dragRotate: false,
+        pitchWithRotate: false,
+        scrollZoom: true,
+        dragPan: true,
+        doubleClickZoom: true,
+        keyboard: true,
+        touchZoomRotate: true,
+        boxZoom: true,
+      });
+      mapRef.current = map;
+      map.touchZoomRotate.disableRotation();
+      map.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
+
+      const ensureBrowseLayers = () => {
+        if (!browseModeRef.current || !map.isStyleLoaded()) return;
+        const data = locationData(locationsRef.current);
+        let source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+        if (!source) {
+          map.addSource(LOCATION_SOURCE, { type: 'geojson', data, cluster: true, clusterMaxZoom: 12, clusterRadius: 48 });
+          source = map.getSource(LOCATION_SOURCE) as GeoJSONSource;
+        } else {
+          source.setData(data);
+        }
+
+        if (!map.getLayer(CLUSTER_LAYER)) map.addLayer({
+          id: CLUSTER_LAYER,
+          type: 'circle',
+          source: LOCATION_SOURCE,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#2f8f46',
+            'circle-radius': ['step', ['get', 'point_count'], 18, 25, 23, 100, 29, 500, 35],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#dff7e2',
+          },
+        });
+        if (!map.getLayer(CLUSTER_COUNT_LAYER)) map.addLayer({
+          id: CLUSTER_COUNT_LAYER,
+          type: 'symbol',
+          source: LOCATION_SOURCE,
+          filter: ['has', 'point_count'],
+          layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12 },
+          paint: { 'text-color': '#fff' },
+        });
+        if (!map.getLayer(POINT_LAYER)) map.addLayer({
+          id: POINT_LAYER,
+          type: 'circle',
+          source: LOCATION_SOURCE,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': ['case', ['boolean', ['get', 'sponsored'], false], '#f5c451', '#67d66e'],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 6, 12, 8, 18, 10],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#102114',
+          },
+        });
+        if (!map.getLayer(LABEL_LAYER)) map.addLayer({
+          id: LABEL_LAYER,
+          type: 'symbol',
+          source: LOCATION_SOURCE,
+          minzoom: 10,
+          filter: ['!', ['has', 'point_count']],
+          layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.4], 'text-anchor': 'top', 'text-optional': true },
+          paint: { 'text-color': '#f4f7f4', 'text-halo-color': '#102114', 'text-halo-width': 1.5 },
+        });
+
+        setBrowseLoadedCount(data.features.length);
+        setMapWarning(null);
+        if (data.features.length && !fittedBrowseBoundsRef.current) {
+          fittedBrowseBoundsRef.current = true;
+          fitLocations(map, locationsRef.current);
+        }
+      };
+
+      map.on('load', () => { map.resize(); ensureBrowseLayers(); });
+      map.on('styledata', ensureBrowseLayers);
+      map.on('click', (event) => {
+        if (browseModeRef.current || revealedRef.current) return;
+        onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+      });
+      map.on('click', CLUSTER_LAYER, async (event) => {
+        setSelectedLocation(null);
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        const clusterId = Number(feature?.properties?.cluster_id);
+        if (!feature || !Number.isFinite(clusterId)) return;
+        const coordinates = featureCoordinates(feature);
+        const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+        if (!coordinates || !source) return;
+        map.easeTo({ center: coordinates, zoom: await source.getClusterExpansionZoom(clusterId) });
+      });
+      map.on('click', POINT_LAYER, (event) => {
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        if (!feature) return;
+        const coordinates = featureCoordinates(feature);
+        const id = String(feature.properties?.id || '');
+        if (!coordinates) return;
+        const item = locationsRef.current.find((location) => location.id === id);
+        if (item) {
+          setSelectedLocation(item);
+          setBrowserOpen(true);
+        }
+        hoverPopupRef.current?.remove();
+        map.easeTo({ center: coordinates, zoom: Math.max(map.getZoom(), 12), duration: 450 });
+      });
+      map.on('mouseenter', POINT_LAYER, (event) => {
+        map.getCanvas().style.cursor = 'pointer';
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        const coordinates = feature ? featureCoordinates(feature) : null;
+        if (!feature || !coordinates) return;
+        const p = feature.properties || {};
+        const subtitle = [p.city, p.region].filter(Boolean).join(', ');
+        hoverPopupRef.current?.remove();
+        hoverPopupRef.current = new Popup({ closeButton: false, closeOnClick: false, offset: 10 })
+          .setLngLat(coordinates)
+          .setText(subtitle ? `${p.name} — ${subtitle}` : String(p.name || 'Dispensary'))
+          .addTo(map);
+      });
+      map.on('mouseleave', POINT_LAYER, () => {
+        map.getCanvas().style.cursor = '';
+        hoverPopupRef.current?.remove();
+        hoverPopupRef.current = null;
+      });
+      map.on('mouseenter', CLUSTER_LAYER, (event) => {
+        map.getCanvas().style.cursor = 'pointer';
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+        const coordinates = feature ? featureCoordinates(feature) : null;
+        if (!feature || !coordinates) return;
+        hoverPopupRef.current?.remove();
+        hoverPopupRef.current = new Popup({ closeButton: false, closeOnClick: false, offset: 12 })
+          .setLngLat(coordinates)
+          .setText(`${feature.properties?.point_count || ''} locations — click to zoom`)
+          .addTo(map);
+      });
+      map.on('mouseleave', CLUSTER_LAYER, () => {
+        map.getCanvas().style.cursor = '';
+        hoverPopupRef.current?.remove();
+        hoverPopupRef.current = null;
+      });
+      map.on('error', (event) => {
+        const message = event.error?.message || 'Map resource failed to load.';
+        console.warn('GeoWeedo map resource warning:', message);
+        if (!/tile/i.test(message)) setMapWarning(message);
+      });
+
+      const timer = window.setTimeout(() => { map.resize(); ensureBrowseLayers(); }, 250);
+      return () => {
+        window.clearTimeout(timer);
+        hoverPopupRef.current?.remove();
+        userMarkerRef.current?.remove();
+        map.remove();
+        mapRef.current = null;
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Map initialization failed.';
+      setMapWarning(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    locationsRef.current = filteredLocations;
+    const map = mapRef.current;
+    if (!map || !browseMode) return;
+    const data = locationData(filteredLocations);
+    const apply = () => {
+      const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData(data);
+      setBrowseLoadedCount(data.features.length);
+      if (data.features.length) fitLocations(map, filteredLocations, search || region !== 'all' ? 9 : 5.5);
+    };
+    if (map.isStyleLoaded() && map.getSource(LOCATION_SOURCE)) apply();
+    else map.once('idle', apply);
+  }, [browseMode, filteredLocations, region, search]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    guessMarkerRef.current?.remove();
+    actualMarkerRef.current?.remove();
+    if (map.getLayer('guess-line')) map.removeLayer('guess-line');
+    if (map.getSource('guess-line')) map.removeSource('guess-line');
+    if (guess) guessMarkerRef.current = new Marker({ color: '#67d66e' }).setLngLat([guess.lng, guess.lat]).addTo(map);
+    if (revealed && actual) actualMarkerRef.current = new Marker({ color: '#f4f7f4' }).setLngLat([actual.lng, actual.lat]).addTo(map);
+  }, [guess, actual, revealed]);
+
+  const resetView = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    setSearch('');
+    setRegion('all');
+    setSelectedLocation(null);
+    setBrowserOpen(true);
+    fitLocations(map, locations.length ? locations : [{ id: 'us', name: 'USA', lat: 39, lng: -98 }], 5.5);
+  };
+
+  const locateMe = () => {
+    if (!navigator.geolocation) {
+      setMapWarning('Location services are not available in this browser.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      setLocating(false);
+      const map = mapRef.current;
+      if (!map) return;
+      const lng = position.coords.longitude;
+      const lat = position.coords.latitude;
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = new Marker({ color: '#fff' })
+        .setLngLat([lng, lat])
+        .setPopup(new Popup({ offset: 14 }).setText('You are here'))
+        .addTo(map);
+      map.easeTo({ center: [lng, lat], zoom: 11, duration: 700 });
+    }, (error) => {
+      setLocating(false);
+      setMapWarning(error.message || 'Could not determine your location.');
+    }, { timeout: 8000, maximumAge: 300000 });
+  };
+
+  return (
+    <div className="guess-map-wrap">
+      <div ref={nodeRef} className="guess-map-canvas" tabIndex={0} />
+
+      {browseMode && (
+        <div className="map-browser-tools">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search dispensary or city" aria-label="Search dispensaries" />
+          <select value={region} onChange={(event) => setRegion(event.target.value)} aria-label="Filter by state">
+            <option value="all">All states</option>
+            {regions.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <button type="button" onClick={locateMe} disabled={locating}>{locating ? 'Locating…' : 'Near me'}</button>
+          <button type="button" onClick={resetView}>Show all</button>
+          <button type="button" onClick={() => setBrowserOpen((open) => !open)}>{browserOpen ? 'Hide list' : `List (${browseList.length})`}</button>
+        </div>
+      )}
+
+      {browseMode && browserOpen && !selectedLocation && (
+        <aside className="map-browser-panel" aria-label="Browse dispensaries">
+          <div className="map-browser-panel-head">
+            <div>
+              <span>BROWSE DISPENSARIES</span>
+              <strong>{browseList.length.toLocaleString()} mapped locations</strong>
+            </div>
+            <button type="button" onClick={() => setBrowserOpen(false)} aria-label="Hide dispensary list">×</button>
+          </div>
+          <div className="map-browser-list">
+            {browseList.length === 0 ? (
+              <div className="map-browser-empty">No dispensaries match this search.</div>
+            ) : browseList.map((item) => (
+              <button key={item.id} type="button" className="map-browser-row" onClick={() => focusLocation(item)}>
+                <span className="map-browser-row-pin">●</span>
+                <span className="map-browser-row-copy">
+                  <strong>{item.name}</strong>
+                  <small>{[item.city, item.region].filter(Boolean).join(', ') || 'Location details pending'}</small>
+                </span>
+                <span className="map-browser-row-status">
+                  {item.sponsored ? '★' : item.approved && item.imageryReady ? 'PLAY' : item.approved ? '✓' : '›'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      {browseMode && selectedLocation && browserOpen && (
+        <aside className="map-location-card">
+          <button className="map-location-close" type="button" onClick={() => setSelectedLocation(null)} aria-label="Back to dispensary list">‹</button>
+          <div className="map-location-eyebrow">{selectedLocation.sponsored ? 'FEATURED LOCATION' : selectedLocation.approved ? 'GEOWEEDO LOCATION' : 'MAP LOCATION'}</div>
+          <h3>{selectedLocation.name}</h3>
+          <p>{[selectedLocation.city, selectedLocation.region].filter(Boolean).join(', ') || 'Location details pending'}</p>
+          <div className="map-location-badges">
+            {selectedLocation.approved && <span>✓ Approved</span>}
+            {selectedLocation.imageryReady && <span>◉ Imagery ready</span>}
+            {selectedLocation.sponsored && <span>★ Sponsored</span>}
+            {!selectedLocation.approved && <span>Browse only</span>}
+          </div>
+          <dl>
+            <div><dt>Coordinates</dt><dd>{selectedLocation.lat.toFixed(5)}, {selectedLocation.lng.toFixed(5)}</dd></div>
+            {selectedLocation.source && <div><dt>Source</dt><dd>{selectedLocation.source}</dd></div>}
+            <div><dt>Gameplay</dt><dd>{selectedLocation.approved && selectedLocation.imageryReady ? 'Eligible' : 'Not yet eligible'}</dd></div>
+          </dl>
+          <button className="map-location-focus" type="button" onClick={() => mapRef.current?.easeTo({ center: [selectedLocation.lng, selectedLocation.lat], zoom: 16, duration: 600 })}>Zoom to location</button>
+        </aside>
+      )}
+
+      {browseMode && <div className="map-data-status">{browseLoadedCount.toLocaleString()} / {locations.filter(validLocation).length.toLocaleString()} locations</div>}
+      {mapWarning && <div className="map-data-warning">Map warning: {mapWarning}</div>}
+      {browseMode ? <div className="map-hint">Drag to pan · wheel/pinch to zoom · choose a dispensary from the list</div> : !revealed && <div className="map-hint">Drag to pan · scroll/pinch to zoom · click to place your guess</div>}
+    </div>
+  );
 }
