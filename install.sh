@@ -7,7 +7,7 @@ APP_DIR="${GEOWEEDO_DIR:-$APP_HOME/GeoWeedo}"
 DOMAIN="${GEOWEEDO_DOMAIN:-geoweedo.yerbas.org}"
 
 if [[ $EUID -ne 0 ]]; then
-  echo "Run with sudo: sudo ./install.sh"
+  echo "Run with sudo: sudo bash install.sh"
   exit 1
 fi
 
@@ -125,7 +125,9 @@ Unit=geoweedo-wallet-worker.service
 WantedBy=timers.target
 EOF
 
-cat >/etc/nginx/sites-available/geoweedo <<EOF
+if [[ ! -f /etc/nginx/sites-available/geoweedo ]]; then
+  echo "==> Creating Nginx site"
+  cat >/etc/nginx/sites-available/geoweedo <<EOF
 server {
     listen 80;
     listen [::]:80;
@@ -144,8 +146,11 @@ server {
     }
 }
 EOF
+  ln -sf /etc/nginx/sites-available/geoweedo /etc/nginx/sites-enabled/geoweedo
+else
+  echo "==> Preserving existing Nginx site (including any Certbot/TLS configuration)"
+fi
 
-ln -sf /etc/nginx/sites-available/geoweedo /etc/nginx/sites-enabled/geoweedo
 nginx -t
 systemctl reload nginx
 systemctl daemon-reload
