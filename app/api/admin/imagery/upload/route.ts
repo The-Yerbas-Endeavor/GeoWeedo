@@ -1,13 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 
 export const runtime = 'nodejs';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
 
 const allowed: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -16,7 +12,7 @@ const allowed: Record<string, string> = {
 };
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const form = await request.formData();
   const file = form.get('file');
   const slugRaw = String(form.get('slug') || 'dispensary');
