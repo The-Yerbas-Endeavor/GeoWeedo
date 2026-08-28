@@ -16,6 +16,10 @@ export type DispensaryCandidate = {
   sourceUrl?: string;
   sourceLicense?: string;
   status: 'candidate' | 'reviewing' | 'approved' | 'rejected';
+  imageryStatus?: 'unchecked' | 'coverage' | 'no_coverage' | 'missing_coordinates' | 'error';
+  imageryCount?: number;
+  imageryCheckedAt?: string;
+  imageryMessage?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,7 +35,7 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
     const fingerprint = `${row.name}|${row.streetAddress || ''}|${row.city || ''}|${row.region || ''}`.toLowerCase();
     const duplicate = items.some((item) => `${item.name}|${item.streetAddress || ''}|${item.city || ''}|${item.region || ''}`.toLowerCase() === fingerprint);
     if (duplicate || !row.name.trim()) continue;
-    items.push({ ...row, id: `candidate-${crypto.randomUUID()}`, status: 'candidate', createdAt: now, updatedAt: now });
+    items.push({ ...row, id: `candidate-${crypto.randomUUID()}`, status: 'candidate', imageryStatus: row.imageryStatus || 'unchecked', createdAt: now, updatedAt: now });
     added++;
   }
   await writeRuntimeJson(FILE, items);
