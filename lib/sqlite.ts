@@ -1,5 +1,3 @@
-import 'server-only';
-
 import { mkdirSync } from 'fs';
 import path from 'path';
 import { DatabaseSync } from 'node:sqlite';
@@ -478,8 +476,6 @@ function initializeSchema(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS rpc_jobs_ready_idx ON rpc_jobs(status, available_at);
   `);
 
-  // Existing installations already have the first dispensary tables. Add newer
-  // nullable columns defensively without replacing the database.
   const additiveColumns = [
     ['dispensaries', 'postal_code', 'TEXT'],
     ['dispensaries', 'phone', 'TEXT'],
