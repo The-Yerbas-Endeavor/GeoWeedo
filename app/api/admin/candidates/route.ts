@@ -10,6 +10,38 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => null);
+
+  if (Array.isArray(body?.ids)) {
+    const ids = [...new Set(body.ids.map(String).filter(Boolean))].slice(0, 5000);
+    const action = String(body.action || '');
+    if (!ids.length) return NextResponse.json({ error: 'At least one candidate id is required.' }, { status: 400 });
+    if (!['approve', 'reject'].includes(action)) return NextResponse.json({ error: 'Bulk action must be approve or reject.' }, { status: 400 });
+
+    const all = await listCandidates();
+    const selected = all.filter((item) => ids.includes(item.id));
+    let updated = 0;
+    let skipped = 0;
+    const skippedReasons: Record<string, number> = {};
+
+    for (const item of selected) {
+      if (action === 'approve') {
+        const hasCoordinates = Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
+        const playableCoverage = item.imageryStatus === 'coverage';
+        if (!hasCoordinates || !playableCoverage) {
+          skipped++;
+          const reason = !hasCoordinates ? 'missing_coordinates' : 'imagery_not_playable';
+          skippedReasons[reason] = (skippedReasons[reason] || 0) + 1;
+          continue;
+        }
+      }
+
+      const result = await updateCandidate(item.id, { status: action === 'approve' ? 'approved' : 'rejected' });
+      if (result) updated++;
+    }
+
+    return NextResponse.json({ action, requested: ids.length, matched: selected.length, updated, skipped, skippedReasons });
+  }
+
   if (!body?.id) return NextResponse.json({ error: 'Candidate id is required.' }, { status: 400 });
   const patch: Partial<DispensaryCandidate> = {};
   if (['candidate', 'reviewing', 'approved', 'rejected'].includes(body.status)) patch.status = body.status as DispensaryCandidate['status'];
