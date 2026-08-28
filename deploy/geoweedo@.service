@@ -1,0 +1,19 @@
+[Unit]
+Description=GeoWeedo Next.js (%i slot)
+After=network.target
+
+[Service]
+Type=simple
+User=geo
+WorkingDirectory=/home/geo/GeoWeedo-%i
+Environment=NODE_ENV=production
+EnvironmentFile=-/home/geo/GeoWeedo-shared/.env.local
+ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port ${GEOWEEDO_PORT}
+Restart=always
+RestartSec=2
+TimeoutStartSec=30
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
