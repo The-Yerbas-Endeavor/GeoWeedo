@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { listCandidates } from '@/lib/candidateStore';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const all = (await listCandidates()).filter((item) => item.status !== 'rejected');
@@ -22,7 +23,6 @@ export async function GET() {
     }));
 
   const states = new Set(all.map((item) => item.region).filter(Boolean));
-
   return NextResponse.json({
     candidates,
     stats: {
@@ -31,7 +31,5 @@ export async function GET() {
       missingCoordinates: Math.max(0, all.length - candidates.length),
       states: states.size,
     },
-  }, {
-    headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
-  });
+  }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }
