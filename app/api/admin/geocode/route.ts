@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
+import { getAdminFromRequest } from '@/lib/adminAuth';
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const q = String(request.nextUrl.searchParams.get('q') || '').trim();
   if (q.length < 5) return NextResponse.json({ error: 'Enter a complete address.' }, { status: 400 });
 
@@ -20,7 +16,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)',
+        'User-Agent': 'GeoWeedo/0.4 (https://geoweedo.yerbas.org)',
         Referer: 'https://geoweedo.yerbas.org/',
       },
       next: { revalidate: 2592000 },
