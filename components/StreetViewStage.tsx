@@ -3,224 +3,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Viewer } from '@photo-sphere-viewer/core';
 
-type Props = {
-  latitude: number;
-  longitude: number;
-  heading?: number;
-  photoId?: string;
-  imageryProvider?: 'kartaview' | 'geoweedo';
-  imageUrl?: string;
-  projection?: string;
-  fieldOfView?: number;
-};
+type Props = { latitude:number; longitude:number; heading?:number; photoId?:string; imageryProvider?:'kartaview'|'geoweedo'; imageUrl?:string; projection?:string; fieldOfView?:number };
+type StreetPhoto = { id:string; lat:number; lng:number; heading:number; fieldOfView:number; projection:string; imageUrl:string; sequenceId:string; sequenceIndex:number; shotDate?:string|null };
+type ApiResponse = { photos?:StreetPhoto[]; initialIndex?:number; message?:string; error?:string };
 
-type StreetPhoto = {
-  id: string; lat: number; lng: number; heading: number; fieldOfView: number; projection: string;
-  imageUrl: string; sequenceId: string; sequenceIndex: number; shotDate?: string | null;
-};
-
-type ApiResponse = { provider?: string; photos?: StreetPhoto[]; initialIndex?: number; attribution?: string; message?: string; error?: string };
-
-export default function StreetViewStage({ latitude, longitude, heading = 0, photoId, imageryProvider = 'kartaview', imageUrl, projection = '', fieldOfView = 0 }: Props) {
-  const sphereRef = useRef<HTMLDivElement | null>(null);
-  const flatStageRef = useRef<HTMLDivElement | null>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; startX: number; startY: number } | null>(null);
-  const [photos, setPhotos] = useState<StreetPhoto[]>([]);
-  const [index, setIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [flatZoom, setFlatZoom] = useState(1);
-  const [flatOffset, setFlatOffset] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    setError(null); setIndex(0);
-    if (imageryProvider === 'geoweedo') {
-      if (!imageUrl) { setPhotos([]); setError('The approved GeoWeedo-hosted image is missing.'); setLoading(false); return; }
-      setPhotos([{ id: photoId || 'geoweedo-hosted', lat: latitude, lng: longitude, heading, fieldOfView, projection: projection.toUpperCase(), imageUrl, sequenceId: 'geoweedo', sequenceIndex: 0 }]);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true); setPhotos([]);
-    const query = new URLSearchParams({ lat: String(latitude), lng: String(longitude) });
-    if (photoId) query.set('photoId', photoId);
-    fetch(`/api/street-imagery?${query.toString()}`, { signal: controller.signal })
-      .then(async (response) => { const data = (await response.json()) as ApiResponse; if (!response.ok) throw new Error(data.error || 'Street imagery lookup failed.'); return data; })
-      .then((data) => {
-        const nextPhotos = data.photos ?? [];
-        setPhotos(nextPhotos);
-        setIndex(Math.min(Math.max(data.initialIndex ?? 0, 0), Math.max(0, nextPhotos.length - 1)));
-        if (!nextPhotos.length) setError(data.message || 'No KartaView imagery is available near this round yet.');
-      })
-      .catch((err) => { if (err?.name !== 'AbortError') setError(err instanceof Error ? err.message : 'Street imagery failed to load.'); })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, [latitude, longitude, heading, photoId, imageryProvider, imageUrl, projection, fieldOfView]);
-
-  const current = photos[index];
-  const isSphere = useMemo(() => Boolean(current && (current.projection === 'SPHERE' || current.projection === 'EQUIRECTANGULAR' || current.fieldOfView >= 300)), [current]);
-
-  useEffect(() => {
-    setFlatZoom(1);
-    setFlatOffset({ x: 0, y: 0 });
-    dragRef.current = null;
-  }, [current?.id]);
-
-  useEffect(() => {
-    const container = sphereRef.current;
-    viewerRef.current?.destroy();
-    viewerRef.current = null;
-    if (!current || !isSphere || !container) return;
-
-    const viewer = new Viewer({
-      container,
-      panorama: current.imageUrl,
-      navbar: ['zoom', 'move', 'caption', 'fullscreen'],
-      caption: imageryProvider === 'geoweedo' ? 'GeoWeedo hosted panorama' : 'KartaView street imagery',
-      defaultYaw: ((current.heading || 0) * Math.PI) / 180,
-      mousemove: true,
-      mousewheel: true,
-      mousewheelCtrlKey: false,
-      touchmoveTwoFingers: false,
-      keyboard: 'always',
-      moveInertia: 0.9,
-      moveSpeed: 1.4,
-    });
-
-    viewer.setCursor('grab');
-    viewerRef.current = viewer;
-
-    return () => {
-      if (viewerRef.current === viewer) viewerRef.current = null;
-      viewer.destroy();
-    };
-  }, [current, isSphere, imageryProvider]);
-
-  const step = (direction: -1 | 1) => setIndex((value) => Math.min(Math.max(value + direction, 0), Math.max(0, photos.length - 1)));
-  const providerLabel = imageryProvider === 'geoweedo' ? 'GeoWeedo hosted' : 'KartaView';
-  const setZoom = (next: number) => {
-    const clamped = Math.min(3.5, Math.max(1, next));
-    setFlatZoom(clamped);
-    if (clamped === 1) setFlatOffset({ x: 0, y: 0 });
-  };
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && /INPUT|TEXTAREA|SELECT|BUTTON/.test(target.tagName)) return;
-      const key = event.key.toLowerCase();
-      const viewer = viewerRef.current;
-
-      if (key === 'arrowleft' || key === 'a') {
-        if (isSphere && viewer) {
-          const position = viewer.getPosition();
-          viewer.rotate({ yaw: position.yaw - 0.12, pitch: position.pitch });
-        } else step(-1);
-        event.preventDefault();
-      }
-      if (key === 'arrowright' || key === 'd') {
-        if (isSphere && viewer) {
-          const position = viewer.getPosition();
-          viewer.rotate({ yaw: position.yaw + 0.12, pitch: position.pitch });
-        } else step(1);
-        event.preventDefault();
-      }
-      if (key === 'arrowup' || key === 'w') {
-        if (isSphere && viewer) {
-          const position = viewer.getPosition();
-          viewer.rotate({ yaw: position.yaw, pitch: Math.min(Math.PI / 2, position.pitch + 0.10) });
-        } else step(1);
-        event.preventDefault();
-      }
-      if (key === 'arrowdown' || key === 's') {
-        if (isSphere && viewer) {
-          const position = viewer.getPosition();
-          viewer.rotate({ yaw: position.yaw, pitch: Math.max(-Math.PI / 2, position.pitch - 0.10) });
-        } else step(-1);
-        event.preventDefault();
-      }
-      if (key === '+' || key === '=') {
-        if (isSphere && viewer) viewer.zoom(Math.min(100, viewer.getZoomLevel() + 10));
-        else setZoom(flatZoom + 0.25);
-      }
-      if (key === '-' || key === '_') {
-        if (isSphere && viewer) viewer.zoom(Math.max(0, viewer.getZoomLevel() - 10));
-        else setZoom(flatZoom - 0.25);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isSphere, photos.length, flatZoom]);
-
-  const onFlatWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setZoom(flatZoom + (event.deltaY < 0 ? 0.2 : -0.2));
-  };
-
-  const onFlatPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (flatZoom <= 1) return;
-    flatStageRef.current?.setPointerCapture(event.pointerId);
-    dragRef.current = { pointerId: event.pointerId, x: flatOffset.x, y: flatOffset.y, startX: event.clientX, startY: event.clientY };
-  };
-
-  const onFlatPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    setFlatOffset({ x: drag.x + event.clientX - drag.startX, y: drag.y + event.clientY - drag.startY });
-  };
-
-  const endFlatDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-    try { flatStageRef.current?.releasePointerCapture(event.pointerId); } catch {}
-  };
-
-  return (
-    <div className={`streetview-wrap ${isSphere ? 'streetview-spherical' : 'streetview-sequence'}`}>
-      {loading && <div className="map-error"><strong>Loading street imagery…</strong><span>Loading the approved starting frame.</span></div>}
-      {!loading && current && <>
-        {isSphere ? (
-          <>
-            <div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0} aria-label={`Interactive ${providerLabel} 360 panorama`} />
-            <div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div>
-          </>
-        ) : (
-          <div
-            ref={flatStageRef}
-            className={`street-photo-stage ${flatZoom > 1 ? 'is-zoomed' : ''}`}
-            tabIndex={0}
-            onWheel={onFlatWheel}
-            onPointerDown={onFlatPointerDown}
-            onPointerMove={onFlatPointerMove}
-            onPointerUp={endFlatDrag}
-            onPointerCancel={endFlatDrag}
-            onDoubleClick={() => setZoom(flatZoom > 1 ? 1 : 2)}
-            aria-label={`Interactive ${providerLabel} street-level sequence`}
-          >
-            <img
-              src={current.imageUrl}
-              alt={`${providerLabel} street-level imagery near the round location`}
-              draggable={false}
-              style={{ transform: `translate(${flatOffset.x}px, ${flatOffset.y}px) scale(${flatZoom})` }}
-            />
-            <button type="button" className="street-nav street-nav-prev" onClick={() => step(-1)} disabled={index <= 0} aria-label="Move backward">‹</button>
-            <button type="button" className="street-nav street-nav-next" onClick={() => step(1)} disabled={index >= photos.length - 1} aria-label="Move forward">›</button>
-            <div className="street-zoom-controls" aria-label="Street image zoom controls">
-              <button type="button" onClick={() => setZoom(flatZoom - 0.25)} disabled={flatZoom <= 1}>−</button>
-              <button type="button" onClick={() => setZoom(1)} disabled={flatZoom === 1}>Reset</button>
-              <button type="button" onClick={() => setZoom(flatZoom + 0.25)} disabled={flatZoom >= 3.5}>+</button>
-            </div>
-            <div className="street-drag-hint">A/D or W/S to move · wheel/double-click to zoom · drag when zoomed</div>
-          </div>
-        )}
-        <div className="street-imagery-toolbar">
-          <button type="button" onClick={() => step(-1)} disabled={index <= 0}>← Previous</button>
-          <span>{index + 1} / {photos.length} · {providerLabel}{isSphere ? ' · 360°' : ' · sequence'}</span>
-          <button type="button" onClick={() => step(1)} disabled={index >= photos.length - 1}>Next →</button>
-        </div>
-      </>}
-      {!loading && error && <div className="map-error"><strong>Street imagery unavailable</strong><span>{error}</span><span className="imagery-note">This round needs curated KartaView or GeoWeedo-hosted imagery before it should enter the live pool.</span></div>}
-    </div>
-  );
+export default function StreetViewStage({latitude,longitude,heading=0,photoId,imageryProvider='kartaview',imageUrl,projection='',fieldOfView=0}:Props){
+ const sphereRef=useRef<HTMLDivElement|null>(null), viewerRef=useRef<Viewer|null>(null);
+ const [photos,setPhotos]=useState<StreetPhoto[]>([]),[index,setIndex]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[flatZoom,setFlatZoom]=useState(1);
+ useEffect(()=>{setError(null);setIndex(0);setFlatZoom(1);if(imageryProvider==='geoweedo'){if(!imageUrl){setPhotos([]);setError('The approved GeoWeedo-hosted image is missing.');setLoading(false);return;}setPhotos([{id:photoId||'geoweedo-hosted',lat:latitude,lng:longitude,heading,fieldOfView,projection:projection.toUpperCase(),imageUrl,sequenceId:'geoweedo',sequenceIndex:0}]);setLoading(false);return;}const c=new AbortController();setLoading(true);setPhotos([]);const q=new URLSearchParams({lat:String(latitude),lng:String(longitude)});if(photoId)q.set('photoId',photoId);fetch(`/api/street-imagery?${q}`,{signal:c.signal}).then(async r=>{const d=await r.json() as ApiResponse;if(!r.ok)throw new Error(d.error||'Street imagery lookup failed.');return d;}).then(d=>{const p=d.photos||[];setPhotos(p);setIndex(Math.min(Math.max(d.initialIndex||0,0),Math.max(0,p.length-1)));if(!p.length)setError(d.message||'No KartaView imagery is available near this round yet.');}).catch(e=>{if(e?.name!=='AbortError')setError(e instanceof Error?e.message:'Street imagery failed to load.');}).finally(()=>setLoading(false));return()=>c.abort();},[latitude,longitude,heading,photoId,imageryProvider,imageUrl,projection,fieldOfView]);
+ const current=photos[index]; const isSphere=useMemo(()=>Boolean(current&&(current.projection==='SPHERE'||current.projection==='EQUIRECTANGULAR'||current.fieldOfView>=300)),[current]);
+ useEffect(()=>{const el=sphereRef.current;viewerRef.current?.destroy();viewerRef.current=null;if(!current||!isSphere||!el)return;const v=new Viewer({container:el,panorama:current.imageUrl,navbar:['zoom','move','fullscreen'],defaultYaw:((current.heading||0)*Math.PI)/180,mousemove:true,mousewheel:true,mousewheelCtrlKey:false,touchmoveTwoFingers:false,keyboard:'always',moveInertia:.9,moveSpeed:1.4});viewerRef.current=v;return()=>{if(viewerRef.current===v)viewerRef.current=null;v.destroy();};},[current,isSphere]);
+ const step=(d:-1|1)=>{setFlatZoom(1);setIndex(v=>Math.min(Math.max(v+d,0),Math.max(0,photos.length-1)));};
+ const zoom=(d:number)=>setFlatZoom(v=>Math.min(3.5,Math.max(1,v+d)));
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{const t=e.target as HTMLElement|null;if(t&&/INPUT|TEXTAREA|SELECT|BUTTON/.test(t.tagName))return;const k=e.key.toLowerCase(),v=viewerRef.current;if((k==='arrowleft'||k==='a')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw-.12,pitch:p.pitch});}else if(k==='arrowleft'||k==='a')step(-1);else if((k==='arrowright'||k==='d')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw+.12,pitch:p.pitch});}else if(k==='arrowright'||k==='d')step(1);else if(k==='arrowup'||k==='w'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.min(Math.PI/2,p.pitch+.1)});}else step(1);}else if(k==='arrowdown'||k==='s'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.max(-Math.PI/2,p.pitch-.1)});}else step(-1);}else return;e.preventDefault();};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[isSphere,photos.length]);
+ const label=imageryProvider==='geoweedo'?'GeoWeedo hosted':'KartaView';
+ return <div className={`streetview-wrap ${isSphere?'streetview-spherical':'streetview-sequence'}`}>
+  {loading&&<div className="map-error"><strong>Loading street imagery…</strong></div>}
+  {!loading&&current&&<>{isSphere?<><div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0}/><div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div></>:<div className="street-photo-stage" tabIndex={0} onWheel={e=>{e.preventDefault();zoom(e.deltaY<0?.2:-.2);}}>
+   <img src={current.imageUrl} alt={`${label} street imagery`} draggable={false} style={{transform:`scale(${flatZoom})`}}/>
+   <button type="button" className="street-nav street-nav-prev" onClick={()=>step(-1)} disabled={index<=0}>‹</button><button type="button" className="street-nav street-nav-next" onClick={()=>step(1)} disabled={index>=photos.length-1}>›</button>
+   <div className="street-zoom-controls"><button onClick={()=>zoom(-.25)} disabled={flatZoom<=1}>−</button><button onClick={()=>setFlatZoom(1)} disabled={flatZoom===1}>Reset</button><button onClick={()=>zoom(.25)} disabled={flatZoom>=3.5}>+</button></div>
+   <div className="street-drag-hint">← → or A/D: travel street · wheel: zoom</div>
+  </div>}
+  <div className="street-imagery-toolbar"><button onClick={()=>step(-1)} disabled={index<=0}>← Previous</button><span>{index+1} / {photos.length} · {label}{isSphere?' · 360°':' · street sequence'}</span><button onClick={()=>step(1)} disabled={index>=photos.length-1}>Next →</button></div></>}
+  {!loading&&error&&<div className="map-error"><strong>Street imagery unavailable</strong><span>{error}</span></div>}
+ </div>;
 }
