@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "deploy": "bash scripts/deploy-zero-downtime.sh",
+    "deploy:install": "bash scripts/install-zero-downtime.sh",
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "bash scripts/create-admin.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
