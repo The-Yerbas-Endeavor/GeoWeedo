@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 
 export const runtime = 'nodejs';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
 
 function parseCsvLine(line: string) {
   const values: string[] = [];
@@ -100,7 +96,7 @@ function normalizedJsonRows(text: string, source: string, sourceUrl?: string, so
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const form = await request.formData();
   const file = form.get('file');
   if (!(file instanceof File)) return NextResponse.json({ error: 'CSV or JSON file is required.' }, { status: 400 });
