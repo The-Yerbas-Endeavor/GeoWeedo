@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import maplibregl, { LngLatBounds } from 'maplibre-gl';
+import {
+  LngLatBounds,
+  Map as LibreMap,
+  Marker,
+  NavigationControl,
+  Popup,
+} from 'maplibre-gl';
 
 export type LatLng = { lat: number; lng: number };
 
@@ -14,9 +20,9 @@ type Props = {
 
 export default function GuessMap({ guess, actual = null, revealed = false, onGuess }: Props) {
   const nodeRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const guessMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const actualMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const mapRef = useRef<LibreMap | null>(null);
+  const guessMarkerRef = useRef<Marker | null>(null);
+  const actualMarkerRef = useRef<Marker | null>(null);
   const revealedRef = useRef(revealed);
   const onGuessRef = useRef(onGuess);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +39,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
     if (!nodeRef.current || mapRef.current) return;
 
     try {
-      const map = new maplibregl.Map({
+      const map = new LibreMap({
         container: nodeRef.current,
         style: 'https://tiles.openfreemap.org/styles/bright',
         center: [-98, 39],
@@ -41,7 +47,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         attributionControl: true,
       });
 
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
       map.on('click', (event) => {
         if (revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
@@ -74,18 +80,18 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
     if (map.getSource('guess-line')) map.removeSource('guess-line');
 
     if (guess) {
-      guessMarkerRef.current = new maplibregl.Marker({ color: '#67d66e' })
+      guessMarkerRef.current = new Marker({ color: '#67d66e' })
         .setLngLat([guess.lng, guess.lat])
-        .setPopup(new maplibregl.Popup({ offset: 18 }).setText('Your guess'))
+        .setPopup(new Popup({ offset: 18 }).setText('Your guess'))
         .addTo(map);
 
       if (!revealed) map.easeTo({ center: [guess.lng, guess.lat], duration: 350 });
     }
 
     if (revealed && actual) {
-      actualMarkerRef.current = new maplibregl.Marker({ color: '#f4f7f4' })
+      actualMarkerRef.current = new Marker({ color: '#f4f7f4' })
         .setLngLat([actual.lng, actual.lat])
-        .setPopup(new maplibregl.Popup({ offset: 18 }).setText('Actual location'))
+        .setPopup(new Popup({ offset: 18 }).setText('Actual location'))
         .addTo(map);
 
       if (guess) {
