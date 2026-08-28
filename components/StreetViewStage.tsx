@@ -56,57 +56,81 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
   }, [latitude, longitude, heading, photoId, imageryProvider, imageUrl, projection, fieldOfView]);
 
   const current = photos[index];
-  const isSphere = useMemo(() => Boolean(current && (current.projection === 'SPHERE' || current.fieldOfView >= 300)), [current]);
+  const isSphere = useMemo(() => Boolean(current && (current.projection === 'SPHERE' || current.projection === 'EQUIRECTANGULAR' || current.fieldOfView >= 300)), [current]);
 
   useEffect(() => {
-    viewerRef.current?.destroy(); viewerRef.current = null;
-    if (!current || !isSphere || !sphereRef.current) return;
-    viewerRef.current = new Viewer({
-      container: sphereRef.current,
+    const container = sphereRef.current;
+    viewerRef.current?.destroy();
+    viewerRef.current = null;
+    if (!current || !isSphere || !container) return;
+
+    const viewer = new Viewer({
+      container,
       panorama: current.imageUrl,
       navbar: ['zoom', 'move', 'caption', 'fullscreen'],
       caption: imageryProvider === 'geoweedo' ? 'GeoWeedo hosted panorama' : 'KartaView street imagery',
       defaultYaw: ((current.heading || 0) * Math.PI) / 180,
+      mousemove: true,
+      mousewheel: true,
       mousewheelCtrlKey: false,
       touchmoveTwoFingers: false,
+      keyboard: 'always',
+      moveInertia: 0.8,
+      moveSpeed: 1.25,
     });
-    return () => { viewerRef.current?.destroy(); viewerRef.current = null; };
+
+    viewer.setCursor('grab');
+    viewerRef.current = viewer;
+
+    // PSV already owns pointer/touch gestures. Explicitly keep browser scrolling and
+    // parent overlays from stealing drag gestures from the WebGL canvas.
+    const stop = (event: Event) => event.stopPropagation();
+    container.addEventListener('pointerdown', stop);
+    container.addEventListener('pointermove', stop);
+    container.addEventListener('touchstart', stop, { passive: true });
+    container.addEventListener('touchmove', stop, { passive: true });
+
+    return () => {
+      container.removeEventListener('pointerdown', stop);
+      container.removeEventListener('pointermove', stop);
+      container.removeEventListener('touchstart', stop);
+      container.removeEventListener('touchmove', stop);
+      if (viewerRef.current === viewer) viewerRef.current = null;
+      viewer.destroy();
+    };
   }, [current, isSphere, imageryProvider]);
 
   const step = (direction: -1 | 1) => setIndex((value) => Math.min(Math.max(value + direction, 0), Math.max(0, photos.length - 1)));
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') step(-1);
-      if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') step(1);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [photos.length]);
-
   const providerLabel = imageryProvider === 'geoweedo' ? 'GeoWeedo hosted' : 'KartaView';
 
+  useEffect(() => {
+    if (isSphere) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') step(-1);
+      if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') step(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSphere, photos.length]);
+
   return (
-    <div className="streetview-wrap">
+    <div className={`streetview-wrap ${isSphere ? 'streetview-spherical' : 'streetview-sequence'}`}>
       {loading && <div className="map-error"><strong>Loading street imagery…</strong><span>Loading the approved starting frame.</span></div>}
       {!loading && current && <>
         {isSphere ? (
-          <div ref={sphereRef} className="streetview-canvas" aria-label={`Interactive ${providerLabel} 360 panorama`} />
+          <>
+            <div ref={sphereRef} className="streetview-canvas interactive-sphere" aria-label={`Interactive ${providerLabel} 360 panorama`} />
+            <div className="street-drag-hint">Drag to look around · scroll to zoom · arrows also rotate</div>
+          </>
         ) : (
-          <div className="street-photo-stage" aria-label={`Interactive ${providerLabel} street sequence`}>
+          <div className="street-photo-stage">
             <img src={current.imageUrl} alt={`${providerLabel} street-level imagery near the round location`} draggable={false} />
-            {photos.length > 1 && <>
-              <button type="button" className="street-nav street-nav-prev" aria-label="Move backward along street imagery" onClick={() => step(-1)} disabled={index <= 0}>‹</button>
-              <button type="button" className="street-nav street-nav-next" aria-label="Move forward along street imagery" onClick={() => step(1)} disabled={index >= photos.length - 1}>›</button>
-            </>}
-            <div className="street-drag-hint">Use ← → or A / D to move along the street</div>
+            <button type="button" className="street-nav street-nav-prev" onClick={() => step(-1)} disabled={index <= 0} aria-label="Move backward">‹</button>
+            <button type="button" className="street-nav street-nav-next" onClick={() => step(1)} disabled={index >= photos.length - 1} aria-label="Move forward">›</button>
+            <div className="street-drag-hint">Move with ‹ › or keyboard A / D</div>
           </div>
         )}
-        <div className="street-imagery-toolbar">
-          <button type="button" onClick={() => step(-1)} disabled={index <= 0}>← Previous</button>
-          <span>{index + 1} / {photos.length} · {providerLabel}{isSphere ? ' · drag to look around' : ' · street sequence'}</span>
-          <button type="button" onClick={() => step(1)} disabled={index >= photos.length - 1}>Next →</button>
-        </div>
+        <div className="street-imagery-toolbar"><button type="button" onClick={() => step(-1)} disabled={index <= 0}>← Previous</button><span>{index + 1} / {photos.length} · {providerLabel}{isSphere ? ' · 360°' : ''}</span><button type="button" onClick={() => step(1)} disabled={index >= photos.length - 1}>Next →</button></div>
       </>}
       {!loading && error && <div className="map-error"><strong>Street imagery unavailable</strong><span>{error}</span><span className="imagery-note">This round needs curated KartaView or GeoWeedo-hosted imagery before it should enter the live pool.</span></div>}
     </div>
