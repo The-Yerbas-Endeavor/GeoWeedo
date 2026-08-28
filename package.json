@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
-    "admin:create": "node --conditions=react-server --experimental-strip-types scripts/create-admin.mjs",
+    "admin:create": "bash scripts/create-admin.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
