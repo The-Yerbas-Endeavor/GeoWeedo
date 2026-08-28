@@ -23,6 +23,9 @@ model Dispensary {
   heading              Float?
   recreational         Boolean  @default(false)
   medical              Boolean  @default(false)
+  dataSource           String?
+  sourceUrl            String?
+  sourceLicense        String?
   imageryProvider      String?
   imageryPhotoId       String?
   imagerySequenceId    String?
@@ -31,7 +34,7 @@ model Dispensary {
   imageryHeading       Float?
   imageryFieldOfView   Float?
   imageryProjection    String?
-  imageryUrl            String?
+  imageryUrl           String?
   imageryVerifiedAt    DateTime?
   verified             Boolean  @default(false)
   active               Boolean  @default(false)
@@ -39,17 +42,36 @@ model Dispensary {
   updatedAt            DateTime @updatedAt
 
   rounds               Round[]
+  sponsoredListings    SponsoredListing[]
+}
+
+model Player {
+  id                 String   @id @default(cuid())
+  handle             String?  @unique
+  yerbasAddress      String?  @unique
+  walletVerifiedAt   DateTime?
+  rewardEligible     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  games              Game[]
+  rewardPayouts      RewardPayout[]
 }
 
 model Game {
-  id          String   @id @default(cuid())
-  mode        String   @default("standard")
-  dailyKey    String?
-  totalScore  Int      @default(0)
-  completedAt DateTime?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  playerId     String?
+  mode         String   @default("standard")
+  dailyKey     String?
+  totalScore   Int      @default(0)
+  rewardYerb   Decimal? @db.Decimal(18, 8)
+  rewardState  String   @default("not_eligible")
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
 
-  rounds      Round[]
+  player       Player?  @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  rounds       Round[]
+  rewardPayout RewardPayout?
 }
 
 model Round {
@@ -67,4 +89,35 @@ model Round {
   dispensary    Dispensary @relation(fields: [dispensaryId], references: [id])
 
   @@unique([gameId, roundNumber])
+}
+
+model RewardPayout {
+  id          String   @id @default(cuid())
+  playerId    String
+  gameId      String   @unique
+  amountYerb  Decimal  @db.Decimal(18, 8)
+  status      String   @default("pending")
+  txid        String?  @unique
+  reviewedAt  DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model SponsoredListing {
+  id             String     @id @default(cuid())
+  dispensaryId   String
+  amountYerb     Decimal    @db.Decimal(18, 8)
+  paymentTxid    String?    @unique
+  priorityWeight Int        @default(1)
+  status         String     @default("pending")
+  startsAt       DateTime
+  endsAt         DateTime
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  dispensary     Dispensary @relation(fields: [dispensaryId], references: [id], onDelete: Cascade)
 }
