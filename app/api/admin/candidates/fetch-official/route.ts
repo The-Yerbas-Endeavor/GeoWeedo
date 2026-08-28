@@ -38,8 +38,7 @@ async function fetchOregon() {
   return (Array.isArray(data) ? data : []).filter((row: any) => String(row.license_type || '').toLowerCase().includes('retail') && !String(row.license_expired || '').toLowerCase().includes('yes')).map((row: any) => ({
     name: String(row.business_name || row.business_licenses || '').trim(),
     streetAddress: String(row.physical_address || '').trim() || undefined,
-    city: undefined,
-    region: 'Oregon', country: 'USA', latitude: undefined, longitude: undefined, website: undefined,
+    city: undefined, region: 'Oregon', country: 'USA', latitude: undefined, longitude: undefined, website: undefined,
     licenseNumber: String(row.license_number || '').trim() || undefined,
     dataSource: 'Oregon OLCC Open Data', sourceUrl,
     sourceLicense: 'Official Oregon Open Data; verify current portal terms/metadata.',
@@ -95,6 +94,24 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const preset = String(body?.preset || '');
   try {
+    if (preset === 'all') {
+      const sources = [
+        ['Oregon OLCC', await fetchOregon()],
+        ['Nevada CCB', await fetchNevada()],
+        ['Washington LCB', await fetchWashington()],
+      ] as const;
+      let added = 0;
+      let fetched = 0;
+      let total = 0;
+      const details = [];
+      for (const [source, rows] of sources) {
+        const result = await importCandidates(rows as any[]);
+        added += result.added; fetched += rows.length; total = result.total;
+        details.push({ source, fetched: rows.length, added: result.added });
+      }
+      return NextResponse.json({ added, fetched, total, details, source: 'Official state sync' }, { status: 201 });
+    }
+
     let rows: any[] = [];
     let source = '';
     if (preset === 'oregon-olcc') { rows = await fetchOregon(); source = 'Oregon OLCC Cannabis Business Licenses & Endorsements'; }
