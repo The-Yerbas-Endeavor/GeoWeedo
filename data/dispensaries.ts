@@ -12,6 +12,9 @@ export type Dispensary = {
   photoUrl?: string;
   panoramaId?: string;
   heading?: number;
+  dataSource?: string;
+  sourceUrl?: string;
+  sourceLicense?: string;
   imageryProvider?: 'kartaview' | 'geoweedo';
   imageryPhotoId?: string;
   imagerySequenceId?: string;
@@ -21,6 +24,8 @@ export type Dispensary = {
   imageryFieldOfView?: number;
   imageryProjection?: string;
   imageryUrl?: string;
+  priorityWeight?: number;
+  sponsoredUntil?: string;
   recreational: boolean;
   medical: boolean;
   verified: boolean;
@@ -37,6 +42,7 @@ export const dispensaries: Dispensary[] = [
     city: 'Portland',
     region: 'Oregon',
     country: 'USA',
+    dataSource: 'demo',
     recreational: true,
     medical: true,
     verified: true,
@@ -51,6 +57,7 @@ export const dispensaries: Dispensary[] = [
     city: 'Denver',
     region: 'Colorado',
     country: 'USA',
+    dataSource: 'demo',
     recreational: true,
     medical: true,
     verified: true,
@@ -65,6 +72,7 @@ export const dispensaries: Dispensary[] = [
     city: 'Las Vegas',
     region: 'Nevada',
     country: 'USA',
+    dataSource: 'demo',
     recreational: true,
     medical: true,
     verified: true,
@@ -79,6 +87,7 @@ export const dispensaries: Dispensary[] = [
     city: 'Los Angeles',
     region: 'California',
     country: 'USA',
+    dataSource: 'demo',
     recreational: true,
     medical: true,
     verified: true,
@@ -93,6 +102,7 @@ export const dispensaries: Dispensary[] = [
     city: 'Seattle',
     region: 'Washington',
     country: 'USA',
+    dataSource: 'demo',
     recreational: true,
     medical: false,
     verified: true,
