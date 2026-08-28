@@ -13,7 +13,7 @@ fi
 
 echo "==> Installing GeoWeedo dependencies"
 apt-get update
-apt-get install -y git curl build-essential nginx sqlite3 ca-certificates
+apt-get install -y git curl build-essential nginx sqlite3 ca-certificates openssl
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'Number(process.versions.node.split(`.`)[0])')" -lt 22 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -35,11 +35,23 @@ if [[ ! -f .env.local ]]; then
   chown "$APP_USER:$APP_USER" .env.local
 fi
 
+if grep -q '^GEOWEEDO_SESSION_SECRET=$' .env.local; then
+  SESSION_SECRET="$(openssl rand -hex 32)"
+  sed -i "s/^GEOWEEDO_SESSION_SECRET=$/GEOWEEDO_SESSION_SECRET=$SESSION_SECRET/" .env.local
+  unset SESSION_SECRET
+fi
+
+chmod 600 .env.local
+chown "$APP_USER:$APP_USER" .env.local
+
 mkdir -p data/runtime public/uploads/dispensaries
 chown -R "$APP_USER:$APP_USER" data/runtime public/uploads
 chmod 750 data/runtime
 
+echo "==> Initializing SQLite schema"
 sudo -u "$APP_USER" npm run db:init
+chmod 640 data/runtime/geoweedo.sqlite || true
+chown "$APP_USER:$APP_USER" data/runtime/geoweedo.sqlite || true
 
 if ! sudo -u "$APP_USER" sqlite3 data/runtime/geoweedo.sqlite "SELECT username FROM admin_users LIMIT 1;" | grep -q .; then
   echo
@@ -78,9 +90,39 @@ Environment=PORT=3000
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/geoweedo-wallet-worker.service <<EOF
+[Unit]
+Description=GeoWeedo restricted YERB wallet worker
+After=network.target geoweedo.service
+
+[Service]
+Type=oneshot
+User=$APP_USER
+WorkingDirectory=$APP_DIR
+ExecStart=/usr/bin/npm run wallet:worker
+PrivateTmp=true
+NoNewPrivileges=true
+EOF
+
+cat >/etc/systemd/system/geoweedo-wallet-worker.timer <<EOF
+[Unit]
+Description=Run GeoWeedo YERB wallet worker every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Persistent=true
+Unit=geoweedo-wallet-worker.service
+
+[Install]
+WantedBy=timers.target
 EOF
 
 cat >/etc/nginx/sites-available/geoweedo <<EOF
@@ -108,9 +150,12 @@ nginx -t
 systemctl reload nginx
 systemctl daemon-reload
 systemctl enable --now geoweedo
+systemctl enable --now geoweedo-wallet-worker.timer
 
 echo
 echo "GeoWeedo installed."
 echo "Database: $APP_DIR/data/runtime/geoweedo.sqlite"
 echo "Admin login: https://$DOMAIN/admin/login"
-echo "Check: systemctl status geoweedo --no-pager"
+echo "App status: systemctl status geoweedo --no-pager"
+echo "Wallet timer: systemctl status geoweedo-wallet-worker.timer --no-pager"
+echo "Withdrawals remain disabled until YERB_WITHDRAWALS_ENABLED=true is set in .env.local."
