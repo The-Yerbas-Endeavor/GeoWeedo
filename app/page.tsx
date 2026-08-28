@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import GuessMap, { LatLng } from '@/components/GuessMap';
 import StreetViewStage from '@/components/StreetViewStage';
-import { dispensaries } from '@/data/dispensaries';
+import { dispensaries, type Dispensary } from '@/data/dispensaries';
 
 const MAX_SCORE = 5000;
 
@@ -34,8 +34,22 @@ export default function HomePage() {
   const [revealed, setRevealed] = useState(false);
   const [roundDistance, setRoundDistance] = useState<number | null>(null);
   const [roundScore, setRoundScore] = useState<number | null>(null);
+  const [approvedDispensaries, setApprovedDispensaries] = useState<Dispensary[]>([]);
 
-  const rounds = useMemo(() => dispensaries.filter((item) => item.active).slice(0, 5), []);
+  useEffect(() => {
+    fetch('/api/dispensaries', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Failed to load approved dispensaries.')))
+      .then((data) => setApprovedDispensaries(Array.isArray(data.dispensaries) ? data.dispensaries : []))
+      .catch(() => setApprovedDispensaries([]));
+  }, []);
+
+  const rounds = useMemo(() => {
+    const approved = approvedDispensaries.filter((item) => item.active && item.verified && item.imageryPhotoId);
+    const demos = dispensaries.filter((item) => item.active);
+    const pool = approved.length >= 5 ? approved : [...approved, ...demos.filter((demo) => !approved.some((item) => item.id === demo.id))];
+    return pool.slice(0, 5);
+  }, [approvedDispensaries]);
+
   const current = rounds[round];
   const total = scores.reduce((sum, value) => sum + value, 0);
   const onGuess = useCallback((value: LatLng) => setGuess(value), []);
@@ -134,18 +148,14 @@ export default function HomePage() {
 
       <section className="panorama-stage live-panorama">
         <StreetViewStage
-          latitude={current.latitude}
-          longitude={current.longitude}
-          heading={current.heading}
+          latitude={current.imageryLatitude ?? current.latitude}
+          longitude={current.imageryLongitude ?? current.longitude}
+          heading={current.imageryHeading ?? current.heading}
+          photoId={current.imageryPhotoId}
         />
 
         <aside className="guess-card live-guess-card">
-          <GuessMap
-            guess={guess}
-            actual={actual}
-            revealed={revealed}
-            onGuess={onGuess}
-          />
+          <GuessMap guess={guess} actual={actual} revealed={revealed} onGuess={onGuess} />
 
           {!revealed ? (
             <div className="guess-actions">
