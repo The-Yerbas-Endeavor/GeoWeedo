@@ -64,11 +64,23 @@ function normalizedCsvRows(text: string, source: string, sourceUrl?: string, sou
 }
 
 function normalizedJsonRows(text: string, source: string, sourceUrl?: string, sourceLicense?: string) {
-  const parsed = JSON.parse(text);
-  const array = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.data) ? parsed.data : Array.isArray(parsed?.results) ? parsed.results : [];
-  return array
-    .filter((item: unknown): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
-    .map((item) => normalizeObject(item, source, sourceUrl, sourceLicense))
+  const parsed: unknown = JSON.parse(text);
+  let array: unknown[] = [];
+
+  if (Array.isArray(parsed)) {
+    array = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    const object = parsed as Record<string, unknown>;
+    if (Array.isArray(object.data)) array = object.data;
+    else if (Array.isArray(object.results)) array = object.results;
+  }
+
+  const objects: Record<string, unknown>[] = array.filter(
+    (item: unknown): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item),
+  );
+
+  return objects
+    .map((item: Record<string, unknown>) => normalizeObject(item, source, sourceUrl, sourceLicense))
     .filter((row) => row.name);
 }
 
