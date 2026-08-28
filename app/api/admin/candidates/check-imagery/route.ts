@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 import { listCandidates, updateCandidate } from '@/lib/candidateStore';
 
 export const runtime = 'nodejs';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
 
 async function checkCoverage(lat: number, lng: number) {
   const url = new URL('https://api.openstreetcam.org/2.0/photo/');
@@ -17,7 +13,7 @@ async function checkCoverage(lat: number, lng: number) {
   url.searchParams.set('orderBy', 'id');
   url.searchParams.set('orderDirection', 'desc');
   url.searchParams.set('radius', '500');
-  const response = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
+  const response = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.4 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
   if (!response.ok) throw new Error(`KartaView returned ${response.status}`);
   const json = await response.json();
   const rows = Array.isArray(json?.result?.data) ? json.result.data : Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
@@ -25,7 +21,7 @@ async function checkCoverage(lat: number, lng: number) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
   const limit = Math.max(1, Math.min(Number(body?.limit) || 10, 10));
