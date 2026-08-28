@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 import { getDatabase, getDatabasePath } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
 
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
-
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
   const db = getDatabase();
   const tables = [
