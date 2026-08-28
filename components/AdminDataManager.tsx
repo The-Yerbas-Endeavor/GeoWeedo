@@ -25,6 +25,7 @@ export default function AdminDataManager() {
     noCoverage: candidates.filter((item) => item.imageryStatus === 'no_coverage').length,
     missingCoordinates: candidates.filter((item) => item.imageryStatus === 'missing_coordinates').length,
     unchecked: candidates.filter((item) => !item.imageryStatus || item.imageryStatus === 'unchecked').length,
+    mapReady: candidates.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude) && item.status !== 'rejected').length,
   }), [candidates]);
 
   async function load() {
@@ -62,8 +63,17 @@ export default function AdminDataManager() {
       });
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `${label} fetch failed.`);
-      setStatus(`${label}: fetched ${data.fetched} rows and added ${data.added} new candidates. ${data.total} candidates are queued.`);
+      if (!response.ok && !Array.isArray(data.details)) throw new Error(data.error || `${label} fetch failed.`);
+
+      if (Array.isArray(data.details)) {
+        const failed = data.details.filter((item: any) => !item.ok);
+        const detail = data.details.map((item: any) => item.ok
+          ? `${item.source}: ${item.fetched} fetched / ${item.added} new / ${item.geocoded} map-ready`
+          : `${item.source}: FAILED (${item.error})`).join(' · ');
+        setStatus(`${label}: ${data.fetched || 0} fetched, ${data.added || 0} new, ${data.geocoded || 0} map-ready.${failed.length ? ` ${failed.length} source(s) failed.` : ''} ${detail}`);
+      } else {
+        setStatus(`${label}: fetched ${data.fetched} rows, added ${data.added} new candidates, and ${data.geocoded || 0} have coordinates for the public map. ${data.total} candidates are queued.`);
+      }
       await load();
     } catch (error) { setStatus(error instanceof Error ? error.message : `${label} fetch failed.`); }
     finally { setBusy(false); }
@@ -133,7 +143,7 @@ export default function AdminDataManager() {
         </div>
         <div className="admin-panel">
           <h2>Official source presets</h2>
-          <div className="source-note"><strong>Oregon + Nevada + Washington</strong><span>Pull all three direct official feeds into the SQLite candidate database in one pass.</span><button className="primary" disabled={busy} onClick={() => fetchOfficial('all', 'Official state sync')}>Fetch all official dispensaries</button></div>
+          <div className="source-note"><strong>Oregon + Nevada + Washington</strong><span>Pull all three direct official feeds into the SQLite candidate database in one pass. Each state imports independently, so one source failure no longer blocks the others.</span><button className="primary" disabled={busy} onClick={() => fetchOfficial('all', 'Official state sync')}>Fetch all official dispensaries</button></div>
           <div className="source-note"><strong>California · DCC</strong><span>DCC license search is refreshed daily. Prioritize active Type 10 storefront retailer licenses. Use the DCC export until a stable public bulk API is confirmed.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
           <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy} onClick={() => fetchOfficial('oregon-olcc', 'Oregon OLCC')}>Fetch Oregon retailers now</button></div>
           <div className="source-note"><strong>Nevada · direct import</strong><span>CCB's official licensed retail-location list is parsed directly.</span><button className="secondary" disabled={busy} onClick={() => fetchOfficial('nevada-ccb', 'Nevada CCB')}>Fetch Nevada retailers now</button></div>
@@ -142,7 +152,7 @@ export default function AdminDataManager() {
       </section>
 
       <section className="admin-panel approved-list">
-        <div className="queue-toolbar"><div><h2>Batch imagery triage</h2><p className="admin-help">Coverage {stats.coverage} · Hosted imagery needed {stats.noCoverage} · Coordinates needed {stats.missingCoordinates} · Unchecked {stats.unchecked}</p></div><button className="primary" disabled={busy || stats.unchecked === 0} onClick={checkImageryBatch}>Check next 10</button></div>
+        <div className="queue-toolbar"><div><h2>Batch imagery triage</h2><p className="admin-help">Public map ready {stats.mapReady} · Coverage {stats.coverage} · Hosted imagery needed {stats.noCoverage} · Coordinates needed {stats.missingCoordinates} · Unchecked {stats.unchecked}</p></div><button className="primary" disabled={busy || stats.unchecked === 0} onClick={checkImageryBatch}>Check next 10</button></div>
       </section>
 
       <section className="admin-panel approved-list">
