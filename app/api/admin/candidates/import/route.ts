@@ -28,18 +28,31 @@ function first(row: Record<string, string>, keys: string[]) {
   for (const key of keys) if (row[key] !== undefined && row[key] !== '') return row[key];
   return '';
 }
-
-function normalizeObject(input: Record<string, unknown>, source: string, sourceUrl?: string, sourceLicense?: string) {
+function normalizedRecord(input: Record<string, unknown>) {
   const row: Record<string, string> = {};
   Object.entries(input).forEach(([key, value]) => { row[normalizeKey(key)] = value == null ? '' : String(value).trim(); });
+  return row;
+}
+function californiaStorefrontEligible(input: Record<string, unknown>) {
+  const row = normalizedRecord(input);
+  const licenseType = first(row, ['licensetype', 'licensecategory', 'type']);
+  const licenseStatus = first(row, ['licensestatus', 'status']);
+  const number = first(row, ['licensenumber', 'licenseid', 'license']);
+  const storefront = /type\s*10|storefront retailer|^retailer$/i.test(licenseType) || /^c10-/i.test(number);
+  const active = !licenseStatus || /active|about to expire|pending renewal/i.test(licenseStatus);
+  return storefront && active;
+}
+
+function normalizeObject(input: Record<string, unknown>, source: string, sourceUrl?: string, sourceLicense?: string) {
+  const row = normalizedRecord(input);
   const latRaw = first(row, ['latitude', 'lat']);
   const lngRaw = first(row, ['longitude', 'lng', 'lon', 'long']);
   const latitude = Number(latRaw); const longitude = Number(lngRaw);
   return {
-    name: first(row, ['businessname', 'licenseename', 'facilityname', 'tradename', 'name', 'doingbusinessas', 'dba', 'premisename']),
+    name: first(row, ['businessname', 'licenseename', 'facilityname', 'tradename', 'name', 'doingbusinessas', 'dba', 'premisename', 'dbaname', 'legalbusinessname']),
     streetAddress: first(row, ['streetaddress', 'address', 'premiseaddress', 'locationaddress', 'physicaladdress', 'premisestreetaddress']),
     city: first(row, ['city', 'premisecity', 'locationcity']),
-    region: first(row, ['state', 'region', 'province', 'premisestate']),
+    region: first(row, ['state', 'region', 'province', 'premisestate']) || (source === 'california-dcc' ? 'California' : ''),
     country: first(row, ['country']) || 'USA',
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
@@ -59,8 +72,9 @@ function normalizedCsvRows(text: string, source: string, sourceUrl?: string, sou
     const fields = parseCsvLine(line);
     const object: Record<string, unknown> = {};
     headers.forEach((header, index) => { object[header] = fields[index] || ''; });
+    if (source === 'california-dcc' && !californiaStorefrontEligible(object)) return null;
     return normalizeObject(object, source, sourceUrl, sourceLicense);
-  }).filter((row) => row.name);
+  }).filter((row): row is NonNullable<typeof row> => Boolean(row?.name));
 }
 
 function normalizedJsonRows(text: string, source: string, sourceUrl?: string, sourceLicense?: string) {
@@ -80,6 +94,7 @@ function normalizedJsonRows(text: string, source: string, sourceUrl?: string, so
   );
 
   return objects
+    .filter((item) => source !== 'california-dcc' || californiaStorefrontEligible(item))
     .map((item: Record<string, unknown>) => normalizeObject(item, source, sourceUrl, sourceLicense))
     .filter((row) => row.name);
 }
@@ -101,7 +116,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'The uploaded CSV/JSON could not be parsed.' }, { status: 400 });
   }
-  if (!rows.length) return NextResponse.json({ error: 'No usable rows found. Include a business/name column.' }, { status: 400 });
+  if (!rows.length) return NextResponse.json({ error: source === 'california-dcc' ? 'No active California Type 10 storefront retailer rows were found.' : 'No usable rows found. Include a business/name column.' }, { status: 400 });
   const result = await importCandidates(rows);
   return NextResponse.json({ ...result, parsed: rows.length }, { status: 201 });
 }
