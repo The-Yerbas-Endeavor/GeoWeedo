@@ -55,17 +55,17 @@ export default function AdminDataManager() {
     finally { setBusy(false); }
   }
 
-  async function fetchOregon() {
+  async function fetchOfficial(preset: 'oregon-olcc' | 'nevada-ccb' | 'washington-lcb', label: string) {
     setBusy(true);
     try {
       const response = await fetch('/api/admin/candidates/fetch-official', {
-        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ preset: 'oregon-olcc' }),
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ preset }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Oregon OLCC fetch failed.');
-      setStatus(`Oregon OLCC: fetched ${data.fetched} retailer rows and added ${data.added} new candidates. ${data.total} candidates are queued.`);
+      if (!response.ok) throw new Error(data.error || `${label} fetch failed.`);
+      setStatus(`${label}: fetched ${data.fetched} rows and added ${data.added} new candidates. ${data.total} candidates are queued.`);
       await load();
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Oregon OLCC fetch failed.'); }
+    } catch (error) { setStatus(error instanceof Error ? error.message : `${label} fetch failed.`); }
     finally { setBusy(false); }
   }
 
@@ -88,20 +88,6 @@ export default function AdminDataManager() {
     setSourceUrl('https://www.cannabis.ca.gov/resources/search-for-licensed-business/');
     setSourceLicense('California Department of Cannabis Control official license data');
     setStatus('California DCC preset selected. Import a current DCC export and prioritize active Type 10 storefront retailer licenses.');
-  }
-
-  function useNevadaPreset() {
-    setSource('nevada-ccb');
-    setSourceUrl('https://ccb.nv.gov/list-of-licensees/');
-    setSourceLicense('Nevada Cannabis Compliance Board official license data');
-    setStatus('Nevada CCB preset selected. Import the current active-license or retail-location export.');
-  }
-
-  function useWashingtonPreset() {
-    setSource('washington-lcb-open-data');
-    setSourceUrl('https://data.wa.gov/');
-    setSourceLicense('Washington State open-data cannabis licensing dataset; do not use PRA frequently-requested-list exports for commercial purposes.');
-    setStatus('Washington open-data preset selected. Use the LCB Cannabis Renewal/open-data dataset, not the Public Records frequently-requested lists.');
   }
 
   function review(item: Candidate) {
@@ -142,10 +128,10 @@ export default function AdminDataManager() {
         </div>
         <div className="admin-panel">
           <h2>Official source presets</h2>
-          <div className="source-note"><strong>California · DCC</strong><span>DCC license search is refreshed daily. Prioritize active Type 10 storefront retailer licenses.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
-          <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy || !secret} onClick={fetchOregon}>Fetch Oregon OLCC retailers now</button></div>
-          <div className="source-note"><strong>Nevada · CCB</strong><span>CCB publishes active licenses and licensed retail locations.</span><button className="secondary" onClick={useNevadaPreset}>Use Nevada CCB preset</button></div>
-          <div className="source-note"><strong>Washington · open data only</strong><span>Use LCB's Cannabis Renewal/open-data dataset. Avoid Public Records list exports for commercial use.</span><button className="secondary" onClick={useWashingtonPreset}>Use Washington open-data preset</button></div>
+          <div className="source-note"><strong>California · DCC</strong><span>DCC license search is refreshed daily. Prioritize active Type 10 storefront retailer licenses. Use the DCC export until a stable public bulk API is confirmed.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
+          <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('oregon-olcc', 'Oregon OLCC')}>Fetch Oregon retailers now</button></div>
+          <div className="source-note"><strong>Nevada · direct import</strong><span>CCB's official licensed retail-location list is parsed directly.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('nevada-ccb', 'Nevada CCB')}>Fetch Nevada retailers now</button></div>
+          <div className="source-note"><strong>Washington · direct open data</strong><span>LCB Cannabis Renewal dataset on data.wa.gov (brpd-b6zd). This avoids the Public Records commercial-use restriction.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('washington-lcb', 'Washington LCB')}>Fetch Washington open data now</button></div>
         </div>
       </section>
 
