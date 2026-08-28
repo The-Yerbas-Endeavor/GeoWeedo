@@ -18,7 +18,17 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   const guessMarkerRef = useRef<any>(null);
   const actualMarkerRef = useRef<any>(null);
   const lineRef = useRef<any>(null);
+  const revealedRef = useRef(revealed);
+  const onGuessRef = useRef(onGuess);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    revealedRef.current = revealed;
+  }, [revealed]);
+
+  useEffect(() => {
+    onGuessRef.current = onGuess;
+  }, [onGuess]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,8 +48,8 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         });
 
         map.addListener('click', (event: any) => {
-          if (revealed || !event.latLng) return;
-          onGuess({ lat: event.latLng.lat(), lng: event.latLng.lng() });
+          if (revealedRef.current || !event.latLng) return;
+          onGuessRef.current({ lat: event.latLng.lat(), lng: event.latLng.lng() });
         });
 
         mapRef.current = map;
@@ -51,7 +61,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
     return () => {
       cancelled = true;
     };
-  }, [onGuess, revealed]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
