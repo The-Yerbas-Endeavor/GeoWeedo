@@ -12,6 +12,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 button { font: inherit; }
+button:disabled { cursor: not-allowed; opacity: .45; }
 
 .landing-shell, .result-shell, .game-shell { min-height: 100vh; }
 .topbar, .game-header { height: 72px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: rgba(11,14,12,.92); backdrop-filter: blur(10px); }
@@ -20,7 +21,7 @@ button { font: inherit; }
 .nav-actions { display: flex; gap: 10px; }
 .ghost, .secondary { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 12px; padding: 12px 16px; cursor: pointer; }
 .primary { border: 0; background: var(--accent); color: #081108; border-radius: 12px; padding: 13px 18px; font-weight: 800; cursor: pointer; }
-.primary:hover { filter: brightness(1.06); }
+.primary:hover:not(:disabled) { filter: brightness(1.06); }
 .secondary:hover, .ghost:hover { border-color: rgba(255,255,255,.22); }
 
 .hero { max-width: 1000px; margin: 0 auto; padding: 90px 24px 56px; text-align: center; }
@@ -47,22 +48,25 @@ button { font: inherit; }
 .game-header { position: relative; z-index: 5; }
 .round-meter { font-weight: 800; font-size: 13px; letter-spacing: .12em; color: var(--muted); }
 .running-score { font-weight: 800; }
-.panorama-stage { min-height: calc(100vh - 72px); position: relative; background: radial-gradient(circle at 65% 28%, #4c5f51 0, #29352c 27%, #131814 58%, #0b0e0c 100%); overflow: hidden; }
-.panorama-stage::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: linear-gradient(175deg, transparent 0 19%, #343a36 20% 58%, #161a17 59%); opacity: .82; }
-.panorama-copy { position: absolute; left: 6vw; top: 14vh; max-width: 500px; z-index: 2; }
-.panorama-copy span { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .16em; font-weight: 800; }
-.panorama-copy h2 { font-size: clamp(38px,5vw,62px); margin: 12px 0; line-height: 1.02; letter-spacing: -.045em; }
-.panorama-copy p { color: var(--muted); line-height: 1.6; }
-.map-toggle { position: absolute; left: 24px; bottom: 24px; z-index: 3; border: 1px solid var(--line); background: rgba(11,14,12,.86); color: var(--text); padding: 12px 15px; border-radius: 12px; }
-.guess-card { position: absolute; right: 24px; bottom: 24px; width: min(370px, calc(100vw - 48px)); z-index: 4; background: rgba(17,22,18,.96); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.32); }
-.mini-map { height: 220px; border-radius: 12px; background: repeating-linear-gradient(0deg, #202820 0 28px, #263027 29px 30px), repeating-linear-gradient(90deg, transparent 0 28px, rgba(255,255,255,.04) 29px 30px); display: grid; place-items: center; color: var(--muted); margin-bottom: 12px; position: relative; }
-.pin { position: absolute; color: var(--accent); font-size: 28px; transform: translateY(-20px); }
+.panorama-stage { min-height: calc(100vh - 72px); position: relative; background: #111; overflow: hidden; }
+.live-panorama { height: calc(100vh - 72px); min-height: 620px; }
+.streetview-wrap, .streetview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.streetview-wrap { z-index: 1; }
+.live-guess-card { position: absolute; right: 24px; bottom: 24px; width: min(390px, calc(100vw - 48px)); z-index: 4; background: rgba(17,22,18,.96); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.42); backdrop-filter: blur(12px); }
+.guess-map-wrap { height: 250px; border-radius: 12px; overflow: hidden; position: relative; background: #202820; margin-bottom: 12px; }
+.guess-map-canvas { width: 100%; height: 100%; }
+.map-hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); padding: 8px 11px; border-radius: 8px; background: rgba(11,14,12,.88); color: var(--text); font-size: 12px; text-align: center; pointer-events: none; }
+.map-error { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; background: rgba(11,14,12,.94); color: var(--text); text-align: center; }
+.map-error span { max-width: 440px; color: var(--muted); line-height: 1.5; font-size: 13px; }
+.map-error.compact { border-radius: 12px; }
+.guess-actions { display: grid; gap: 10px; }
+.guess-status { color: var(--muted); font-size: 12px; line-height: 1.45; min-height: 18px; }
 .full { width: 100%; }
-.reveal h3 { font-size: 26px; margin: 8px 0 4px; }
-.reveal > p { color: var(--muted); margin-top: 0; }
-.reveal-stat { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--line); }
+.reveal h3 { font-size: 25px; margin: 8px 0 4px; }
+.reveal > p { color: var(--muted); margin: 0 0 8px; }
+.reveal-stat { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); }
 .reveal-stat span { color: var(--muted); }
-.reveal .primary { margin-top: 10px; }
+.reveal .primary { margin-top: 8px; }
 
 .result-shell { display: grid; place-items: center; padding: 28px; background: radial-gradient(circle at 50% 10%, #223126, #0b0e0c 45%); }
 .result-card { width: min(520px,100%); background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 34px; text-align: center; }
@@ -78,5 +82,10 @@ button { font: inherit; }
   .feature-row div { border-right: 0; border-bottom: 1px solid var(--line); }
   .feature-row div:last-child { border-bottom: 0; }
   .nav-actions { display: none; }
-  .panorama-copy { top: 10vh; left: 24px; right: 24px; }
+  .topbar, .game-header { padding: 0 16px; }
+  .running-score { font-size: 13px; }
+  .round-meter { font-size: 10px; }
+  .live-panorama { height: calc(100vh - 72px); min-height: 560px; }
+  .live-guess-card { left: 12px; right: 12px; bottom: 12px; width: auto; }
+  .guess-map-wrap { height: 210px; }
 }
