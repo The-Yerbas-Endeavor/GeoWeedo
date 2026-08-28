@@ -111,33 +111,42 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
       const target = event.target as HTMLElement | null;
       if (target && /INPUT|TEXTAREA|SELECT|BUTTON/.test(target.tagName)) return;
       const key = event.key.toLowerCase();
+      const viewer = viewerRef.current;
 
       if (key === 'arrowleft' || key === 'a') {
-        if (isSphere) viewerRef.current?.rotate({ yaw: '-=0.12', pitch: 0 });
-        else step(-1);
+        if (isSphere && viewer) {
+          const position = viewer.getPosition();
+          viewer.rotate({ yaw: position.yaw - 0.12, pitch: position.pitch });
+        } else step(-1);
         event.preventDefault();
       }
       if (key === 'arrowright' || key === 'd') {
-        if (isSphere) viewerRef.current?.rotate({ yaw: '+=0.12', pitch: 0 });
-        else step(1);
+        if (isSphere && viewer) {
+          const position = viewer.getPosition();
+          viewer.rotate({ yaw: position.yaw + 0.12, pitch: position.pitch });
+        } else step(1);
         event.preventDefault();
       }
       if (key === 'arrowup' || key === 'w') {
-        if (isSphere) viewerRef.current?.rotate({ yaw: 0, pitch: '+=0.10' });
-        else step(1);
+        if (isSphere && viewer) {
+          const position = viewer.getPosition();
+          viewer.rotate({ yaw: position.yaw, pitch: Math.min(Math.PI / 2, position.pitch + 0.10) });
+        } else step(1);
         event.preventDefault();
       }
       if (key === 'arrowdown' || key === 's') {
-        if (isSphere) viewerRef.current?.rotate({ yaw: 0, pitch: '-=0.10' });
-        else step(-1);
+        if (isSphere && viewer) {
+          const position = viewer.getPosition();
+          viewer.rotate({ yaw: position.yaw, pitch: Math.max(-Math.PI / 2, position.pitch - 0.10) });
+        } else step(-1);
         event.preventDefault();
       }
       if (key === '+' || key === '=') {
-        if (isSphere) viewerRef.current?.zoom((viewerRef.current.getZoomLevel() ?? 50) + 10);
+        if (isSphere && viewer) viewer.zoom(Math.min(100, viewer.getZoomLevel() + 10));
         else setZoom(flatZoom + 0.25);
       }
       if (key === '-' || key === '_') {
-        if (isSphere) viewerRef.current?.zoom((viewerRef.current.getZoomLevel() ?? 50) - 10);
+        if (isSphere && viewer) viewer.zoom(Math.max(0, viewer.getZoomLevel() - 10));
         else setZoom(flatZoom - 0.25);
       }
     };
