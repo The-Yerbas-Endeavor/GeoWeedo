@@ -5,6 +5,7 @@
 
 .info-shell { min-height: 100vh; background: radial-gradient(circle at 50% 0%, #1d2a20 0, #0b0e0c 36%); }
 .info-hero { max-width: 920px; margin: 0 auto; padding: 86px 24px 44px; text-align: center; }
+.info-hero.compact-hero { padding-bottom: 24px; }
 .info-hero h1 { margin: 14px 0 18px; font-size: clamp(42px, 7vw, 72px); line-height: 1; letter-spacing: -.05em; }
 .info-hero p { margin: 0 auto; max-width: 760px; color: var(--muted); font-size: 18px; line-height: 1.7; }
 .info-grid { max-width: 1120px; margin: 0 auto; padding: 20px 24px 84px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -19,6 +20,17 @@
 .reward-callout strong { color: var(--accent); font-size: 26px; }
 .yerb-score { color: var(--accent); font-weight: 800; }
 
+.account-card { width: min(720px, calc(100% - 32px)); margin: 0 auto 80px; padding: 26px; border: 1px solid var(--line); border-radius: 20px; background: rgba(19,24,21,.96); display: grid; gap: 14px; }
+.account-card label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; }
+.account-card input, .account-card textarea { width: 100%; background: #0f1310; color: var(--text); border: 1px solid rgba(255,255,255,.11); border-radius: 10px; padding: 12px; font: inherit; }
+.account-card textarea { resize: vertical; line-height: 1.45; }
+.account-status { padding: 12px 14px; border-radius: 12px; background: #0f1310; color: #b8c3ba; border: 1px solid var(--line); line-height: 1.5; }
+.verified-card { display: grid; gap: 5px; padding: 16px; border: 1px solid rgba(103,214,110,.35); border-radius: 14px; background: rgba(103,214,110,.08); }
+.verified-card strong { color: var(--accent); font-size: 18px; }
+.verified-card span { overflow-wrap: anywhere; }
+.verified-card small, .account-note { color: var(--muted); }
+.account-note { margin: 4px 0 0; font-size: 12px; line-height: 1.6; }
+
 @media (max-width: 900px) {
   .info-grid, .info-grid.two-col { grid-template-columns: 1fr 1fr; }
   .reward-callout { grid-template-columns: 1fr; }
@@ -26,4 +38,5 @@
 @media (max-width: 650px) {
   .info-grid, .info-grid.two-col { grid-template-columns: 1fr; }
   .info-hero { padding-top: 58px; }
+  .site-topbar .nav-actions { display: none; }
 }
