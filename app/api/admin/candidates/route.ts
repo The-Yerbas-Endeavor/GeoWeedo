@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => null);
 
   if (Array.isArray(body?.ids)) {
-    const ids = [...new Set(body.ids.map(String).filter(Boolean))].slice(0, 5000);
+    const ids = Array.from(new Set<string>(body.ids.map((value: unknown) => String(value)).filter(Boolean))).slice(0, 5000);
     const action = String(body.action || '');
     if (!ids.length) return NextResponse.json({ error: 'At least one candidate id is required.' }, { status: 400 });
     if (!['approve', 'reject'].includes(action)) return NextResponse.json({ error: 'Bulk action must be approve or reject.' }, { status: 400 });
