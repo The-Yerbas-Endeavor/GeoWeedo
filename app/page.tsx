@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import GuessMap, { LatLng } from '@/components/GuessMap';
 import SiteHeader from '@/components/SiteHeader';
@@ -88,7 +87,7 @@ export default function HomePage() {
         </section>
         <section className="preview-card">
           <div className="street-preview"><div className="preview-overlay">OPEN STREET IMAGERY</div><div className="road-line" /><div className="storefront">DISPENSARY?</div></div>
-          <div className="preview-copy"><span>LOOK AROUND</span><h2>Every storefront tells a story.</h2><p>Architecture, mountains, road markings, signs and neighboring businesses can all give the location away.</p><p><Link className="yerb-score" href="/rewards">See how YERB rewards work →</Link></p></div>
+          <div className="preview-copy"><span>LOOK AROUND</span><h2>Every storefront tells a story.</h2><p>Architecture, mountains, road markings, signs and neighboring businesses can all give the location away.</p><p><a className="yerb-score" href="/rewards">See how YERB rewards work →</a></p></div>
         </section>
       </main>
     );
@@ -103,7 +102,7 @@ export default function HomePage() {
   const actual = { lat: current.latitude, lng: current.longitude };
   return (
     <main className="game-shell">
-      <header className="game-header"><Link className="brand brand-link" href="/"><span className="brand-pin">✦</span> GEOWEEDO</Link><div className="round-meter">ROUND {round + 1} / {rounds.length}</div><div className="running-score">{completedTotal.toLocaleString()} pts · <span className="yerb-score">~{estimatedYerb} YERB</span></div></header>
+      <header className="game-header"><a className="brand brand-link" href="/"><span className="brand-pin">✦</span> GEOWEEDO</a><div className="round-meter">ROUND {round + 1} / {rounds.length}</div><div className="running-score">{completedTotal.toLocaleString()} pts · <span className="yerb-score">~{estimatedYerb} YERB</span></div></header>
       <section className="panorama-stage live-panorama">
         <StreetViewStage
           latitude={current.imageryLatitude ?? current.latitude}
