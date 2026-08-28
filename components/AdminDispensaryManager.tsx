@@ -23,11 +23,13 @@ type SavedDispensary = {
   region: string;
   country: string;
   imageryProvider: string;
+  dataSource?: string;
   active: boolean;
 };
 
 const emptyForm = {
   name: '', streetAddress: '', city: '', region: '', country: 'USA', website: '',
+  dataSource: 'manual', sourceUrl: '', sourceLicense: '',
   latitude: '', longitude: '', recreational: true, medical: false,
 };
 
@@ -158,6 +160,16 @@ export default function AdminDispensaryManager() {
             <input placeholder="Street address" value={form.streetAddress} onChange={(e) => setForm({...form, streetAddress:e.target.value})} />
             <div className="field-row"><input placeholder="City" value={form.city} onChange={(e) => setForm({...form, city:e.target.value})} /><input placeholder="State / region" value={form.region} onChange={(e) => setForm({...form, region:e.target.value})} /></div>
             <div className="field-row"><input placeholder="Country" value={form.country} onChange={(e) => setForm({...form, country:e.target.value})} /><input placeholder="Website (optional)" value={form.website} onChange={(e) => setForm({...form, website:e.target.value})} /></div>
+            <div className="field-row">
+              <select value={form.dataSource} onChange={(e) => setForm({...form, dataSource:e.target.value})}>
+                <option value="manual">Manual / business supplied</option>
+                <option value="state-registry">Official license registry</option>
+                <option value="open-data">Compatible open data</option>
+                <option value="weedmaps-authorized">Weedmaps authorized/API</option>
+              </select>
+              <input placeholder="Source URL (optional)" value={form.sourceUrl} onChange={(e) => setForm({...form, sourceUrl:e.target.value})} />
+            </div>
+            <input placeholder="Source license / permission note (optional)" value={form.sourceLicense} onChange={(e) => setForm({...form, sourceLicense:e.target.value})} />
             <button onClick={geocode} disabled={busy || !secret}>Find coordinates from address</button>
             <div className="field-row"><input placeholder="Latitude" value={form.latitude} onChange={(e) => setForm({...form, latitude:e.target.value})} /><input placeholder="Longitude" value={form.longitude} onChange={(e) => setForm({...form, longitude:e.target.value})} /></div>
             <div className="check-row"><label><input type="checkbox" checked={form.recreational} onChange={(e) => setForm({...form, recreational:e.target.checked})} /> Recreational</label><label><input type="checkbox" checked={form.medical} onChange={(e) => setForm({...form, medical:e.target.checked})} /> Medical</label></div>
@@ -178,8 +190,8 @@ export default function AdminDispensaryManager() {
         </div>
       </section>
 
-      <section className="admin-panel approved-list"><h2>Approved game pool</h2>{saved.length === 0 ? <p>No approved real dispensaries yet.</p> : saved.map((item) => <div className="approved-row" key={item.id}><div><strong>{item.name}</strong><span>{item.city}, {item.region} · {item.imageryProvider}</span></div><button onClick={() => toggle(item)}>{item.active ? 'Deactivate' : 'Activate'}</button></div>)}</section>
-      <p className="admin-attribution">Address search © OpenStreetMap contributors. Street imagery © KartaView contributors.</p>
+      <section className="admin-panel approved-list"><h2>Approved game pool</h2>{saved.length === 0 ? <p>No approved real dispensaries yet.</p> : saved.map((item) => <div className="approved-row" key={item.id}><div><strong>{item.name}</strong><span>{item.city}, {item.region} · {item.imageryProvider} · {item.dataSource || 'manual'}</span></div><button onClick={() => toggle(item)}>{item.active ? 'Deactivate' : 'Activate'}</button></div>)}</section>
+      <p className="admin-attribution">Address search © OpenStreetMap contributors. Street imagery © KartaView contributors. Weedmaps data may only be used when separately authorized.</p>
     </main>
   );
 }
