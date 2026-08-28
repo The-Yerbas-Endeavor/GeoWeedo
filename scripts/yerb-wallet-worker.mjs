@@ -6,6 +6,7 @@ const dbPath = path.join(process.cwd(), 'data', 'runtime', 'geoweedo.sqlite');
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON;');
 db.exec('PRAGMA journal_mode = WAL;');
+db.exec('PRAGMA busy_timeout = 5000;');
 
 const rpcUrl = process.env.YERB_RPC_URL;
 const rpcUser = process.env.YERB_RPC_USER;
@@ -30,11 +31,23 @@ async function rpc(method, params = []) {
 }
 
 function atomicFromYerb(value) {
-  return Math.round(Number(value) * ATOMIC);
+  const atomic = Math.round(Number(value) * ATOMIC);
+  if (!Number.isSafeInteger(atomic)) throw new Error(`YERB value is outside the safe accounting range: ${value}`);
+  return atomic;
+}
+
+async function listWalletTransactions() {
+  try {
+    return await rpc('listtransactions', ['*', 1000, 0, true]);
+  } catch (error) {
+    // Some older Bitcoin/Dash-derived Yerbas wallet builds expose the 3-argument form.
+    console.warn(`listtransactions include_watchonly form failed; retrying compatibility form: ${error instanceof Error ? error.message : error}`);
+    return rpc('listtransactions', ['*', 1000, 0]);
+  }
 }
 
 async function scanDeposits() {
-  const transactions = await rpc('listtransactions', ['*', 1000, 0, true]);
+  const transactions = await listWalletTransactions();
   let credited = 0;
   for (const tx of Array.isArray(transactions) ? transactions : []) {
     if (tx.category !== 'receive' || !tx.address || !tx.txid) continue;
@@ -43,6 +56,7 @@ async function scanDeposits() {
 
     const vout = Number.isInteger(tx.vout) ? tx.vout : 0;
     const amountAtomic = atomicFromYerb(tx.amount);
+    if (amountAtomic <= 0) continue;
     const confirmations = Math.max(0, Number(tx.confirmations || 0));
     const now = new Date().toISOString();
     const status = confirmations >= confirmationsRequired ? 'confirmed' : 'detected';
@@ -73,7 +87,7 @@ async function scanDeposits() {
         }
         db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        try { db.exec('ROLLBACK'); } catch {}
         throw error;
       }
     }
@@ -89,9 +103,11 @@ async function processWithdrawals() {
   }
 
   for (const withdrawal of pending) {
-    const amountYerb = Number(withdrawal.amount_atomic) / ATOMIC;
+    const amountYerb = Number((Number(withdrawal.amount_atomic) / ATOMIC).toFixed(8));
     try {
-      db.prepare("UPDATE withdrawals SET status = 'sending' WHERE id = ? AND status = 'approved'").run(withdrawal.id);
+      const claimed = db.prepare("UPDATE withdrawals SET status = 'sending' WHERE id = ? AND status = 'approved'").run(withdrawal.id);
+      if (Number(claimed.changes || 0) !== 1) continue;
+
       const txid = String(await rpc('sendtoaddress', [withdrawal.destination_address, amountYerb, `GeoWeedo withdrawal ${withdrawal.id}`]));
       const now = new Date().toISOString();
       db.exec('BEGIN IMMEDIATE');
@@ -103,7 +119,7 @@ async function processWithdrawals() {
         }
         db.exec('COMMIT');
       } catch (error) {
-        db.exec('ROLLBACK');
+        try { db.exec('ROLLBACK'); } catch {}
         throw error;
       }
       console.log(`Sent withdrawal ${withdrawal.id}: ${txid}`);
@@ -112,11 +128,11 @@ async function processWithdrawals() {
       const now = new Date().toISOString();
       db.exec('BEGIN IMMEDIATE');
       try {
-        db.prepare("UPDATE withdrawals SET status = 'failed', failure_reason = ? WHERE id = ?").run(message.slice(0, 500), withdrawal.id);
+        db.prepare("UPDATE withdrawals SET status = 'failed', failure_reason = ? WHERE id = ? AND status = 'sending'").run(message.slice(0, 500), withdrawal.id);
         if (withdrawal.hold_ledger_id) db.prepare("UPDATE wallet_ledger SET status = 'released', posted_at = ? WHERE id = ? AND status = 'held'").run(now, withdrawal.hold_ledger_id);
         db.exec('COMMIT');
       } catch {
-        db.exec('ROLLBACK');
+        try { db.exec('ROLLBACK'); } catch {}
       }
       console.error(`Withdrawal ${withdrawal.id} failed: ${message}`);
     }
