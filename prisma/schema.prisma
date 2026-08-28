@@ -8,27 +8,37 @@ datasource db {
 }
 
 model Dispensary {
-  id             String   @id @default(cuid())
-  name           String
-  slug           String   @unique
-  latitude       Float
-  longitude      Float
-  streetAddress  String?
-  city           String
-  region         String
-  country        String
-  website        String?
-  photoUrl       String?
-  panoramaId     String?
-  heading        Float?
-  recreational   Boolean  @default(false)
-  medical        Boolean  @default(false)
-  verified       Boolean  @default(false)
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  latitude             Float
+  longitude            Float
+  streetAddress        String?
+  city                 String
+  region               String
+  country              String
+  website              String?
+  photoUrl             String?
+  panoramaId           String?
+  heading              Float?
+  recreational         Boolean  @default(false)
+  medical              Boolean  @default(false)
+  imageryProvider      String?
+  imageryPhotoId       String?
+  imagerySequenceId    String?
+  imageryLatitude      Float?
+  imageryLongitude     Float?
+  imageryHeading       Float?
+  imageryFieldOfView   Float?
+  imageryProjection    String?
+  imageryUrl            String?
+  imageryVerifiedAt    DateTime?
+  verified             Boolean  @default(false)
+  active               Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  rounds         Round[]
+  rounds               Round[]
 }
 
 model Game {
