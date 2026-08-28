@@ -48,15 +48,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .feature-row strong { font-size: 24px; }
 .feature-row span { color: var(--muted); font-size: 13px; }
 
-.preview-card { max-width: 1120px; margin: 24px auto 80px; padding: 0 24px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 28px; align-items: center; }
-.street-preview { min-height: 360px; border-radius: 24px; position: relative; overflow: hidden; border: 1px solid var(--line); background: radial-gradient(circle at 70% 30%, #415348 0, #263129 25%, #141a16 55%, #0d100e 100%); }
-.preview-overlay { position: absolute; left: 18px; top: 18px; font-size: 11px; letter-spacing: .14em; color: var(--muted); }
-.road-line { position: absolute; left: -5%; right: -5%; bottom: 35px; height: 80px; transform: rotate(-4deg); background: #383e3a; border-top: 2px solid #c6c7a8; }
-.storefront { position: absolute; right: 13%; bottom: 105px; width: 170px; height: 110px; background: #1f2721; border: 1px solid #4c5d50; border-radius: 4px; display: grid; place-items: center; color: var(--accent); font-weight: 800; font-size: 13px; }
-.preview-copy span { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .18em; }
-.preview-copy h2 { font-size: 40px; line-height: 1.05; margin: 12px 0; letter-spacing: -.04em; }
-.preview-copy p { color: var(--muted); line-height: 1.7; }
-
 .game-header { position: relative; z-index: 5; }
 .round-meter { font-weight: 800; font-size: 13px; letter-spacing: .12em; color: var(--muted); }
 .running-score { font-weight: 800; }
@@ -71,7 +62,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .map-hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); padding: 8px 11px; border-radius: 8px; background: rgba(11,14,12,.88); color: var(--text); font-size: 12px; text-align: center; pointer-events: none; }
 .map-error { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; background: rgba(11,14,12,.94); color: var(--text); text-align: center; }
 .map-error span { max-width: 440px; color: var(--muted); line-height: 1.5; font-size: 13px; }
-.map-error.compact { border-radius: 12px; }
 .guess-actions { display: grid; gap: 10px; }
 .guess-status { color: var(--muted); font-size: 12px; line-height: 1.45; min-height: 18px; }
 .full { width: 100%; }
@@ -81,16 +71,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .reveal-stat span { color: var(--muted); }
 .reveal .primary { margin-top: 8px; }
 
-.street-photo-stage { position: absolute; inset: 0; overflow: hidden; background: #080a09; touch-action: none; cursor: zoom-in; }
-.street-photo-stage.is-zoomed { cursor: grab; }
-.street-photo-stage.is-zoomed:active { cursor: grabbing; }
-.street-photo-stage img { width: 100%; height: 100%; object-fit: cover; transform-origin: center center; transition: transform .08s linear; user-select: none; pointer-events: none; }
+.street-photo-stage { position:absolute; inset:0; overflow:hidden; background:#080a09; cursor:default; display:grid; place-items:center; }
+.street-photo-stage img { width:100%; height:100%; object-fit:contain; transform-origin:center center; transition:transform .08s linear; user-select:none; pointer-events:none; }
 .street-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 4; width: 54px; height: 72px; border: 1px solid rgba(255,255,255,.18); background: rgba(8,11,9,.72); color: var(--text); font-size: 40px; border-radius: 14px; cursor: pointer; backdrop-filter: blur(8px); }
 .street-nav-prev { left: 18px; }
 .street-nav-next { right: 18px; }
 .street-zoom-controls { position: absolute; z-index: 4; left: 18px; top: 18px; display: flex; gap: 6px; padding: 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(8,11,9,.72); backdrop-filter: blur(8px); }
 .street-zoom-controls button, .street-imagery-toolbar button { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: var(--text); border-radius: 9px; min-width: 40px; min-height: 38px; padding: 7px 11px; cursor: pointer; }
-.street-drag-hint { position: absolute; z-index: 4; left: 50%; bottom: 62px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); padding: 8px 12px; border-radius: 999px; background: rgba(8,11,9,.72); color: rgba(255,255,255,.88); font-size: 12px; text-align: center; pointer-events: none; backdrop-filter: blur(8px); }
+.street-drag-hint { position: absolute; z-index: 4; left: 50%; top:18px; width: max-content; max-width: calc(100% - 32px); transform:translateX(-50%); padding: 8px 12px; border-radius: 999px; background: rgba(8,11,9,.72); color: rgba(255,255,255,.88); font-size: 12px; text-align: center; pointer-events: none; backdrop-filter: blur(8px); }
 .street-imagery-toolbar { position: absolute; z-index: 5; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 7px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(8,11,9,.82); backdrop-filter: blur(8px); }
 .street-imagery-toolbar span { min-width: 150px; text-align: center; color: #d7dfd9; font-size: 12px; white-space: nowrap; }
 .interactive-sphere { cursor: grab; touch-action: none; }
@@ -104,26 +92,4 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .score-list div { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--line); }
 .score-list span { color: var(--muted); }
 
-@media (max-width: 760px) {
-  .preview-card { grid-template-columns: 1fr; }
-  .feature-row { grid-template-columns: 1fr; }
-  .feature-row div { border-right: 0; border-bottom: 1px solid var(--line); }
-  .feature-row div:last-child { border-bottom: 0; }
-  .nav-actions { display: none; }
-  .topbar, .game-header { padding: 0 16px; }
-  .running-score { font-size: 13px; }
-  .round-meter { font-size: 10px; }
-  .live-panorama { height: calc(100vh - 72px); min-height: 560px; }
-  .live-guess-card { left: 12px; right: 12px; bottom: 12px; width: auto; }
-  .guess-map-wrap { height: 210px; }
-  .home-map-stage { min-height: 520px; }
-  .home-play-card { left: 16px; right: 16px; bottom: 16px; top: auto; transform: none; width: auto; padding: 22px; }
-  .home-play-card h1 { font-size: 52px; }
-  .street-nav { width: 46px; height: 62px; font-size: 34px; }
-  .street-nav-prev { left: 10px; }
-  .street-nav-next { right: 10px; }
-  .street-zoom-controls { left: 10px; top: 10px; }
-  .street-drag-hint { bottom: 72px; font-size: 11px; }
-  .street-imagery-toolbar { bottom: 10px; max-width: calc(100% - 24px); }
-  .street-imagery-toolbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-}
+@media (max-width:760px){.nav-actions{display:none}.topbar,.game-header{padding:0 16px}.running-score{font-size:13px}.round-meter{font-size:10px}.live-panorama{height:calc(100vh - 72px);min-height:560px}.live-guess-card{left:12px;right:12px;bottom:12px;width:auto}.guess-map-wrap{height:210px}.home-map-stage{min-height:520px}.home-play-card{left:16px;right:16px;bottom:16px;top:auto;transform:none;width:auto;padding:22px}.home-play-card h1{font-size:52px}.street-nav{width:46px;height:62px;font-size:34px}.street-nav-prev{left:10px}.street-nav-next{right:10px}.street-zoom-controls{left:10px;top:10px}.street-imagery-toolbar{bottom:10px;max-width:calc(100% - 24px)}.street-imagery-toolbar span{min-width:0;overflow:hidden;text-overflow:ellipsis}}
