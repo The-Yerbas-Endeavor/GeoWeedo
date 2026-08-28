@@ -15,6 +15,13 @@ echo "==> Installing GeoWeedo dependencies"
 apt-get update
 apt-get install -y git curl build-essential nginx sqlite3 ca-certificates openssl
 
+if ! command -v sqlite3 >/dev/null 2>&1; then
+  echo "SQLite CLI installation failed; sqlite3 is required."
+  exit 1
+fi
+
+echo "==> Using SQLite $(sqlite3 --version | awk '{print $1}')"
+
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'Number(process.versions.node.split(`.`)[0])')" -lt 22 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
@@ -52,6 +59,10 @@ echo "==> Initializing SQLite schema"
 sudo -u "$APP_USER" npm run db:init
 chmod 640 data/runtime/geoweedo.sqlite || true
 chown "$APP_USER:$APP_USER" data/runtime/geoweedo.sqlite || true
+
+echo "==> Verifying SQLite database"
+sudo -u "$APP_USER" sqlite3 data/runtime/geoweedo.sqlite "PRAGMA integrity_check;" | grep -qx 'ok'
+sudo -u "$APP_USER" sqlite3 data/runtime/geoweedo.sqlite "SELECT COUNT(*) FROM schema_migrations;" >/dev/null
 
 if ! sudo -u "$APP_USER" sqlite3 data/runtime/geoweedo.sqlite "SELECT username FROM admin_users LIMIT 1;" | grep -q .; then
   echo
