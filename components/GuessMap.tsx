@@ -30,8 +30,6 @@ type Props = {
   browseMode?: boolean;
 };
 
-// Keep gameplay independent of a remote style JSON. This tiny MapLibre style
-// starts immediately and requests ordinary OpenStreetMap raster tiles directly.
 const GAME_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -43,15 +41,7 @@ const GAME_STYLE: StyleSpecification = {
       maxzoom: 19,
     },
   },
-  layers: [
-    {
-      id: 'osm',
-      type: 'raster',
-      source: 'osm',
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
+  layers: [{ id: 'osm', type: 'raster', source: 'osm', minzoom: 0, maxzoom: 19 }],
 };
 
 export default function GuessMap({
@@ -84,20 +74,26 @@ export default function GuessMap({
         style: GAME_STYLE,
         center: [-98, 39],
         zoom: 2.6,
+        minZoom: 1,
+        maxZoom: 19,
         attributionControl: {},
         dragRotate: false,
         pitchWithRotate: false,
+        scrollZoom: true,
+        dragPan: true,
+        doubleClickZoom: true,
+        keyboard: true,
+        touchZoomRotate: true,
+        boxZoom: true,
       });
 
-      map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+      map.touchZoomRotate.disableRotation();
+      map.addControl(new NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
       map.on('load', () => map.resize());
       map.on('click', (event) => {
         if (browseModeRef.current || revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       });
-
-      // A tile may occasionally fail without making the map unusable. Do not
-      // cover gameplay with a fatal overlay for an individual network error.
       map.on('error', (event) => {
         console.warn('GeoWeedo map resource warning:', event.error?.message || event);
       });
@@ -160,7 +156,6 @@ export default function GuessMap({
         .setLngLat([guess.lng, guess.lat])
         .setPopup(new Popup({ offset: 18 }).setText('Your guess'))
         .addTo(map);
-      if (!revealed) map.easeTo({ center: [guess.lng, guess.lat], duration: 350 });
     }
 
     if (revealed && actual) {
@@ -193,10 +188,15 @@ export default function GuessMap({
 
   return (
     <div className="guess-map-wrap">
-      <div ref={nodeRef} className="guess-map-canvas" aria-label={browseMode ? 'GeoWeedo dispensary location map' : 'Interactive open-source guessing map'} />
+      <div
+        ref={nodeRef}
+        className="guess-map-canvas"
+        tabIndex={0}
+        aria-label={browseMode ? 'GeoWeedo dispensary location map' : 'Interactive open-source guessing map'}
+      />
       {browseMode
-        ? <div className="map-hint">Explore GeoWeedo dispensary locations</div>
-        : !guess && !revealed && <div className="map-hint">Click anywhere on the map to place your guess</div>}
+        ? <div className="map-hint">Drag to pan · scroll/pinch to zoom · click pins for details</div>
+        : !revealed && <div className="map-hint">Drag to pan · scroll/pinch to zoom · click to place your guess</div>}
     </div>
   );
 }
