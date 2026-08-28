@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
-import { listSponsorships, saveSponsorship } from '@/lib/sponsorshipStore';
+import { listSponsorships, saveSponsorship, type Sponsorship } from '@/lib/sponsorshipStore';
 
 function authorized(request: NextRequest) {
   const expected = process.env.GEOWEEDO_ADMIN_SECRET;
@@ -22,13 +22,15 @@ export async function POST(request: NextRequest) {
   const endsAt = new Date(body?.endsAt || Date.now());
   if (!(await readApprovedDispensaries()).some((item) => item.id === dispensaryId)) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
   if (!Number.isFinite(amountYerb) || amountYerb <= 0) return NextResponse.json({ error: 'Positive amountYerb is required.' }, { status: 400 });
-  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) return NextResponse.json({ error: 'Valid sponsorship dates are required.' }, { status: 400 });
+  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt.getTime() <= startsAt.getTime()) return NextResponse.json({ error: 'Valid sponsorship dates are required.' }, { status: 400 });
+  const rawStatus = String(body?.status || 'pending');
+  const status: Sponsorship['status'] = (['pending','active','expired','cancelled'] as const).includes(rawStatus as Sponsorship['status']) ? rawStatus as Sponsorship['status'] : 'pending';
   const sponsorship = await saveSponsorship({
     id: body?.id ? String(body.id) : undefined,
     dispensaryId, amountYerb,
     paymentTxid: String(body?.paymentTxid || '').trim() || undefined,
     priorityWeight: Number.isFinite(priorityWeight) ? priorityWeight : 1,
-    status: ['pending','active','expired','cancelled'].includes(body?.status) ? body.status : 'pending',
+    status,
     startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(),
   });
   return NextResponse.json({ sponsorship }, { status: 201 });
