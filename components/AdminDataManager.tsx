@@ -55,7 +55,7 @@ export default function AdminDataManager() {
     finally { setBusy(false); }
   }
 
-  async function fetchOfficial(preset: 'oregon-olcc' | 'nevada-ccb' | 'washington-lcb', label: string) {
+  async function fetchOfficial(preset: 'all' | 'oregon-olcc' | 'nevada-ccb' | 'washington-lcb', label: string) {
     setBusy(true);
     try {
       const response = await fetch('/api/admin/candidates/fetch-official', {
@@ -128,10 +128,11 @@ export default function AdminDataManager() {
         </div>
         <div className="admin-panel">
           <h2>Official source presets</h2>
+          <div className="source-note"><strong>Oregon + Nevada + Washington</strong><span>Pull all three direct official feeds into the SQLite candidate database in one pass.</span><button className="primary" disabled={busy || !secret} onClick={() => fetchOfficial('all', 'Official state sync')}>Fetch all official dispensaries</button></div>
           <div className="source-note"><strong>California · DCC</strong><span>DCC license search is refreshed daily. Prioritize active Type 10 storefront retailer licenses. Use the DCC export until a stable public bulk API is confirmed.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
           <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('oregon-olcc', 'Oregon OLCC')}>Fetch Oregon retailers now</button></div>
           <div className="source-note"><strong>Nevada · direct import</strong><span>CCB's official licensed retail-location list is parsed directly.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('nevada-ccb', 'Nevada CCB')}>Fetch Nevada retailers now</button></div>
-          <div className="source-note"><strong>Washington · direct open data</strong><span>LCB Cannabis Renewal dataset on data.wa.gov (brpd-b6zd). This avoids the Public Records commercial-use restriction.</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('washington-lcb', 'Washington LCB')}>Fetch Washington open data now</button></div>
+          <div className="source-note"><strong>Washington · direct open data</strong><span>LCB Cannabis Renewal dataset on data.wa.gov (brpd-b6zd).</span><button className="secondary" disabled={busy || !secret} onClick={() => fetchOfficial('washington-lcb', 'Washington LCB')}>Fetch Washington open data now</button></div>
         </div>
       </section>
 
