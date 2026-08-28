@@ -94,7 +94,7 @@ export default function HomePage() {
 
         <section className="preview-card">
           <div className="street-preview">
-            <div className="preview-overlay">INTERACTIVE STREET VIEW</div>
+            <div className="preview-overlay">OPEN STREET IMAGERY</div>
             <div className="road-line" />
             <div className="storefront">DISPENSARY?</div>
           </div>
