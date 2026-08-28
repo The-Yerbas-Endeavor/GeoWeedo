@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 
 export const runtime = 'nodejs';
-
-function authorized(request: NextRequest) {
-  const expected = process.env.GEOWEEDO_ADMIN_SECRET;
-  return Boolean(expected) && request.headers.get('x-geoweedo-admin') === expected;
-}
 
 function parseCsvLine(line: string) {
   const values: string[] = [];
@@ -32,7 +28,7 @@ function pick(row: Record<string, string>, names: string[]) {
 async function fetchOregon() {
   const sourceUrl = 'https://data.oregon.gov/Business/OLCC-Cannabis-Business-Licenses-Endorsements/q32u-cmam';
   const apiUrl = 'https://data.oregon.gov/resource/q32u-cmam.json?$limit=5000';
-  const response = await fetch(apiUrl, { headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
+  const response = await fetch(apiUrl, { headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.4 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
   if (!response.ok) throw new Error(`Oregon Open Data returned ${response.status}`);
   const data = await response.json();
   return (Array.isArray(data) ? data : []).filter((row: any) => String(row.license_type || '').toLowerCase().includes('retail') && !String(row.license_expired || '').toLowerCase().includes('yes')).map((row: any) => ({
@@ -47,7 +43,7 @@ async function fetchOregon() {
 
 async function fetchNevada() {
   const sourceUrl = 'https://ccb.nv.gov/list-of-licensees/';
-  const response = await fetch(sourceUrl, { headers: { Accept: 'text/html', 'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
+  const response = await fetch(sourceUrl, { headers: { Accept: 'text/html', 'User-Agent': 'GeoWeedo/0.4 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
   if (!response.ok) throw new Error(`Nevada CCB returned ${response.status}`);
   const html = await response.text();
   const plain = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#8211;|&ndash;/g, '–').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
@@ -68,7 +64,7 @@ async function fetchNevada() {
 async function fetchWashington() {
   const sourceUrl = 'https://data.wa.gov/d/brpd-b6zd';
   const apiUrl = 'https://data.wa.gov/api/v3/views/brpd-b6zd/export.csv?accessType=DOWNLOAD';
-  const response = await fetch(apiUrl, { headers: { Accept: 'text/csv', 'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
+  const response = await fetch(apiUrl, { headers: { Accept: 'text/csv', 'User-Agent': 'GeoWeedo/0.4 (https://geoweedo.yerbas.org)' }, cache: 'no-store' });
   if (!response.ok) throw new Error(`Washington Open Data returned ${response.status}`);
   const text = await response.text();
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
@@ -90,7 +86,7 @@ async function fetchWashington() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => null);
   const preset = String(body?.preset || '');
   try {
