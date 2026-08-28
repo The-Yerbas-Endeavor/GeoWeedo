@@ -5,6 +5,7 @@
   background: #090b09;
   display: grid;
   place-items: center;
+  touch-action: pan-y;
 }
 
 .street-photo-stage img {
@@ -12,23 +13,61 @@
   height: 100%;
   object-fit: cover;
   user-select: none;
+  pointer-events: none;
+}
+
+.street-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  width: 58px;
+  height: 76px;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  background: rgba(11,14,12,.78);
+  color: #fff;
+  font-size: 46px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.28);
+}
+
+.street-nav:hover:not(:disabled) { background: rgba(19,24,21,.94); }
+.street-nav:disabled { opacity: .25; cursor: default; }
+.street-nav-prev { left: 22px; }
+.street-nav-next { right: 22px; }
+
+.street-drag-hint {
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(11,14,12,.78);
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .street-imagery-toolbar {
   position: absolute;
-  left: 50%;
+  left: 18px;
   bottom: 18px;
-  transform: translateX(-50%);
-  z-index: 3;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 440px);
   padding: 7px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(11,14,12,.9);
   backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
 }
 
 .street-imagery-toolbar button {
@@ -39,6 +78,8 @@
   padding: 9px 12px;
   cursor: pointer;
 }
+
+.street-imagery-toolbar button:disabled { opacity: .35; cursor: default; }
 
 .street-imagery-toolbar span {
   color: var(--muted);
@@ -64,14 +105,22 @@
   background: #090b09;
 }
 
+.psv-container, .psv-canvas-container, .psv-canvas {
+  pointer-events: auto !important;
+}
+
 @media (max-width: 760px) {
   .street-imagery-toolbar {
+    left: 12px;
     top: 12px;
     bottom: auto;
     max-width: calc(100% - 24px);
   }
 
-  .street-imagery-toolbar button {
-    padding: 8px 10px;
-  }
+  .street-imagery-toolbar span { display: none; }
+  .street-imagery-toolbar button { padding: 8px 10px; }
+  .street-nav { width: 48px; height: 64px; font-size: 38px; }
+  .street-nav-prev { left: 12px; }
+  .street-nav-next { right: 12px; }
+  .street-drag-hint { top: 64px; max-width: calc(100% - 120px); overflow: hidden; text-overflow: ellipsis; }
 }
