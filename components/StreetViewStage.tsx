@@ -23,11 +23,15 @@ type ApiResponse = { provider?: string; photos?: StreetPhoto[]; initialIndex?: n
 
 export default function StreetViewStage({ latitude, longitude, heading = 0, photoId, imageryProvider = 'kartaview', imageUrl, projection = '', fieldOfView = 0 }: Props) {
   const sphereRef = useRef<HTMLDivElement | null>(null);
+  const flatStageRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; startX: number; startY: number } | null>(null);
   const [photos, setPhotos] = useState<StreetPhoto[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [flatZoom, setFlatZoom] = useState(1);
+  const [flatOffset, setFlatOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     setError(null); setIndex(0);
@@ -59,6 +63,12 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
   const isSphere = useMemo(() => Boolean(current && (current.projection === 'SPHERE' || current.projection === 'EQUIRECTANGULAR' || current.fieldOfView >= 300)), [current]);
 
   useEffect(() => {
+    setFlatZoom(1);
+    setFlatOffset({ x: 0, y: 0 });
+    dragRef.current = null;
+  }, [current?.id]);
+
+  useEffect(() => {
     const container = sphereRef.current;
     viewerRef.current?.destroy();
     viewerRef.current = null;
@@ -75,26 +85,14 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
       mousewheelCtrlKey: false,
       touchmoveTwoFingers: false,
       keyboard: 'always',
-      moveInertia: 0.8,
-      moveSpeed: 1.25,
+      moveInertia: 0.9,
+      moveSpeed: 1.4,
     });
 
     viewer.setCursor('grab');
     viewerRef.current = viewer;
 
-    // PSV already owns pointer/touch gestures. Explicitly keep browser scrolling and
-    // parent overlays from stealing drag gestures from the WebGL canvas.
-    const stop = (event: Event) => event.stopPropagation();
-    container.addEventListener('pointerdown', stop);
-    container.addEventListener('pointermove', stop);
-    container.addEventListener('touchstart', stop, { passive: true });
-    container.addEventListener('touchmove', stop, { passive: true });
-
     return () => {
-      container.removeEventListener('pointerdown', stop);
-      container.removeEventListener('pointermove', stop);
-      container.removeEventListener('touchstart', stop);
-      container.removeEventListener('touchmove', stop);
       if (viewerRef.current === viewer) viewerRef.current = null;
       viewer.destroy();
     };
@@ -102,16 +100,72 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
 
   const step = (direction: -1 | 1) => setIndex((value) => Math.min(Math.max(value + direction, 0), Math.max(0, photos.length - 1)));
   const providerLabel = imageryProvider === 'geoweedo' ? 'GeoWeedo hosted' : 'KartaView';
+  const setZoom = (next: number) => {
+    const clamped = Math.min(3.5, Math.max(1, next));
+    setFlatZoom(clamped);
+    if (clamped === 1) setFlatOffset({ x: 0, y: 0 });
+  };
 
   useEffect(() => {
-    if (isSphere) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'a') step(-1);
-      if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'd') step(1);
+      const target = event.target as HTMLElement | null;
+      if (target && /INPUT|TEXTAREA|SELECT|BUTTON/.test(target.tagName)) return;
+      const key = event.key.toLowerCase();
+
+      if (key === 'arrowleft' || key === 'a') {
+        if (isSphere) viewerRef.current?.rotate({ yaw: '-=0.12', pitch: 0 });
+        else step(-1);
+        event.preventDefault();
+      }
+      if (key === 'arrowright' || key === 'd') {
+        if (isSphere) viewerRef.current?.rotate({ yaw: '+=0.12', pitch: 0 });
+        else step(1);
+        event.preventDefault();
+      }
+      if (key === 'arrowup' || key === 'w') {
+        if (isSphere) viewerRef.current?.rotate({ yaw: 0, pitch: '+=0.10' });
+        else step(1);
+        event.preventDefault();
+      }
+      if (key === 'arrowdown' || key === 's') {
+        if (isSphere) viewerRef.current?.rotate({ yaw: 0, pitch: '-=0.10' });
+        else step(-1);
+        event.preventDefault();
+      }
+      if (key === '+' || key === '=') {
+        if (isSphere) viewerRef.current?.zoom((viewerRef.current.getZoomLevel() ?? 50) + 10);
+        else setZoom(flatZoom + 0.25);
+      }
+      if (key === '-' || key === '_') {
+        if (isSphere) viewerRef.current?.zoom((viewerRef.current.getZoomLevel() ?? 50) - 10);
+        else setZoom(flatZoom - 0.25);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isSphere, photos.length]);
+  }, [isSphere, photos.length, flatZoom]);
+
+  const onFlatWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setZoom(flatZoom + (event.deltaY < 0 ? 0.2 : -0.2));
+  };
+
+  const onFlatPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (flatZoom <= 1) return;
+    flatStageRef.current?.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, x: flatOffset.x, y: flatOffset.y, startX: event.clientX, startY: event.clientY };
+  };
+
+  const onFlatPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setFlatOffset({ x: drag.x + event.clientX - drag.startX, y: drag.y + event.clientY - drag.startY });
+  };
+
+  const endFlatDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+    try { flatStageRef.current?.releasePointerCapture(event.pointerId); } catch {}
+  };
 
   return (
     <div className={`streetview-wrap ${isSphere ? 'streetview-spherical' : 'streetview-sequence'}`}>
@@ -119,18 +173,43 @@ export default function StreetViewStage({ latitude, longitude, heading = 0, phot
       {!loading && current && <>
         {isSphere ? (
           <>
-            <div ref={sphereRef} className="streetview-canvas interactive-sphere" aria-label={`Interactive ${providerLabel} 360 panorama`} />
-            <div className="street-drag-hint">Drag to look around · scroll to zoom · arrows also rotate</div>
+            <div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0} aria-label={`Interactive ${providerLabel} 360 panorama`} />
+            <div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div>
           </>
         ) : (
-          <div className="street-photo-stage">
-            <img src={current.imageUrl} alt={`${providerLabel} street-level imagery near the round location`} draggable={false} />
+          <div
+            ref={flatStageRef}
+            className={`street-photo-stage ${flatZoom > 1 ? 'is-zoomed' : ''}`}
+            tabIndex={0}
+            onWheel={onFlatWheel}
+            onPointerDown={onFlatPointerDown}
+            onPointerMove={onFlatPointerMove}
+            onPointerUp={endFlatDrag}
+            onPointerCancel={endFlatDrag}
+            onDoubleClick={() => setZoom(flatZoom > 1 ? 1 : 2)}
+            aria-label={`Interactive ${providerLabel} street-level sequence`}
+          >
+            <img
+              src={current.imageUrl}
+              alt={`${providerLabel} street-level imagery near the round location`}
+              draggable={false}
+              style={{ transform: `translate(${flatOffset.x}px, ${flatOffset.y}px) scale(${flatZoom})` }}
+            />
             <button type="button" className="street-nav street-nav-prev" onClick={() => step(-1)} disabled={index <= 0} aria-label="Move backward">‹</button>
             <button type="button" className="street-nav street-nav-next" onClick={() => step(1)} disabled={index >= photos.length - 1} aria-label="Move forward">›</button>
-            <div className="street-drag-hint">Move with ‹ › or keyboard A / D</div>
+            <div className="street-zoom-controls" aria-label="Street image zoom controls">
+              <button type="button" onClick={() => setZoom(flatZoom - 0.25)} disabled={flatZoom <= 1}>−</button>
+              <button type="button" onClick={() => setZoom(1)} disabled={flatZoom === 1}>Reset</button>
+              <button type="button" onClick={() => setZoom(flatZoom + 0.25)} disabled={flatZoom >= 3.5}>+</button>
+            </div>
+            <div className="street-drag-hint">A/D or W/S to move · wheel/double-click to zoom · drag when zoomed</div>
           </div>
         )}
-        <div className="street-imagery-toolbar"><button type="button" onClick={() => step(-1)} disabled={index <= 0}>← Previous</button><span>{index + 1} / {photos.length} · {providerLabel}{isSphere ? ' · 360°' : ''}</span><button type="button" onClick={() => step(1)} disabled={index >= photos.length - 1}>Next →</button></div>
+        <div className="street-imagery-toolbar">
+          <button type="button" onClick={() => step(-1)} disabled={index <= 0}>← Previous</button>
+          <span>{index + 1} / {photos.length} · {providerLabel}{isSphere ? ' · 360°' : ' · sequence'}</span>
+          <button type="button" onClick={() => step(1)} disabled={index >= photos.length - 1}>Next →</button>
+        </div>
       </>}
       {!loading && error && <div className="map-error"><strong>Street imagery unavailable</strong><span>{error}</span><span className="imagery-note">This round needs curated KartaView or GeoWeedo-hosted imagery before it should enter the live pool.</span></div>}
     </div>
