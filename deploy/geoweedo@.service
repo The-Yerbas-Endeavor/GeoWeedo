@@ -8,7 +8,7 @@ User=geo
 WorkingDirectory=/home/geo/GeoWeedo-%i
 Environment=NODE_ENV=production
 EnvironmentFile=-/home/geo/GeoWeedo-shared/.env.local
-ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port ${GEOWEEDO_PORT}
+ExecStart=/usr/bin/bash -lc 'if [ "%i" = "blue" ]; then PORT=3000; else PORT=3001; fi; exec /usr/bin/npm start -- --hostname 127.0.0.1 --port "$PORT"'
 Restart=always
 RestartSec=2
 TimeoutStartSec=30
