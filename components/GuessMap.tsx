@@ -44,7 +44,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         style: 'https://tiles.openfreemap.org/styles/bright',
         center: [-98, 39],
         zoom: 2.6,
-        attributionControl: true,
+        attributionControl: {},
       });
 
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
