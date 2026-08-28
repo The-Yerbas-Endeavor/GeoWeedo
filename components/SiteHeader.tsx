@@ -11,6 +11,7 @@ export default function SiteHeader() {
         <Link className="ghost nav-link" href="/rewards">YERB rewards</Link>
         <Link className="ghost nav-link" href="/for-dispensaries">For dispensaries</Link>
         <Link className="ghost nav-link" href="/about">About</Link>
+        <Link className="primary nav-link" href="/account">Account</Link>
       </div>
     </nav>
   );
