@@ -7,38 +7,28 @@ GeoWeedo is a dispensary geography guessing game inspired by location-guessing g
 - Next.js + TypeScript application shell
 - Five-round single-player game flow
 - 25,000-point scoring structure
-- Interactive Google Street View panorama
-- Interactive Google Maps guessing map
+- MapLibre GL JS guessing map using OpenFreeMap/OpenStreetMap data
+- KartaView street-level imagery provider with no Google dependency
+- Interactive 360 panorama rendering when KartaView supplies spherical imagery
+- Step-through sequence navigation for ordinary street-level photos
 - Click-to-place and move guesses
 - Real Haversine distance calculation
 - Distance-based scoring up to 5,000 points per round
 - Reveal map with guess, actual location, and connecting line
+- Cached server-side KartaView lookups to reduce public API traffic
 - Daily Challenge entry point
 - Typed dispensary data model with demo seed locations
 - Responsive dark map/game UI
 
-## Google Maps setup
+## Zero-Google stack
 
-GeoWeedo expects a browser Google Maps API key in `.env.local`.
+GeoWeedo v0.2 does not require a Google Maps API key, Google Cloud project, or Google billing account.
 
-```bash
-cp .env.example .env.local
-nano .env.local
-```
+The guessing map uses MapLibre GL JS with the OpenFreeMap public style. Street-level imagery uses KartaView's public read API. KartaView coverage is crowdsourced and therefore less complete than Google Street View, so rounds should only become active after imagery coverage is verified.
 
-Set:
+When KartaView reports spherical/360 imagery, GeoWeedo renders it through the open-source Photo Sphere Viewer. Otherwise, players can move forward and backward through the nearby KartaView image sequence.
 
-```env
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_key_here
-```
-
-Enable the Google Maps JavaScript API for that key. Street View is rendered through the Maps JavaScript API. Restrict the browser key by HTTP referrer in Google Cloud, including your production hostname, for example:
-
-```text
-https://geoweedo.yerbas.org/*
-```
-
-Do not commit `.env.local` or an unrestricted API key.
+No environment variable is required for this stack.
 
 ## Development
 
@@ -61,15 +51,16 @@ sudo systemctl restart geoweedo
 
 ## Next implementation layer
 
-1. Replace demo coordinates with curated real dispensaries and verified panorama positions.
-2. Move dispensaries into PostgreSQL/PostGIS.
-3. Add admin CRUD/import tools and panorama validation.
-4. Add deterministic daily challenge generation and leaderboard persistence.
-5. Add difficulty modes: Easy, Normal, Hard, and No Move.
-6. Add panorama offsets so difficult rounds can begin away from the storefront.
+1. Replace demo coordinates with curated real dispensaries that have verified KartaView or GeoWeedo-hosted imagery.
+2. Add an admin imagery-validation workflow that searches KartaView before activating a dispensary.
+3. Add a GeoWeedo-hosted imagery fallback for important dispensaries without KartaView coverage.
+4. Move dispensaries into PostgreSQL/PostGIS.
+5. Add deterministic Daily Challenge generation and leaderboard persistence.
+6. Add difficulty modes: Easy, Normal, Hard, and No Move.
+7. Store an imagery provider and starting frame/panorama reference per dispensary so live rounds never depend on an unverified nearest-image search.
 
 ## Dispensary record
 
 The model supports identity, coordinates, locality, website/photo metadata, panorama placement, recreational/medical flags, verification, and active status.
 
-The current demo records are placeholders and should be replaced with curated real dispensaries after panorama coverage is verified.
+The current demo records are placeholders. Before a real dispensary is admitted to the live game pool, GeoWeedo should verify that its street imagery exists, is close enough to the storefront, and provides a fair playable starting view.
