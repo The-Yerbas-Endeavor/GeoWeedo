@@ -7,6 +7,8 @@ import {
   Marker,
   NavigationControl,
   Popup,
+  type GeoJSONSource,
+  type MapGeoJSONFeature,
   type StyleSpecification,
 } from 'maplibre-gl';
 
@@ -44,6 +46,11 @@ const GAME_STYLE: StyleSpecification = {
   layers: [{ id: 'osm', type: 'raster', source: 'osm', minzoom: 0, maxzoom: 19 }],
 };
 
+const LOCATION_SOURCE = 'browse-locations';
+const CLUSTER_LAYER = 'browse-clusters';
+const CLUSTER_COUNT_LAYER = 'browse-cluster-count';
+const POINT_LAYER = 'browse-points';
+
 export default function GuessMap({
   guess,
   actual = null,
@@ -56,7 +63,6 @@ export default function GuessMap({
   const mapRef = useRef<LibreMap | null>(null);
   const guessMarkerRef = useRef<Marker | null>(null);
   const actualMarkerRef = useRef<Marker | null>(null);
-  const locationMarkersRef = useRef<Marker[]>([]);
   const revealedRef = useRef(revealed);
   const browseModeRef = useRef(browseMode);
   const onGuessRef = useRef(onGuess);
@@ -102,8 +108,6 @@ export default function GuessMap({
       const resizeTimer = window.setTimeout(() => map.resize(), 250);
       return () => {
         window.clearTimeout(resizeTimer);
-        locationMarkersRef.current.forEach((marker) => marker.remove());
-        locationMarkersRef.current = [];
         map.remove();
         mapRef.current = null;
       };
@@ -114,29 +118,105 @@ export default function GuessMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !browseMode) return;
 
-    locationMarkersRef.current.forEach((marker) => marker.remove());
-    locationMarkersRef.current = [];
-    if (!browseMode || locations.length === 0) return;
+    const applyLocations = () => {
+      const features = locations
+        .filter((location) => Number.isFinite(location.lat) && Number.isFinite(location.lng))
+        .map((location) => ({
+          type: 'Feature' as const,
+          geometry: { type: 'Point' as const, coordinates: [location.lng, location.lat] },
+          properties: {
+            id: location.id,
+            name: location.name,
+            city: location.city || '',
+            region: location.region || '',
+            sponsored: Boolean(location.sponsored),
+          },
+        }));
 
-    const bounds = new LngLatBounds();
-    for (const location of locations) {
-      if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) continue;
-      const subtitle = [location.city, location.region].filter(Boolean).join(', ');
-      const popupText = subtitle ? `${location.name}\n${subtitle}` : location.name;
-      const marker = new Marker({ color: location.sponsored ? '#f5c451' : '#67d66e' })
-        .setLngLat([location.lng, location.lat])
-        .setPopup(new Popup({ offset: 18 }).setText(popupText))
-        .addTo(map);
-      locationMarkersRef.current.push(marker);
-      bounds.extend([location.lng, location.lat]);
-    }
+      const data = { type: 'FeatureCollection' as const, features };
+      const existing = map.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+      if (existing) {
+        existing.setData(data);
+      } else {
+        map.addSource(LOCATION_SOURCE, {
+          type: 'geojson',
+          data,
+          cluster: true,
+          clusterMaxZoom: 12,
+          clusterRadius: 48,
+        });
+        map.addLayer({
+          id: CLUSTER_LAYER,
+          type: 'circle',
+          source: LOCATION_SOURCE,
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#2f8f46',
+            'circle-radius': ['step', ['get', 'point_count'], 18, 25, 23, 100, 29, 500, 35],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#dff7e2',
+          },
+        });
+        map.addLayer({
+          id: CLUSTER_COUNT_LAYER,
+          type: 'symbol',
+          source: LOCATION_SOURCE,
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-size': 12,
+          },
+          paint: { 'text-color': '#ffffff' },
+        });
+        map.addLayer({
+          id: POINT_LAYER,
+          type: 'circle',
+          source: LOCATION_SOURCE,
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': ['case', ['boolean', ['get', 'sponsored'], false], '#f5c451', '#67d66e'],
+            'circle-radius': 7,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#102114',
+          },
+        });
 
-    if (!bounds.isEmpty()) {
-      const fit = () => map.fitBounds(bounds, { padding: 80, maxZoom: 6, duration: 500 });
-      if (map.isStyleLoaded()) fit(); else map.once('load', fit);
-    }
+        map.on('click', CLUSTER_LAYER, async (event) => {
+          const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+          const clusterId = Number(feature?.properties?.cluster_id);
+          if (!feature || !Number.isFinite(clusterId)) return;
+          const source = map.getSource(LOCATION_SOURCE) as GeoJSONSource;
+          const zoom = await source.getClusterExpansionZoom(clusterId);
+          const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+          map.easeTo({ center: coordinates, zoom });
+        });
+
+        map.on('click', POINT_LAYER, (event) => {
+          const feature = event.features?.[0] as MapGeoJSONFeature | undefined;
+          if (!feature || feature.geometry.type !== 'Point') return;
+          const properties = feature.properties || {};
+          const subtitle = [properties.city, properties.region].filter(Boolean).join(', ');
+          const text = subtitle ? `${properties.name}\n${subtitle}` : String(properties.name || 'Dispensary');
+          const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+          new Popup({ offset: 12 }).setLngLat(coordinates).setText(text).addTo(map);
+        });
+
+        for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
+          map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+        }
+      }
+
+      if (features.length) {
+        const bounds = new LngLatBounds();
+        features.forEach((feature) => bounds.extend(feature.geometry.coordinates as [number, number]));
+        if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 70, maxZoom: 5.5, duration: 500 });
+      }
+    };
+
+    if (map.isStyleLoaded()) applyLocations(); else map.once('load', applyLocations);
   }, [browseMode, locations]);
 
   useEffect(() => {
@@ -195,7 +275,7 @@ export default function GuessMap({
         aria-label={browseMode ? 'GeoWeedo dispensary location map' : 'Interactive open-source guessing map'}
       />
       {browseMode
-        ? <div className="map-hint">Drag to pan · scroll/pinch to zoom · click pins for details</div>
+        ? <div className="map-hint">Drag to pan · scroll/pinch to zoom · click clusters or locations</div>
         : !revealed && <div className="map-hint">Drag to pan · scroll/pinch to zoom · click to place your guess</div>}
     </div>
   );
