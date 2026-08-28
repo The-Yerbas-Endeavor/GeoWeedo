@@ -41,76 +41,87 @@ function normalizePhoto(photo: RawPhoto) {
 
 async function getJson(url: string) {
   const response = await fetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.2' },
+    headers: { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.3 (https://geoweedo.yerbas.org)' },
     next: { revalidate: 86400 },
   });
   if (!response.ok) throw new Error(`KartaView returned ${response.status}`);
   return response.json();
 }
 
+async function getSequencePhotos(sequenceId: string) {
+  const sequenceUrl = new URL('https://api.openstreetcam.org/2.0/photo/');
+  sequenceUrl.searchParams.set('sequenceId', sequenceId);
+  sequenceUrl.searchParams.set('page', '1');
+  sequenceUrl.searchParams.set('itemsPerPage', '150');
+  const sequenceJson = await getJson(sequenceUrl.toString());
+  const sequenceRaw = Array.isArray(sequenceJson?.result?.data) ? sequenceJson.result.data : [];
+  return sequenceRaw.map(normalizePhoto).filter(Boolean) as NonNullable<ReturnType<typeof normalizePhoto>>[];
+}
+
 export async function GET(request: NextRequest) {
   const lat = Number(request.nextUrl.searchParams.get('lat'));
   const lng = Number(request.nextUrl.searchParams.get('lng'));
+  const approvedPhotoId = String(request.nextUrl.searchParams.get('photoId') || '').trim();
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     return NextResponse.json({ error: 'Invalid latitude or longitude.' }, { status: 400 });
   }
 
   try {
-    const nearbyUrl = new URL('https://api.openstreetcam.org/2.0/photo/');
-    nearbyUrl.searchParams.set('lat', String(lat));
-    nearbyUrl.searchParams.set('lng', String(lng));
-    nearbyUrl.searchParams.set('zoomLevel', '18');
-    nearbyUrl.searchParams.set('join', 'sequence');
-    nearbyUrl.searchParams.set('radius', '500');
-    nearbyUrl.searchParams.set('orderBy', 'id');
-    nearbyUrl.searchParams.set('orderDirection', 'desc');
+    const origin = { lat, lng };
+    let photos: NonNullable<ReturnType<typeof normalizePhoto>>[] = [];
+    let target: NonNullable<ReturnType<typeof normalizePhoto>> | null = null;
 
-    const nearbyJson = await getJson(nearbyUrl.toString());
-    const nearbyRaw = Array.isArray(nearbyJson?.result?.data) ? nearbyJson.result.data : [];
-    const nearby = nearbyRaw.map(normalizePhoto).filter(Boolean) as ReturnType<typeof normalizePhoto>[];
-
-    if (!nearby.length) {
-      return NextResponse.json({ provider: 'kartaview', photos: [], message: 'No KartaView imagery found within 500 meters.' });
+    if (approvedPhotoId) {
+      const detailJson = await getJson(`https://api.openstreetcam.org/2.0/photo/${encodeURIComponent(approvedPhotoId)}`);
+      const raw = detailJson?.result?.data;
+      const detail = Array.isArray(raw) ? raw[0] : raw;
+      target = detail ? normalizePhoto(detail) : null;
+      if (target?.sequenceId) photos = await getSequencePhotos(target.sequenceId);
+      if (target && !photos.length) photos = [target];
     }
 
-    const origin = { lat, lng };
-    const nearest = [...nearby].sort((a, b) => {
-      if (!a || !b) return 0;
-      return distanceKm(origin, a) - distanceKm(origin, b);
-    })[0]!;
+    if (!photos.length) {
+      const nearbyUrl = new URL('https://api.openstreetcam.org/2.0/photo/');
+      nearbyUrl.searchParams.set('lat', String(lat));
+      nearbyUrl.searchParams.set('lng', String(lng));
+      nearbyUrl.searchParams.set('zoomLevel', '18');
+      nearbyUrl.searchParams.set('join', 'sequence');
+      nearbyUrl.searchParams.set('radius', '500');
+      nearbyUrl.searchParams.set('orderBy', 'id');
+      nearbyUrl.searchParams.set('orderDirection', 'desc');
 
-    let photos = nearby.filter(Boolean) as NonNullable<ReturnType<typeof normalizePhoto>>[];
+      const nearbyJson = await getJson(nearbyUrl.toString());
+      const nearbyRaw = Array.isArray(nearbyJson?.result?.data) ? nearbyJson.result.data : [];
+      const nearby = nearbyRaw.map(normalizePhoto).filter(Boolean) as NonNullable<ReturnType<typeof normalizePhoto>>[];
+      if (!nearby.length) {
+        return NextResponse.json({ provider: 'kartaview', photos: [], message: 'No KartaView imagery found within 500 meters.' });
+      }
 
-    if (nearest.sequenceId) {
-      const sequenceUrl = new URL('https://api.openstreetcam.org/2.0/photo/');
-      sequenceUrl.searchParams.set('sequenceId', nearest.sequenceId);
-      sequenceUrl.searchParams.set('page', '1');
-      sequenceUrl.searchParams.set('itemsPerPage', '150');
-      const sequenceJson = await getJson(sequenceUrl.toString());
-      const sequenceRaw = Array.isArray(sequenceJson?.result?.data) ? sequenceJson.result.data : [];
-      const normalizedSequence = sequenceRaw.map(normalizePhoto).filter(Boolean) as NonNullable<ReturnType<typeof normalizePhoto>>[];
-      if (normalizedSequence.length) photos = normalizedSequence;
+      target = [...nearby].sort((a, b) => distanceKm(origin, a) - distanceKm(origin, b))[0];
+      photos = target.sequenceId ? await getSequencePhotos(target.sequenceId) : nearby;
+      if (!photos.length) photos = nearby;
     }
 
     photos.sort((a, b) => a.sequenceIndex - b.sequenceIndex);
-    let nearestIndex = photos.findIndex((photo) => photo.id === nearest.id);
-    if (nearestIndex < 0) {
-      nearestIndex = photos.reduce((best, photo, index) => {
+    let targetIndex = target ? photos.findIndex((photo) => photo.id === target!.id) : -1;
+    if (targetIndex < 0) {
+      targetIndex = photos.reduce((best, photo, index) => {
         const currentDistance = distanceKm(origin, photo);
         const bestDistance = distanceKm(origin, photos[best]);
         return currentDistance < bestDistance ? index : best;
       }, 0);
     }
 
-    const start = Math.max(0, nearestIndex - 12);
-    const end = Math.min(photos.length, nearestIndex + 13);
+    const start = Math.max(0, targetIndex - 12);
+    const end = Math.min(photos.length, targetIndex + 13);
     const windowed = photos.slice(start, end);
 
     return NextResponse.json({
       provider: 'kartaview',
       photos: windowed,
-      initialIndex: Math.max(0, nearestIndex - start),
+      initialIndex: Math.max(0, targetIndex - start),
+      selectedPhotoId: approvedPhotoId || target?.id || null,
       attribution: 'KartaView contributors',
     });
   } catch (error) {
