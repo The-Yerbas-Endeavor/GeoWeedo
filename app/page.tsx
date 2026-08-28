@@ -23,6 +23,13 @@ type PublicMapCandidate = {
   mapCandidate?: boolean;
 };
 
+type PublicMapStats = {
+  total: number;
+  mapped: number;
+  missingCoordinates: number;
+  states: number;
+};
+
 function distanceKm(a: LatLng, b: LatLng) {
   const radiusKm = 6371.0088;
   const toRadians = (value: number) => (value * Math.PI) / 180;
@@ -48,6 +55,7 @@ export default function HomePage() {
   const [roundScore, setRoundScore] = useState<number | null>(null);
   const [approvedDispensaries, setApprovedDispensaries] = useState<Dispensary[]>([]);
   const [mapCandidates, setMapCandidates] = useState<PublicMapCandidate[]>([]);
+  const [mapStats, setMapStats] = useState<PublicMapStats | null>(null);
 
   useEffect(() => {
     fetch('/api/dispensaries', { cache: 'no-store' })
@@ -57,8 +65,11 @@ export default function HomePage() {
 
     fetch('/api/map-candidates', { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Failed to load map candidates.')))
-      .then((data) => setMapCandidates(Array.isArray(data.candidates) ? data.candidates : []))
-      .catch(() => setMapCandidates([]));
+      .then((data) => {
+        setMapCandidates(Array.isArray(data.candidates) ? data.candidates : []);
+        setMapStats(data.stats && typeof data.stats === 'object' ? data.stats : null);
+      })
+      .catch(() => { setMapCandidates([]); setMapStats(null); });
   }, []);
 
   const rounds = useMemo(() => {
@@ -107,10 +118,11 @@ export default function HomePage() {
 
     const seen = new Set<string>();
     return merged.filter((item) => {
+      if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) return false;
       const key = `${item.name}|${item.lat.toFixed(5)}|${item.lng.toFixed(5)}`.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
-      return Number.isFinite(item.lat) && Number.isFinite(item.lng);
+      return true;
     });
   }, [approvedDispensaries, mapCandidates]);
 
@@ -148,9 +160,16 @@ export default function HomePage() {
           <div className="home-play-card">
             <div className="eyebrow">THE DISPENSARY GEOGRAPHY GAME</div>
             <h1>GeoWeedo</h1>
-            <p>Explore a real dispensary location, read the clues, and pinpoint where you are.</p>
+            <p>Explore real dispensary locations, read the clues, and pinpoint where you are.</p>
             <button className="primary home-play-button" onClick={beginGame}>Play GeoWeedo</button>
-            <div className="home-play-meta"><span>5 rounds</span><span>{homeLocations.length} map locations</span><span>YERB rewards</span></div>
+            <div className="home-play-meta">
+              <span>5 rounds</span>
+              <span>{homeLocations.length.toLocaleString()} mapped</span>
+              {mapStats && <span>{mapStats.total.toLocaleString()} candidates</span>}
+              {mapStats && <span>{mapStats.states} states</span>}
+              <span>YERB rewards</span>
+            </div>
+            {mapStats && mapStats.missingCoordinates > 0 && <p className="map-coverage-note">{mapStats.missingCoordinates.toLocaleString()} imported locations still need coordinates before they can appear on the public map.</p>}
           </div>
         </section>
       </main>
