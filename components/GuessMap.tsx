@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   LngLatBounds,
   Map as LibreMap,
   Marker,
   NavigationControl,
   Popup,
+  type StyleSpecification,
 } from 'maplibre-gl';
 
 export type LatLng = { lat: number; lng: number };
@@ -18,6 +19,32 @@ type Props = {
   onGuess: (guess: LatLng) => void;
 };
 
+// Keep gameplay independent of a remote style JSON. This tiny MapLibre style
+// starts immediately and requests ordinary OpenStreetMap raster tiles directly.
+const GAME_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: [
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm',
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+};
+
 export default function GuessMap({ guess, actual = null, revealed = false, onGuess }: Props) {
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LibreMap | null>(null);
@@ -25,7 +52,6 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   const actualMarkerRef = useRef<Marker | null>(null);
   const revealedRef = useRef(revealed);
   const onGuessRef = useRef(onGuess);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
   useEffect(() => { onGuessRef.current = onGuess; }, [onGuess]);
@@ -33,13 +59,10 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   useEffect(() => {
     if (!nodeRef.current || mapRef.current) return;
 
-    let loaded = false;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-
     try {
       const map = new LibreMap({
         container: nodeRef.current,
-        style: 'https://tiles.openfreemap.org/styles/liberty',
+        style: GAME_STYLE,
         center: [-98, 39],
         zoom: 2.6,
         attributionControl: {},
@@ -48,34 +71,28 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
       });
 
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
-      map.on('load', () => {
-        loaded = true;
-        setError(null);
-        map.resize();
-      });
+      map.on('load', () => map.resize());
       map.on('click', (event) => {
         if (revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       });
 
-      // MapLibre can emit non-fatal tile/glyph errors while the map remains usable,
-      // so only show a blocking error when the base style never finishes loading.
-      timeout = setTimeout(() => {
-        if (!loaded && !map.isStyleLoaded()) {
-          setError('The open map is taking too long to load. Use Retry Map to reload it.');
-        }
-      }, 10000);
+      // A tile may occasionally fail without making the map unusable. Do not
+      // cover gameplay with a fatal overlay for an individual network error.
+      map.on('error', (event) => {
+        console.warn('GeoWeedo map resource warning:', event.error?.message || event);
+      });
 
       mapRef.current = map;
-    } catch {
-      setError('The open map could not be initialized in this browser.');
+      const resizeTimer = window.setTimeout(() => map.resize(), 250);
+      return () => {
+        window.clearTimeout(resizeTimer);
+        map.remove();
+        mapRef.current = null;
+      };
+    } catch (error) {
+      console.error('GeoWeedo map initialization failed:', error);
     }
-
-    return () => {
-      if (timeout) clearTimeout(timeout);
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
   }, []);
 
   useEffect(() => {
@@ -129,14 +146,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   return (
     <div className="guess-map-wrap">
       <div ref={nodeRef} className="guess-map-canvas" aria-label="Interactive open-source guessing map" />
-      {!guess && !revealed && !error && <div className="map-hint">Click anywhere on the map to place your guess</div>}
-      {error && (
-        <div className="map-error compact">
-          <strong>Map unavailable</strong>
-          <span>{error}</span>
-          <button type="button" className="secondary" onClick={() => window.location.reload()}>Retry Map</button>
-        </div>
-      )}
+      {!guess && !revealed && <div className="map-hint">Click anywhere on the map to place your guess</div>}
     </div>
   );
 }
