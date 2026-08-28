@@ -27,34 +27,44 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   const onGuessRef = useRef(onGuess);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    revealedRef.current = revealed;
-  }, [revealed]);
-
-  useEffect(() => {
-    onGuessRef.current = onGuess;
-  }, [onGuess]);
+  useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+  useEffect(() => { onGuessRef.current = onGuess; }, [onGuess]);
 
   useEffect(() => {
     if (!nodeRef.current || mapRef.current) return;
 
+    let loaded = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
     try {
       const map = new LibreMap({
         container: nodeRef.current,
-        style: 'https://tiles.openfreemap.org/styles/bright',
+        style: 'https://tiles.openfreemap.org/styles/liberty',
         center: [-98, 39],
         zoom: 2.6,
         attributionControl: {},
+        dragRotate: false,
+        pitchWithRotate: false,
       });
 
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+      map.on('load', () => {
+        loaded = true;
+        setError(null);
+        map.resize();
+      });
       map.on('click', (event) => {
         if (revealedRef.current) return;
         onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
       });
-      map.on('error', () => {
-        setError('The open map tiles could not be loaded.');
-      });
+
+      // MapLibre can emit non-fatal tile/glyph errors while the map remains usable,
+      // so only show a blocking error when the base style never finishes loading.
+      timeout = setTimeout(() => {
+        if (!loaded && !map.isStyleLoaded()) {
+          setError('The open map is taking too long to load. Use Retry Map to reload it.');
+        }
+      }, 10000);
 
       mapRef.current = map;
     } catch {
@@ -62,6 +72,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
     }
 
     return () => {
+      if (timeout) clearTimeout(timeout);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -84,7 +95,6 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         .setLngLat([guess.lng, guess.lat])
         .setPopup(new Popup({ offset: 18 }).setText('Your guess'))
         .addTo(map);
-
       if (!revealed) map.easeTo({ center: [guess.lng, guess.lat], duration: 350 });
     }
 
@@ -98,33 +108,14 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         const line = {
           type: 'Feature' as const,
           properties: {},
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: [
-              [guess.lng, guess.lat],
-              [actual.lng, actual.lat],
-            ],
-          },
+          geometry: { type: 'LineString' as const, coordinates: [[guess.lng, guess.lat], [actual.lng, actual.lat]] },
         };
-
         const addLine = () => {
           if (map.getSource('guess-line')) return;
           map.addSource('guess-line', { type: 'geojson', data: line });
-          map.addLayer({
-            id: 'guess-line',
-            type: 'line',
-            source: 'guess-line',
-            paint: {
-              'line-color': '#67d66e',
-              'line-width': 3,
-              'line-opacity': 0.8,
-            },
-          });
+          map.addLayer({ id: 'guess-line', type: 'line', source: 'guess-line', paint: { 'line-color': '#67d66e', 'line-width': 3, 'line-opacity': 0.8 } });
         };
-
-        if (map.isStyleLoaded()) addLine();
-        else map.once('load', addLine);
-
+        if (map.isStyleLoaded()) addLine(); else map.once('load', addLine);
         const bounds = new LngLatBounds();
         bounds.extend([guess.lng, guess.lat]);
         bounds.extend([actual.lng, actual.lat]);
@@ -143,6 +134,7 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
         <div className="map-error compact">
           <strong>Map unavailable</strong>
           <span>{error}</span>
+          <button type="button" className="secondary" onClick={() => window.location.reload()}>Retry Map</button>
         </div>
       )}
     </div>
