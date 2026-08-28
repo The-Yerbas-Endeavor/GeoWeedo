@@ -1,104 +1,126 @@
 # GeoWeedo
 
-GeoWeedo is a dispensary geography guessing game inspired by location-guessing games such as OpenGuessr.
+GeoWeedo is a dispensary geography guessing game built on an open map/imagery stack with Yerbas rewards and dispensary sponsorships.
 
-## Current gameplay layer
+## Current application layer
 
-- Next.js + TypeScript application shell
-- Five-round single-player game flow
-- 25,000-point scoring structure
-- MapLibre GL JS guessing map using OpenFreeMap/OpenStreetMap data
-- KartaView street-level imagery provider with no Google dependency
-- Interactive 360 panorama rendering when KartaView supplies spherical imagery
-- Step-through sequence navigation for ordinary street-level photos
-- Click-to-place and move guesses
-- Real Haversine distance calculation and scoring
-- Admin dispensary imagery-validation workflow
-- Admin-selected starting frame per approved dispensary
-- Runtime approved game pool with activate/deactivate controls
-- Address lookup through a server-side OpenStreetMap Nominatim proxy
-- GeoWeedo-hosted imagery provider field reserved for fallback coverage
-- Clickable site navigation with How to Play, About, YERB Rewards, and For Dispensaries pages
-- Configurable YERB reward estimate displayed during and after games
-- Prisma models for players, verified Yerbas wallet addresses, reward payouts, and sponsored dispensary listings
-- Dispensary provenance fields for source URL/license tracking
+- Next.js + TypeScript
+- Five-round single-player gameplay and 25,000-point scoring
+- MapLibre GL JS + OpenFreeMap/OpenStreetMap guessing map
+- KartaView street imagery and interactive spherical panoramas
+- GeoWeedo-hosted JPEG/PNG/WebP imagery fallback, including equirectangular 360 panoramas
+- Human-reviewed starting frame before a real dispensary becomes playable
+- Official/open-data candidate import queue with provenance tracking
+- Direct Oregon OLCC Open Data retailer import plus generic regulator CSV import
+- Player account page with Yerbas message-signature ownership verification
+- Auditable YERB reward ledger with pending/held/paid/failed states
+- Isolated YERB payout worker: dry-run by default and explicitly enabled for sends
+- Dispensary YERB sponsorship dashboard with campaign txid, dates, and priority
+- Maximum one sponsored location per standard five-round game
+- Sponsored placement never changes distance, score, or player reward rate
 
-## Yerbas integration
+## Routes
 
-GeoWeedo keeps the map score independent from payments. A game still scores only by distance.
+Public:
 
-Default development reward policy:
+```text
+/
+/how-to-play
+/about
+/rewards
+/for-dispensaries
+/account
+```
+
+Admin:
+
+```text
+/admin/data
+/admin/dispensaries
+/admin/rewards
+/admin/sponsorships
+```
+
+## Zero-Google map and imagery stack
+
+GeoWeedo does not require a Google Maps API key, Google Cloud project, or Google billing account. MapLibre/OpenFreeMap powers the guessing map. KartaView is the default street-imagery source; GeoWeedo-hosted imagery fills important coverage gaps.
+
+Approved real dispensaries are stored in `data/runtime/dispensaries.json`. Hosted production imagery is stored under `public/uploads/dispensaries/`. Both locations are gitignored so application pulls/rebuilds do not overwrite production curation.
+
+## Official dispensary data
+
+`/admin/data` supports generic licensing/open-data CSV imports. Imported records enter a candidate queue and cannot become playable until imagery is reviewed.
+
+Oregon also has a direct admin import using the official **OLCC Cannabis Business Licenses & Endorsements** Oregon Open Data dataset.
+
+Do not scrape public Weedmaps listings. Weedmaps-derived records may only be used when GeoWeedo has authorization/API rights for the intended use or a business supplies data it has the right to provide.
+
+See:
+
+```text
+docs/dispensary-data-sources.md
+docs/official-dispensary-imports.md
+```
+
+## Player wallet verification
+
+`/account` verifies ownership without collecting a private key. GeoWeedo creates a one-time message and the player signs it with their Yerbas wallet. The server checks the signature using the Yerbas RPC `verifymessage` method and records the public address as verified/reward-eligible.
+
+Never submit wallet seed phrases or private keys to GeoWeedo.
+
+## YERB rewards
+
+Default development policy:
 
 ```env
 NEXT_PUBLIC_YERB_PER_POINT=0.0004
 NEXT_PUBLIC_YERB_DAILY_CAP=25
 ```
 
-At that default rate, a perfect 25,000-point game estimates to 10 YERB. This is a configurable development policy, not a promise of payment.
+At the default rate, a perfect 25,000-point game estimates to 10 YERB. Score remains a pure geography score; reward economics are separate.
 
-Automatic payouts are intentionally not enabled yet. The next payout layer must require a player account, verified Yerbas address, completed-game persistence, anti-abuse review, daily-cap enforcement, and a server-side wallet/RPC worker. RPC credentials must never be exposed to browser code.
+The admin reward ledger is at `/admin/rewards`. The actual sender is intentionally outside the web request path:
 
-The Prisma model now supports:
-
-- `Player`
-- `Game.rewardYerb` and reward state
-- `RewardPayout` with status and transaction ID
-- `SponsoredListing` with YERB amount, payment txid, priority weight, and campaign dates
-
-Sponsored placement must never change score calculation. Priority should be capped to a small share of ordinary games and clearly labeled where surfaced.
-
-## Dispensary data sourcing
-
-GeoWeedo tracks `dataSource`, `sourceUrl`, and `sourceLicense` so every imported location has provenance.
-
-Do not scrape or bulk-extract Weedmaps listings from the public Weedmaps site. Their current acceptable-use and developer terms prohibit scraping/crawling/extracting site and business-listing data. Weedmaps-sourced data should only be ingested when GeoWeedo has explicit authorized access/permission for the intended use.
-
-For scalable population, prefer official state/provincial cannabis-license registries, dispensary-provided submissions, and compatible open datasets. See `docs/dispensary-data-sources.md`.
-
-## Zero-Google stack
-
-GeoWeedo does not require a Google Maps API key, Google Cloud project, or Google billing account.
-
-The guessing map uses MapLibre GL JS with the OpenFreeMap public style. Street-level imagery uses KartaView's public read API. KartaView coverage is crowdsourced and therefore less complete than Google Street View, so real dispensaries are admitted to gameplay only after an admin reviews and approves a starting image.
-
-## Admin imagery validation
-
-The admin workflow lives at:
-
-```text
-/admin/dispensaries
+```bash
+npm run rewards:dry-run
+npm run rewards:pay
 ```
 
-Set a strong server-side secret in `.env.local`:
+`rewards:pay` still sends nothing unless `YERB_PAYOUTS_ENABLED=true` is set. The worker checks verified addresses, applies the daily cap, sends pending ledger entries one at a time, and records each txid.
+
+Gameplay does **not** automatically create paid reward entries yet because the current game is still client-authoritative. The next security layer is server-authoritative game sessions and anti-cheat validation; validated completed games can then create pending reward entries automatically.
+
+See `docs/yerb-reward-operations.md`.
+
+## Dispensary sponsorships
+
+`/admin/sponsorships` records the dispensary, YERB amount, payment txid, start/end dates, status, and priority weight. Active campaigns can affect selection frequency in ordinary games, but GeoWeedo caps selection at one sponsored round per five-round game. Daily competitive challenges should remain unsponsored.
+
+## Environment
+
+Start from `.env.example`. Important values:
 
 ```env
-GEOWEEDO_ADMIN_SECRET=replace_with_a_long_random_value
+GEOWEEDO_ADMIN_SECRET=
+GEOWEEDO_SESSION_SECRET=
+NEXT_PUBLIC_YERB_PER_POINT=0.0004
+NEXT_PUBLIC_YERB_DAILY_CAP=25
+NEXT_PUBLIC_YERB_SPONSOR_ADDRESS=
+YERB_RPC_URL=http://127.0.0.1:YOUR_RPC_PORT
+YERB_RPC_USER=
+YERB_RPC_PASSWORD=
+YERB_PAYOUTS_ENABLED=false
 ```
 
-The workflow is:
-
-1. Enter the real dispensary name and address.
-2. Record the data source/provenance.
-3. Resolve coordinates with the admin-only OpenStreetMap address search, or enter coordinates manually.
-4. Search KartaView near the storefront.
-5. Step through the returned sequence or inspect a 360 view.
-6. Choose the exact starting frame.
-7. Approve it.
-8. The dispensary is saved as verified and active and becomes eligible for the live game pool.
-9. It can later be deactivated without deleting the validation record.
-
-Approved records are stored in `data/runtime/dispensaries.json`. That directory is gitignored so normal `git pull` and rebuilds do not overwrite production approvals. The current runtime JSON store is intentionally simple for the first production layer; the Prisma schema is already extended so these records can later move into PostgreSQL without redesigning the imagery model.
+RPC credentials stay server-side. Confirm the actual Yerbas RPC port and credentials from the wallet/daemon configuration rather than assuming the example port.
 
 ## Development
 
 ```bash
 cp .env.example .env.local
-nano .env.local
 npm install
 npm run dev
 ```
-
-Then open `http://localhost:3000`.
 
 ## Production update
 
@@ -106,20 +128,26 @@ Then open `http://localhost:3000`.
 cd ~/GeoWeedo
 git pull
 npm install
+rm -rf .next
 npm run build
 sudo systemctl restart geoweedo
 ```
 
-The systemd service should continue to run as the `geo` user so it can create and update `data/runtime/dispensaries.json`.
+For hosted-image uploads, configure Nginx to permit the application upload size, for example:
 
-## Next implementation layer
+```nginx
+client_max_body_size 25M;
+```
 
-1. Add GeoWeedo-hosted imagery upload/storage for dispensaries without KartaView coverage.
-2. Add CSV/import review queue for official/open dispensary datasets.
-3. Build player accounts + Yerbas address verification + persisted game sessions.
-4. Add anti-cheat/reward review and server-side Yerbas payout worker.
-5. Add dispensary claim flow and YERB-funded sponsored campaigns with a one-sponsored-round-per-game cap.
-6. Migrate runtime approvals and rewards to PostgreSQL/PostGIS.
-7. Add deterministic Daily Challenge generation and leaderboard persistence.
-8. Add difficulty modes: Easy, Normal, Hard, and No Move.
-9. Add admin users/roles instead of the initial shared admin secret.
+The systemd service should continue running as the `geo` user so it can update `data/runtime/` and `public/uploads/dispensaries/`.
+
+## Next security/persistence layer
+
+1. Server-authoritative game sessions and round tokens.
+2. Anti-cheat/duplicate-account/rate-limit rules and automatic pending reward creation.
+3. Player authentication/session restoration beyond the current wallet-verification record.
+4. Dispensary claim/ownership verification and self-service sponsorship funding.
+5. PostgreSQL/PostGIS migration for players, games, rewards, sponsorships, and curated locations.
+6. Deterministic Daily Challenge and leaderboard persistence.
+7. Easy, Normal, Hard, and No-Move modes.
+8. Admin users/roles replacing the initial shared admin secret.
