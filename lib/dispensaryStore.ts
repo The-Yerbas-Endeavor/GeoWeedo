@@ -14,6 +14,9 @@ export type ApprovedDispensary = {
   latitude: number;
   longitude: number;
   website?: string;
+  dataSource?: string;
+  sourceUrl?: string;
+  sourceLicense?: string;
   recreational: boolean;
   medical: boolean;
   imageryProvider: ImageryProvider;
@@ -25,6 +28,8 @@ export type ApprovedDispensary = {
   imageryFieldOfView?: number;
   imageryProjection?: string;
   imageryUrl: string;
+  priorityWeight?: number;
+  sponsoredUntil?: string;
   verified: true;
   active: boolean;
   createdAt: string;
