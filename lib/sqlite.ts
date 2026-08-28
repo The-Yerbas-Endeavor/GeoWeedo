@@ -50,9 +50,36 @@ export function getDatabase() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dispensary_candidates (
+      id TEXT PRIMARY KEY,
+      fingerprint TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      street_address TEXT,
+      city TEXT,
+      region TEXT,
+      country TEXT,
+      latitude REAL,
+      longitude REAL,
+      website TEXT,
+      license_number TEXT,
+      data_source TEXT NOT NULL,
+      source_url TEXT,
+      source_license TEXT,
+      status TEXT NOT NULL DEFAULT 'candidate',
+      imagery_status TEXT NOT NULL DEFAULT 'unchecked',
+      imagery_count INTEGER,
+      imagery_checked_at TEXT,
+      imagery_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS dispensaries_active_idx ON dispensaries(active, verified);
     CREATE INDEX IF NOT EXISTS dispensaries_region_idx ON dispensaries(region, city);
     CREATE INDEX IF NOT EXISTS dispensaries_source_idx ON dispensaries(data_source);
+    CREATE INDEX IF NOT EXISTS candidate_status_idx ON dispensary_candidates(status, imagery_status);
+    CREATE INDEX IF NOT EXISTS candidate_region_idx ON dispensary_candidates(region, city);
+    CREATE INDEX IF NOT EXISTS candidate_license_idx ON dispensary_candidates(license_number);
   `);
 
   return database;
