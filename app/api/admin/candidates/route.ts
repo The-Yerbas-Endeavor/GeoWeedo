@@ -1,10 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { listCandidates, updateCandidate, type DispensaryCandidate } from '@/lib/candidateStore';
+import { saveApprovedDispensary } from '@/lib/dispensaryStore';
+import { inspectKartaViewCoverage } from '@/lib/kartaViewCoverage';
 
 export async function GET(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   return NextResponse.json({ candidates: await listCandidates() }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+async function promoteCandidate(item: DispensaryCandidate) {
+  if (!Number.isFinite(item.latitude) || !Number.isFinite(item.longitude)) return { ok: false, reason: 'missing_coordinates' };
+  if (!item.city?.trim() || !item.region?.trim()) return { ok: false, reason: 'missing_location_fields' };
+  if (item.imageryStatus !== 'coverage') return { ok: false, reason: 'imagery_not_playable' };
+
+  try {
+    const inspection = await inspectKartaViewCoverage(item.latitude as number, item.longitude as number);
+    const photo = inspection.selected;
+    if (!inspection.quality.playable || !photo?.id || !photo.imageUrl) return { ok: false, reason: 'imagery_revalidation_failed' };
+
+    const saved = await saveApprovedDispensary({
+      name: item.name,
+      slug: `${item.name}-${item.city}-${item.id.slice(-8)}`,
+      streetAddress: item.streetAddress,
+      city: item.city,
+      region: item.region,
+      country: item.country || 'USA',
+      latitude: item.latitude as number,
+      longitude: item.longitude as number,
+      website: item.website,
+      dataSource: item.dataSource,
+      sourceUrl: item.sourceUrl,
+      sourceLicense: item.sourceLicense,
+      recreational: false,
+      medical: false,
+      imageryProvider: 'kartaview',
+      imageryPhotoId: photo.id,
+      imagerySequenceId: photo.sequenceId || undefined,
+      imageryLatitude: photo.lat,
+      imageryLongitude: photo.lng,
+      imageryHeading: photo.heading,
+      imageryFieldOfView: photo.fieldOfView,
+      imageryProjection: photo.projection,
+      imageryUrl: photo.imageUrl,
+      active: true,
+    });
+
+    await updateCandidate(item.id, {
+      status: 'approved',
+      imageryMessage: `Promoted to gameplay. Grade ${inspection.quality.grade}: ${inspection.quality.reason} Starting frame ${photo.id}.`,
+    });
+    return { ok: true, dispensaryId: saved.id };
+  } catch {
+    return { ok: false, reason: 'imagery_revalidation_error' };
+  }
 }
 
 export async function PATCH(request: NextRequest) {
@@ -21,30 +70,40 @@ export async function PATCH(request: NextRequest) {
     const selected = all.filter((item) => ids.includes(item.id));
     let updated = 0;
     let skipped = 0;
+    let promoted = 0;
     const skippedReasons: Record<string, number> = {};
 
     for (const item of selected) {
       if (action === 'approve') {
-        const hasCoordinates = Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
-        const playableCoverage = item.imageryStatus === 'coverage';
-        if (!hasCoordinates || !playableCoverage) {
-          skipped++;
-          const reason = !hasCoordinates ? 'missing_coordinates' : 'imagery_not_playable';
-          skippedReasons[reason] = (skippedReasons[reason] || 0) + 1;
-          continue;
-        }
+        const result = await promoteCandidate(item);
+        if (result.ok) { updated++; promoted++; continue; }
+        skipped++;
+        const reason = result.reason || 'not_eligible';
+        skippedReasons[reason] = (skippedReasons[reason] || 0) + 1;
+        continue;
       }
 
-      const result = await updateCandidate(item.id, { status: action === 'approve' ? 'approved' : 'rejected' });
+      const result = await updateCandidate(item.id, { status: 'rejected' });
       if (result) updated++;
     }
 
-    return NextResponse.json({ action, requested: ids.length, matched: selected.length, updated, skipped, skippedReasons });
+    return NextResponse.json({ action, requested: ids.length, matched: selected.length, updated, promoted, skipped, skippedReasons });
   }
 
   if (!body?.id) return NextResponse.json({ error: 'Candidate id is required.' }, { status: 400 });
+  const id = String(body.id);
+  const all = await listCandidates();
+  const current = all.find((item) => item.id === id);
+  if (!current) return NextResponse.json({ error: 'Candidate not found.' }, { status: 404 });
+
+  if (body.status === 'approved') {
+    const result = await promoteCandidate(current);
+    if (!result.ok) return NextResponse.json({ error: `Candidate cannot enter gameplay: ${result.reason}.` }, { status: 400 });
+    return NextResponse.json({ candidate: (await listCandidates()).find((item) => item.id === id), promoted: true });
+  }
+
   const patch: Partial<DispensaryCandidate> = {};
-  if (['candidate', 'reviewing', 'approved', 'rejected'].includes(body.status)) patch.status = body.status as DispensaryCandidate['status'];
+  if (['candidate', 'reviewing', 'rejected'].includes(body.status)) patch.status = body.status as DispensaryCandidate['status'];
   if (body.name !== undefined) patch.name = String(body.name).trim();
   if (body.streetAddress !== undefined) patch.streetAddress = String(body.streetAddress).trim() || undefined;
   if (body.city !== undefined) patch.city = String(body.city).trim() || undefined;
@@ -56,7 +115,6 @@ export async function PATCH(request: NextRequest) {
   if (body.sourceLicense !== undefined) patch.sourceLicense = String(body.sourceLicense).trim() || undefined;
   if (body.latitude !== undefined && Number.isFinite(Number(body.latitude))) patch.latitude = Number(body.latitude);
   if (body.longitude !== undefined && Number.isFinite(Number(body.longitude))) patch.longitude = Number(body.longitude);
-  const updated = await updateCandidate(String(body.id), patch);
-  if (!updated) return NextResponse.json({ error: 'Candidate not found.' }, { status: 404 });
+  const updated = await updateCandidate(id, patch);
   return NextResponse.json({ candidate: updated });
 }
