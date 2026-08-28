@@ -1,12 +1,14 @@
 {
   "name": "geoweedo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
+    "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "5.15.1",
