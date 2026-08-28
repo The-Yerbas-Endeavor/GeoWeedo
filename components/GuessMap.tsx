@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps } from '@/lib/googleMaps';
+import maplibregl, { LngLatBounds } from 'maplibre-gl';
 
 export type LatLng = { lat: number; lng: number };
 
@@ -14,10 +14,9 @@ type Props = {
 
 export default function GuessMap({ guess, actual = null, revealed = false, onGuess }: Props) {
   const nodeRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const guessMarkerRef = useRef<any>(null);
-  const actualMarkerRef = useRef<any>(null);
-  const lineRef = useRef<any>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const guessMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const actualMarkerRef = useRef<maplibregl.Marker | null>(null);
   const revealedRef = useRef(revealed);
   const onGuessRef = useRef(onGuess);
   const [error, setError] = useState<string | null>(null);
@@ -31,95 +30,108 @@ export default function GuessMap({ guess, actual = null, revealed = false, onGue
   }, [onGuess]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!nodeRef.current || mapRef.current) return;
 
-    loadGoogleMaps()
-      .then((google) => {
-        if (cancelled || !nodeRef.current || mapRef.current) return;
-
-        const map = new google.maps.Map(nodeRef.current, {
-          center: { lat: 39, lng: -98 },
-          zoom: 3,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-          clickableIcons: false,
-          gestureHandling: 'greedy',
-        });
-
-        map.addListener('click', (event: any) => {
-          if (revealedRef.current || !event.latLng) return;
-          onGuessRef.current({ lat: event.latLng.lat(), lng: event.latLng.lng() });
-        });
-
-        mapRef.current = map;
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Guessing map failed to load.');
+    try {
+      const map = new maplibregl.Map({
+        container: nodeRef.current,
+        style: 'https://tiles.openfreemap.org/styles/bright',
+        center: [-98, 39],
+        zoom: 2.6,
+        attributionControl: true,
       });
 
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      map.on('click', (event) => {
+        if (revealedRef.current) return;
+        onGuessRef.current({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+      });
+      map.on('error', () => {
+        setError('The open map tiles could not be loaded.');
+      });
+
+      mapRef.current = map;
+    } catch {
+      setError('The open map could not be initialized in this browser.');
+    }
+
     return () => {
-      cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    const google = (window as any).google;
-    if (!map || !google?.maps) return;
+    if (!map) return;
 
-    if (guessMarkerRef.current) {
-      guessMarkerRef.current.setMap(null);
-      guessMarkerRef.current = null;
-    }
-    if (actualMarkerRef.current) {
-      actualMarkerRef.current.setMap(null);
-      actualMarkerRef.current = null;
-    }
-    if (lineRef.current) {
-      lineRef.current.setMap(null);
-      lineRef.current = null;
-    }
+    guessMarkerRef.current?.remove();
+    guessMarkerRef.current = null;
+    actualMarkerRef.current?.remove();
+    actualMarkerRef.current = null;
+
+    if (map.getLayer('guess-line')) map.removeLayer('guess-line');
+    if (map.getSource('guess-line')) map.removeSource('guess-line');
 
     if (guess) {
-      guessMarkerRef.current = new google.maps.Marker({
-        position: guess,
-        map,
-        title: 'Your guess',
-        label: 'G',
-      });
-      if (!revealed) map.panTo(guess);
+      guessMarkerRef.current = new maplibregl.Marker({ color: '#67d66e' })
+        .setLngLat([guess.lng, guess.lat])
+        .setPopup(new maplibregl.Popup({ offset: 18 }).setText('Your guess'))
+        .addTo(map);
+
+      if (!revealed) map.easeTo({ center: [guess.lng, guess.lat], duration: 350 });
     }
 
     if (revealed && actual) {
-      actualMarkerRef.current = new google.maps.Marker({
-        position: actual,
-        map,
-        title: 'Actual location',
-        label: 'A',
-      });
+      actualMarkerRef.current = new maplibregl.Marker({ color: '#f4f7f4' })
+        .setLngLat([actual.lng, actual.lat])
+        .setPopup(new maplibregl.Popup({ offset: 18 }).setText('Actual location'))
+        .addTo(map);
 
       if (guess) {
-        lineRef.current = new google.maps.Polyline({
-          path: [guess, actual],
-          geodesic: true,
-          strokeOpacity: 0.8,
-          strokeWeight: 3,
-          map,
-        });
-        const bounds = new google.maps.LatLngBounds();
-        bounds.extend(guess);
-        bounds.extend(actual);
-        map.fitBounds(bounds, 56);
+        const line = {
+          type: 'Feature' as const,
+          properties: {},
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: [
+              [guess.lng, guess.lat],
+              [actual.lng, actual.lat],
+            ],
+          },
+        };
+
+        const addLine = () => {
+          if (map.getSource('guess-line')) return;
+          map.addSource('guess-line', { type: 'geojson', data: line });
+          map.addLayer({
+            id: 'guess-line',
+            type: 'line',
+            source: 'guess-line',
+            paint: {
+              'line-color': '#67d66e',
+              'line-width': 3,
+              'line-opacity': 0.8,
+            },
+          });
+        };
+
+        if (map.isStyleLoaded()) addLine();
+        else map.once('load', addLine);
+
+        const bounds = new LngLatBounds();
+        bounds.extend([guess.lng, guess.lat]);
+        bounds.extend([actual.lng, actual.lat]);
+        map.fitBounds(bounds, { padding: 56, maxZoom: 9, duration: 450 });
       } else {
-        map.panTo(actual);
+        map.easeTo({ center: [actual.lng, actual.lat], zoom: 8, duration: 450 });
       }
     }
   }, [guess, actual, revealed]);
 
   return (
     <div className="guess-map-wrap">
-      <div ref={nodeRef} className="guess-map-canvas" aria-label="Interactive guessing map" />
+      <div ref={nodeRef} className="guess-map-canvas" aria-label="Interactive open-source guessing map" />
       {!guess && !revealed && !error && <div className="map-hint">Click anywhere on the map to place your guess</div>}
       {error && (
         <div className="map-error compact">
