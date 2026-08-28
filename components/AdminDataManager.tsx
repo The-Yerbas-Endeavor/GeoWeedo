@@ -49,7 +49,8 @@ export default function AdminDataManager() {
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Import failed.');
-      setStatus(`Parsed ${data.parsed} rows; added ${data.added} new candidates. ${data.total} candidates are now queued.`);
+      const mapReady = typeof data.mapReady === 'number' ? ` ${data.mapReady} imported rows already have coordinates for the public map.` : '';
+      setStatus(`Parsed ${data.parsed} rows; added ${data.added} new candidates. ${data.total} candidates are now queued.${mapReady}`);
       await load();
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Import failed.'); }
     finally { setBusy(false); }
@@ -97,8 +98,8 @@ export default function AdminDataManager() {
   function useCaliforniaPreset() {
     setSource('california-dcc');
     setSourceUrl('https://www.cannabis.ca.gov/resources/search-for-licensed-business/');
-    setSourceLicense('California Department of Cannabis Control official license data');
-    setStatus('California DCC preset selected. Import a current DCC export and prioritize active Type 10 storefront retailer licenses.');
+    setSourceLicense('California Department of Cannabis Control official License Search export; filtered by GeoWeedo to active Type 10 storefront retailers');
+    setStatus('California DCC preset selected. In the DCC License Search, export the current license results, then upload that CSV/JSON here. GeoWeedo will keep only Active / About to Expire Type 10 storefront retailers and reject delivery-only Type 9 and inactive licenses.');
   }
 
   function review(item: Candidate) {
@@ -139,12 +140,12 @@ export default function AdminDataManager() {
             <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             <button className="primary" disabled={busy || !file} onClick={upload}>Import candidates</button>
           </div>
-          <p className="admin-help">The importer recognizes common business/name/address/city/state/latitude/longitude/license fields in CSV or JSON and preserves source provenance. Every record stays a candidate until imagery is validated.</p>
+          <p className="admin-help">The importer recognizes common business/name/address/city/state/latitude/longitude/license fields in CSV or JSON and preserves source provenance. California DCC imports are automatically narrowed to active Type 10 storefront retailers. Every record remains a candidate until imagery is validated.</p>
         </div>
         <div className="admin-panel">
           <h2>Official source presets</h2>
           <div className="source-note"><strong>Oregon + Nevada + Washington</strong><span>Pull all three direct official feeds into the SQLite candidate database in one pass. Each state imports independently, so one source failure no longer blocks the others.</span><button className="primary" disabled={busy} onClick={() => fetchOfficial('all', 'Official state sync')}>Fetch all official dispensaries</button></div>
-          <div className="source-note"><strong>California · DCC</strong><span>DCC license search is refreshed daily. Prioritize active Type 10 storefront retailer licenses. Use the DCC export until a stable public bulk API is confirmed.</span><button className="secondary" onClick={useCaliforniaPreset}>Use California DCC preset</button></div>
+          <div className="source-note"><strong>California · DCC</strong><span>DCC License Search is updated daily. GeoWeedo accepts the DCC export and keeps only Active or About to Expire Type 10 storefront retailers. Expired/Pending Renewal, Type 9 delivery-only, suspended, revoked and surrendered records are excluded.</span><div className="candidate-actions"><a className="secondary" href="https://www.cannabis.ca.gov/resources/search-for-licensed-business/" target="_blank" rel="noreferrer">Open DCC License Search</a><button className="secondary" onClick={useCaliforniaPreset}>Prepare California import</button></div></div>
           <div className="source-note"><strong>Oregon · direct import</strong><span>OLCC Cannabis Business Licenses &amp; Endorsements from Oregon Open Data.</span><button className="secondary" disabled={busy} onClick={() => fetchOfficial('oregon-olcc', 'Oregon OLCC')}>Fetch Oregon retailers now</button></div>
           <div className="source-note"><strong>Nevada · direct import</strong><span>CCB's official licensed retail-location list is parsed directly.</span><button className="secondary" disabled={busy} onClick={() => fetchOfficial('nevada-ccb', 'Nevada CCB')}>Fetch Nevada retailers now</button></div>
           <div className="source-note"><strong>Washington · direct open data</strong><span>LCB Cannabis Renewal dataset on data.wa.gov (brpd-b6zd).</span><button className="secondary" disabled={busy} onClick={() => fetchOfficial('washington-lcb', 'Washington LCB')}>Fetch Washington open data now</button></div>
