@@ -4,6 +4,7 @@ export type Dispensary = {
   slug: string;
   latitude: number;
   longitude: number;
+  streetAddress?: string;
   city: string;
   region: string;
   country: string;
@@ -11,6 +12,15 @@ export type Dispensary = {
   photoUrl?: string;
   panoramaId?: string;
   heading?: number;
+  imageryProvider?: 'kartaview' | 'geoweedo';
+  imageryPhotoId?: string;
+  imagerySequenceId?: string;
+  imageryLatitude?: number;
+  imageryLongitude?: number;
+  imageryHeading?: number;
+  imageryFieldOfView?: number;
+  imageryProjection?: string;
+  imageryUrl?: string;
   recreational: boolean;
   medical: boolean;
   verified: boolean;
