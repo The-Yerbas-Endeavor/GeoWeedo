@@ -14,7 +14,11 @@ if [[ -z "$DISPLAY_NAME" ]]; then
   read -r -p "Admin display name [$USERNAME]: " DISPLAY_NAME
   DISPLAY_NAME="${DISPLAY_NAME:-$USERNAME}"
 fi
-if [[ -z "$PASSWORD" ]]; then
+
+# Never trust an inherited empty/short password from an earlier failed shell
+# attempt. Prompt until we have a valid value instead.
+if [[ ${#PASSWORD} -lt 12 ]]; then
+  PASSWORD=""
   while true; do
     read -r -s -p "Admin password (12+ characters): " PASSWORD
     echo
@@ -22,6 +26,7 @@ if [[ -z "$PASSWORD" ]]; then
       break
     fi
     echo "Password must contain at least 12 characters. Try again."
+    PASSWORD=""
   done
 fi
 
