@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { DatabaseSync } from 'node:sqlite';
 
-const dbPath = path.join(process.cwd(), 'data', 'runtime', 'geoweedo.sqlite');
+const dbPath = process.env.GEOWEEDO_DB_PATH || path.join(process.cwd(), 'data', 'runtime', 'geoweedo.sqlite');
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON;');
 db.exec('PRAGMA journal_mode = WAL;');
@@ -40,7 +40,6 @@ async function listWalletTransactions() {
   try {
     return await rpc('listtransactions', ['*', 1000, 0, true]);
   } catch (error) {
-    // Some older Bitcoin/Dash-derived Yerbas wallet builds expose the 3-argument form.
     console.warn(`listtransactions include_watchonly form failed; retrying compatibility form: ${error instanceof Error ? error.message : error}`);
     return rpc('listtransactions', ['*', 1000, 0]);
   }
@@ -48,6 +47,7 @@ async function listWalletTransactions() {
 
 async function scanDeposits() {
   const transactions = await listWalletTransactions();
+  let detected = 0;
   let credited = 0;
   for (const tx of Array.isArray(transactions) ? transactions : []) {
     if (tx.category !== 'receive' || !tx.address || !tx.txid) continue;
@@ -68,6 +68,7 @@ async function scanDeposits() {
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(id, addressRow.wallet_id, tx.address, tx.txid, vout, amountAtomic, tx.blockheight ?? null, confirmations, status, now, status === 'confirmed' ? now : null);
       deposit = { id, credited_ledger_id: null };
+      detected++;
     } else {
       db.prepare('UPDATE deposits SET confirmations = ?, block_height = COALESCE(?, block_height), status = ?, confirmed_at = CASE WHEN ? = \'confirmed\' THEN COALESCE(confirmed_at, ?) ELSE confirmed_at END WHERE id = ?')
         .run(confirmations, tx.blockheight ?? null, status, status, now, deposit.id);
@@ -92,7 +93,7 @@ async function scanDeposits() {
       }
     }
   }
-  console.log(`Deposit scan complete. Newly credited: ${credited}`);
+  console.log(`Deposit scan complete. Newly detected: ${detected}; newly credited: ${credited}`);
 }
 
 async function processWithdrawals() {
@@ -139,5 +140,6 @@ async function processWithdrawals() {
   }
 }
 
+console.log(`GeoWeedo wallet worker database: ${dbPath}`);
 await scanDeposits();
 await processWithdrawals();
