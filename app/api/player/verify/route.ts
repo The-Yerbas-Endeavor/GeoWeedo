@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyYerbasMessage } from '@/lib/yerbasRpc';
 import { consumeWalletLoginChallenge, createOrLoginUser, USER_COOKIE } from '@/lib/userAuth';
+import { resolveRequestGeo } from '@/lib/requestGeo';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +18,8 @@ export async function POST(request: NextRequest) {
   try {
     const valid = await verifyYerbasMessage(address, signature, challenge);
     if (!valid) return NextResponse.json({ error: 'Wallet signature did not verify.' }, { status: 400 });
-    const login = createOrLoginUser(handle, address, request.headers.get('user-agent'));
+    const geo = await resolveRequestGeo(request);
+    const login = createOrLoginUser(handle, address, request.headers.get('user-agent'), geo);
     const response = NextResponse.json({ player: login.user });
     response.cookies.set(USER_COOKIE, login.token, {
       httpOnly: true,
