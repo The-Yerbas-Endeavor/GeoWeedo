@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Admin login failed.');
-      window.location.href = '/admin/data';
+      window.location.href = '/admin';
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Admin login failed.');
     } finally {
