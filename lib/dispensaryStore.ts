@@ -39,6 +39,22 @@ export type ApprovedDispensary = {
   updatedAt: string;
 };
 
+export type DispensaryDetailUpdate = {
+  name: string;
+  streetAddress?: string;
+  city: string;
+  region: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  website?: string;
+  dataSource?: string;
+  sourceUrl?: string;
+  sourceLicense?: string;
+  recreational: boolean;
+  medical: boolean;
+};
+
 const legacyStorePath = path.join(process.cwd(), 'data', 'runtime', 'dispensaries.json');
 let migratedLegacyStore = false;
 
@@ -137,7 +153,7 @@ async function migrateLegacyJsonOnce() {
 
 export async function readApprovedDispensaries(): Promise<ApprovedDispensary[]> {
   await migrateLegacyJsonOnce();
-  const rows = getDatabase().prepare('SELECT * FROM dispensaries ORDER BY updated_at DESC').all() as Record<string, unknown>[];
+  const rows = getDatabase().prepare('SELECT * FROM dispensaries ORDER BY active DESC, region ASC, city ASC, name ASC').all() as Record<string, unknown>[];
   return rows.map(rowToDispensary);
 }
 
@@ -159,6 +175,27 @@ export async function saveApprovedDispensary(input: Omit<ApprovedDispensary, 'id
 
   upsert(next);
   return next;
+}
+
+export async function updateDispensaryDetails(id: string, input: DispensaryDetailUpdate) {
+  await migrateLegacyJsonOnce();
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    UPDATE dispensaries SET
+      name = ?, street_address = ?, city = ?, region = ?, country = ?,
+      latitude = ?, longitude = ?, website = ?, data_source = ?, source_url = ?,
+      source_license = ?, recreational = ?, medical = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.name, input.streetAddress ?? null, input.city, input.region, input.country,
+    input.latitude, input.longitude, input.website ?? null, input.dataSource ?? null,
+    input.sourceUrl ?? null, input.sourceLicense ?? null, input.recreational ? 1 : 0,
+    input.medical ? 1 : 0, now, id,
+  );
+  if (Number(result.changes) < 1) return null;
+  const row = db.prepare('SELECT * FROM dispensaries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  return row ? rowToDispensary(row) : null;
 }
 
 export async function setDispensaryActive(id: string, active: boolean) {
