@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
+import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
 
 export const runtime = 'nodejs';
 
@@ -126,6 +127,7 @@ const officialSources=[
   {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
   {preset:'colorado-med',label:'Colorado MED',fetcher:fetchColorado},
   {preset:'massachusetts-ccc',label:'Massachusetts CCC',fetcher:fetchMassachusetts},
+  {preset:'illinois-idfpr',label:'Illinois IDFPR',fetcher:fetchIllinoisCandidates},
   {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
   {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
   {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticut},
