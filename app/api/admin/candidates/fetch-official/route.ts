@@ -19,11 +19,25 @@ function coord(value:unknown){if(value==null||value==='')return undefined; const
 function readiness(latitude?:number,longitude?:number){return latitude!==undefined&&longitude!==undefined?'unchecked' as const:'missing_coordinates' as const;}
 function point(value:any){if(!value)return {}; if(typeof value==='object'){const latitude=coord(value.latitude??value.lat??value.coordinates?.[1]); const longitude=coord(value.longitude??value.lng??value.lon??value.coordinates?.[0]); return {latitude,longitude};} const m=String(value).match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i); return m?{longitude:Number(m[1]),latitude:Number(m[2])}:{};}
 function normalizeObject(input:Record<string,any>){const out:Record<string,any>={}; for(const [k,v] of Object.entries(input))out[key(k)]=v; return out;}
-async function getJson(url:string){const r=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'}); if(!r.ok)throw new Error(`Official data source returned ${r.status}`); return r.json();}
+async function getJson(url:string){
+  let r:Response;
+  try{
+    r=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'});
+  }catch(error){
+    const host=(()=>{try{return new URL(url).host;}catch{return url;}})();
+    const detail=error instanceof Error?error.message:String(error);
+    throw new Error(`Could not connect to official data source ${host}: ${detail}`);
+  }
+  if(!r.ok){
+    const detail=(await r.text().catch(()=>''))?.slice(0,180).replace(/\s+/g,' ').trim();
+    throw new Error(`Official data source ${new URL(url).host} returned ${r.status}${detail?`: ${detail}`:''}`);
+  }
+  try{return await r.json();}catch{throw new Error(`Official data source ${new URL(url).host} returned invalid JSON.`);}
+}
 
 async function fetchCalifornia():Promise<CandidateRow[]>{
   const sourceUrl='https://search.cannabis.ca.gov/';
-  const api='https://as-cdt-pub-vip-cannabis-ww-p-002.azurewebsites.net/licenses/filteredSearch';
+  const api='https://as-dcc-pub-cann-w-p-002.azurewebsites.net/licenses/filteredsearch';
   const all:any[]=[];
   const pageSize=500;
   let page=1;
