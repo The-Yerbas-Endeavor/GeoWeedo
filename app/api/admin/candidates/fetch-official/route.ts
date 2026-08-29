@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
+import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
 
 export const runtime = 'nodejs';
@@ -62,23 +63,7 @@ async function fetchOregon():Promise<CandidateRow[]>{
   return (Array.isArray(data)?data:[]).filter((r:any)=>String(r.license_type||'').toLowerCase().includes('retail')&&!String(r.license_expired||'').toLowerCase().includes('yes')).map((r:any)=>{const latitude=coord(r.latitude),longitude=coord(r.longitude);return{name:String(r.business_name||r.business_licenses||'').trim(),streetAddress:String(r.physical_address||'').trim()||undefined,region:'Oregon',country:'USA',latitude,longitude,licenseNumber:String(r.license_number||'').trim()||undefined,dataSource:'Oregon OLCC Open Data',sourceUrl,sourceLicense:'Official Oregon Open Data.',imageryStatus:readiness(latitude,longitude)};}).filter((r:any)=>r.name);
 }
 
-async function fetchColorado():Promise<CandidateRow[]>{
-  const sourceUrl='https://data.colorado.gov/Government/Licensed-Marijuana-Businesses-in-Colorado/93ae-ftjz';
-  const data=await getJson('https://data.colorado.gov/resource/93ae-ftjz.json?$limit=50000');
-  const rows=(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{
-    const type=pick(r,['licensetype','licensetypecode','facilitytype','businesstype','type','licenseclass']);
-    if(type&&!/retail/i.test(type))return null;
-    const status=pick(r,['licensestatus','status']);
-    if(status&&/expired|revoked|surrendered|cancelled|closed|inactive/i.test(status))return null;
-    const licenseNumber=pick(r,['licensenumber','license','licenseid','credentialnumber']);
-    const name=pick(r,['dbaname','tradename','businessname','businesslegalname','facilityname','licenseename','name']);
-    const geo=point(r.location??r.geolocation??r.point??r.georeference);
-    const latitude=coord(r.latitude??r.lat)??geo.latitude;
-    const longitude=coord(r.longitude??r.lng??r.lon)??geo.longitude;
-    return{name,streetAddress:pick(r,['streetaddress','address','premiseaddress','locationaddress','physicaladdress'])||undefined,city:pick(r,['city','premisecity','locationcity','municipality'])||undefined,region:'Colorado',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Colorado MED Licensed Marijuana Businesses',sourceUrl,sourceLicense:'Official Colorado Department of Revenue Marijuana Enforcement Division open data; retail licenses only.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;
-  }).filter(Boolean).filter((r:any)=>r.name) as CandidateRow[];
-  const unique=new Map<string,CandidateRow>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}return Array.from(unique.values());
-}
+async function fetchColorado():Promise<CandidateRow[]>{return fetchColoradoCandidates();}
 
 async function fetchMassachusetts():Promise<CandidateRow[]>{
   const sourceUrl='https://masscannabiscontrol.com/open-data/data-catalog/';
