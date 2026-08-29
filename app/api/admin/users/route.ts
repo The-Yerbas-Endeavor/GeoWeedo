@@ -1,0 +1,32 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/adminAuth';
+import { getDatabase } from '@/lib/sqlite';
+
+export const runtime='nodejs';
+const ATOMIC=100_000_000;
+const yerb=(value:any)=>Number(value||0)/ATOMIC;
+
+export async function GET(request:NextRequest){
+  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
+  const db=getDatabase();
+  const id=request.nextUrl.searchParams.get('id');
+  if(!id){
+    const users=db.prepare(`SELECT u.id,u.username,u.display_name AS displayName,u.email,u.yerbas_address AS yerbasAddress,u.wallet_verified_at AS walletVerifiedAt,u.reward_eligible AS rewardEligible,u.account_status AS accountStatus,u.last_login_at AS lastLoginAt,u.created_at AS createdAt,w.id AS walletId,
+      COALESCE((SELECT SUM(l.amount_atomic) FROM wallet_ledger l WHERE l.wallet_id=w.id AND l.status='posted'),0) AS balanceAtomic,
+      COALESCE((SELECT COUNT(*) FROM deposits d WHERE d.wallet_id=w.id),0) AS depositCount,
+      COALESCE((SELECT COUNT(*) FROM withdrawals x WHERE x.wallet_id=w.id),0) AS withdrawalCount,
+      COALESCE((SELECT COUNT(*) FROM games g WHERE g.user_id=u.id),0) AS gameCount
+      FROM users u LEFT JOIN wallets w ON w.user_id=u.id ORDER BY COALESCE(u.display_name,u.username,u.yerbas_address,u.id) COLLATE NOCASE`).all().map((r:any)=>({...r,rewardEligible:Boolean(r.rewardEligible),balanceYerb:yerb(r.balanceAtomic)}));
+    return NextResponse.json({users},{headers:{'Cache-Control':'no-store'}});
+  }
+  const user=db.prepare(`SELECT u.*,w.id AS wallet_id,w.status AS wallet_status FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.id=?`).get(id) as any;
+  if(!user)return NextResponse.json({error:'User not found.'},{status:404});
+  const walletId=user.wallet_id;
+  const ledger=walletId?db.prepare(`SELECT id,entry_type,amount_atomic,status,reference_type,reference_id,txid,memo,created_at,posted_at FROM wallet_ledger WHERE wallet_id=? ORDER BY created_at DESC LIMIT 100`).all(walletId):[];
+  const deposits=walletId?db.prepare(`SELECT id,address,txid,vout,amount_atomic,confirmations,status,detected_at,confirmed_at FROM deposits WHERE wallet_id=? ORDER BY detected_at DESC LIMIT 100`).all(walletId):[];
+  const withdrawals=walletId?db.prepare(`SELECT id,destination_address,amount_atomic,fee_atomic,status,requested_at,reviewed_at,sent_at,txid,failure_reason FROM withdrawals WHERE wallet_id=? ORDER BY requested_at DESC LIMIT 100`).all(walletId):[];
+  const rewards=walletId?db.prepare(`SELECT id,entry_type,amount_atomic,status,reference_type,reference_id,memo,txid,created_at,posted_at FROM wallet_ledger WHERE wallet_id=? AND (entry_type IN ('reward_pending','reward_credit') OR reference_type IN ('reward','game_reward','admin_reward')) ORDER BY created_at DESC LIMIT 100`).all(walletId):[];
+  const games=db.prepare(`SELECT id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at FROM games WHERE user_id=? ORDER BY started_at DESC LIMIT 100`).all(id);
+  const balanceAtomic=walletId?Number((db.prepare(`SELECT COALESCE(SUM(amount_atomic),0) AS value FROM wallet_ledger WHERE wallet_id=? AND status='posted'`).get(walletId) as any)?.value||0):0;
+  return NextResponse.json({user:{id:user.id,username:user.username,displayName:user.display_name,email:user.email,yerbasAddress:user.yerbas_address,walletVerifiedAt:user.wallet_verified_at,rewardEligible:Boolean(user.reward_eligible),accountStatus:user.account_status,lastLoginAt:user.last_login_at,createdAt:user.created_at,walletId,walletStatus:user.wallet_status,balanceYerb:yerb(balanceAtomic)},ledger:ledger.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),deposits:deposits.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),withdrawals:withdrawals.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic),feeYerb:yerb(r.fee_atomic)})),rewards:rewards.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),games:games.map((r:any)=>({...r,rewardYerb:yerb(r.reward_atomic)}))},{headers:{'Cache-Control':'no-store'}});
+}
