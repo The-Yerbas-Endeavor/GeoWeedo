@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
-import { readApprovedDispensaries, saveApprovedDispensary, setDispensaryActive } from '@/lib/dispensaryStore';
+import { readApprovedDispensaries, saveApprovedDispensary, setDispensaryActive, updateDispensaryDetails } from '@/lib/dispensaryStore';
 import { gradeImagery } from '@/lib/imageryQuality';
 
 function invalid(message: string) { return NextResponse.json({ error: message }, { status: 400 }); }
 function num(value: unknown) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
+function clean(value: unknown) { const s = String(value ?? '').trim(); return s || undefined; }
 
 async function validateKartaView(photoId: string) {
   const headers = { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.6 (https://geoweedo.yerbas.org)' };
@@ -62,16 +63,16 @@ export async function POST(request: NextRequest) {
   }
 
   const saved = await saveApprovedDispensary({
-    name: String(body.name).trim(), slug: String(body.slug || body.name).trim(), streetAddress: String(body.streetAddress || '').trim() || undefined,
+    name: String(body.name).trim(), slug: String(body.slug || body.name).trim(), streetAddress: clean(body.streetAddress),
     city: String(body.city).trim(), region: String(body.region).trim(), country: String(body.country).trim(), latitude, longitude,
-    website: String(body.website || '').trim() || undefined, dataSource: String(body.dataSource || 'manual').trim() || 'manual', sourceUrl: String(body.sourceUrl || '').trim() || undefined,
-    sourceLicense: String(body.sourceLicense || '').trim() || undefined, recreational: Boolean(body.recreational), medical: Boolean(body.medical), imageryProvider,
-    imageryPhotoId: String(body.imageryPhotoId), imagerySequenceId: String(body.imagerySequenceId || '').trim() || undefined, imageryLatitude, imageryLongitude,
+    website: clean(body.website), dataSource: String(body.dataSource || 'manual').trim() || 'manual', sourceUrl: clean(body.sourceUrl),
+    sourceLicense: clean(body.sourceLicense), recreational: Boolean(body.recreational), medical: Boolean(body.medical), imageryProvider,
+    imageryPhotoId: String(body.imageryPhotoId), imagerySequenceId: clean(body.imagerySequenceId), imageryLatitude, imageryLongitude,
     imageryHeading: Number.isFinite(Number(body.imageryHeading)) ? Number(body.imageryHeading) : undefined,
     imageryFieldOfView: Number.isFinite(Number(body.imageryFieldOfView)) ? Number(body.imageryFieldOfView) : undefined,
-    imageryProjection: String(body.imageryProjection || '').trim() || undefined, imageryUrl: String(body.imageryUrl),
+    imageryProjection: clean(body.imageryProjection), imageryUrl: String(body.imageryUrl),
     priorityWeight: Number.isFinite(Number(body.priorityWeight)) ? Math.max(0, Math.floor(Number(body.priorityWeight))) : undefined,
-    sponsoredUntil: String(body.sponsoredUntil || '').trim() || undefined, active: body.active !== false,
+    sponsoredUntil: clean(body.sponsoredUntil), active: body.active !== false,
   });
   return NextResponse.json({ dispensary: saved }, { status: 201 });
 }
@@ -79,7 +80,29 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => null);
-  if (!body?.id || typeof body.active !== 'boolean') return invalid('id and active are required.');
+  if (!body?.id) return invalid('id is required.');
+
+  if (body.details && typeof body.details === 'object') {
+    const details = body.details;
+    const latitude = Number(details.latitude), longitude = Number(details.longitude);
+    if (!String(details.name || '').trim()) return invalid('Name is required.');
+    if (!String(details.city || '').trim()) return invalid('City is required.');
+    if (!String(details.region || '').trim()) return invalid('Region is required.');
+    if (!String(details.country || '').trim()) return invalid('Country is required.');
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return invalid('Valid dispensary coordinates are required.');
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return invalid('Coordinates are outside valid geographic bounds.');
+
+    const updated = await updateDispensaryDetails(String(body.id), {
+      name: String(details.name).trim(), streetAddress: clean(details.streetAddress), city: String(details.city).trim(),
+      region: String(details.region).trim(), country: String(details.country).trim(), latitude, longitude,
+      website: clean(details.website), dataSource: clean(details.dataSource) || 'manual', sourceUrl: clean(details.sourceUrl),
+      sourceLicense: clean(details.sourceLicense), recreational: Boolean(details.recreational), medical: Boolean(details.medical),
+    });
+    if (!updated) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 404 });
+    return NextResponse.json({ dispensary: updated });
+  }
+
+  if (typeof body.active !== 'boolean') return invalid('active must be boolean when details are not supplied.');
   const updated = await setDispensaryActive(String(body.id), body.active);
   if (!updated) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 404 });
   return NextResponse.json({ dispensary: updated });
