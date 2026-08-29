@@ -1,0 +1,22 @@
+[Unit]
+Description=GeoWeedo Yerbas wallet deposit scanner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=geo
+Group=geo
+WorkingDirectory=/home/geo/GeoWeedo
+EnvironmentFile=/home/geo/GeoWeedo-shared/.env.local
+Environment=GEOWEEDO_DB_PATH=/home/geo/GeoWeedo-shared/data/runtime/geoweedo.sqlite
+ExecStart=/usr/bin/node /home/geo/GeoWeedo/scripts/yerb-wallet-worker.mjs
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths=/home/geo/GeoWeedo-shared/data/runtime
+
+[Install]
+WantedBy=multi-user.target
