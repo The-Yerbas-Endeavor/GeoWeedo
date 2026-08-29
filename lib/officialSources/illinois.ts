@@ -20,59 +20,52 @@ type IllinoisCandidate = {
 
 const SOURCE_URL='https://idfpr.illinois.gov/content/dam/soi/en/web/idfpr/licenselookup/adultusedispensaries.pdf';
 const SOURCE_PAGE='https://idfpr.illinois.gov/profs/adultusecan/infoconsumers.html';
+const SOURCE_NAME='Illinois IDFPR Licensed Adult Use Cannabis Dispensaries';
+const SOURCE_LICENSE='Official Illinois Department of Financial and Professional Regulation active adult-use dispensary license list.';
 
 function clean(value:unknown){return String(value??'').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').trim();}
-function normalizeName(value:string){return clean(value).replace(/\s+/g,' ').trim();}
+function normalizeName(value:string){return clean(value).replace(/\s+/g,' ').replace(/^[-–—|]+|[-–—|]+$/g,'').trim();}
 function unique(rows:IllinoisCandidate[]){const map=new Map<string,IllinoisCandidate>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`.toLowerCase();if(!map.has(id))map.set(id,row);}return Array.from(map.values());}
+function candidate(name:string,streetAddress:string,city:string,licenseNumber:string):IllinoisCandidate{return{name:normalizeName(name),streetAddress:clean(streetAddress),city:clean(city),region:'Illinois',country:'USA',licenseNumber:licenseNumber.toUpperCase(),dataSource:SOURCE_NAME,sourceUrl:SOURCE_PAGE,sourceLicense:SOURCE_LICENSE,imageryStatus:'missing_coordinates'};}
+function phone(value:string){return /^\(?\d{3}\)?\s*[-.]?\s*\d{3}\s*[-.]?\s*\d{4}$/i.test(value.replace(/\s+/g,' '));}
+function header(value:string){return /^(?:Links to each document|Active Adult Use Dispensing Organization Licenses|Total Number of Active.*|Dispensaries highlighted.*|Dispensaries that are.*|License Holder|Dispensary Name|Address & Phone|Number$|License Issue|Date$|Adult Use Credential|idfpr\.illinois\.gov|JB PRITZKER|Governor|MARIO TRETO.*|Secretary|CAMILE LINDSAY|Director|\d+)$/i.test(value);}
+function streetLike(value:string){return /^\d{1,6}[A-Za-z-]?\s+/.test(value)||/^\d+[A-Za-z]?\s*(?:N|S|E|W)\.?\s+/i.test(value);}
+function cityMatch(value:string){return value.match(/^(.+?),\s*(?:IL|Illinois)\s+(\d{5}(?:-\s*\d{4})?)\b/i);}
 
-function parseAddressCell(value:string){
-  const lines=clean(value).split(/\n+/).map(v=>v.trim()).filter(Boolean).filter(v=>!/^\(?\d{3}\)?[-\s]\d{3}[-\s]\d{4}$/.test(v));
-  const cityIndex=lines.findIndex(v=>/,\s*IL\s+\d{5}(?:-\d{4})?\b/i.test(v));
-  if(cityIndex<0)return {streetAddress:lines.join(' ')||undefined,city:undefined};
-  const cityLine=lines[cityIndex];
-  const match=cityLine.match(/^(.+?),\s*IL\s+\d{5}(?:-\d{4})?\b/i);
-  const city=match?.[1]?.trim();
-  const streetAddress=lines.slice(0,cityIndex).join(' ').trim()||undefined;
-  return {streetAddress,city};
-}
-
-function candidateFromTableRow(row:unknown[]):IllinoisCandidate|null{
-  const cells=row.map(clean).filter((value,index,array)=>value||index<array.length);
-  if(cells.length<5)return null;
-  const licenseHolder=cells[0];
-  const dispensaryName=cells[1];
-  const addressCell=cells[2];
-  const credential=cells[cells.length-1].match(/284\.\d{6}-AUDO/i)?.[0];
-  if(!credential||/license holder/i.test(licenseHolder)||/dispensary name/i.test(dispensaryName))return null;
-  const {streetAddress,city}=parseAddressCell(addressCell);
-  const name=normalizeName(dispensaryName)||normalizeName(licenseHolder);
-  if(!name||!city||!streetAddress)return null;
-  return {name,streetAddress,city,region:'Illinois',country:'USA',licenseNumber:credential.toUpperCase(),dataSource:'Illinois IDFPR Licensed Adult Use Cannabis Dispensaries',sourceUrl:SOURCE_PAGE,sourceLicense:'Official Illinois Department of Financial and Professional Regulation adult-use dispensary license list.',imageryStatus:'missing_coordinates'};
-}
-
-function fallbackFromText(text:string):IllinoisCandidate[]{
+function parseActiveText(text:string):IllinoisCandidate[]{
+  const start=text.search(/Active Adult Use Dispensing Organization Licenses/i);
+  const end=text.search(/Original Lottery Conditional License List/i);
+  const section=text.slice(start>=0?start:0,end>start?end:text.length);
+  const lines=section.split(/\r?\n/).map(v=>clean(v)).filter(Boolean).filter(v=>!header(v));
   const rows:IllinoisCandidate[]=[];
-  const chunks=text.split(/(?=\b284\.\d{6}-AUDO\b)/i);
-  let carry='';
-  for(const raw of chunks){
-    const block=(carry+' '+raw).replace(/\s+/g,' ').trim();
-    const credentialMatch=block.match(/284\.\d{6}-AUDO/i);
-    if(!credentialMatch){carry=block.slice(-800);continue;}
-    const before=block.slice(0,credentialMatch.index).trim();
-    const cityMatches=Array.from(before.matchAll(/([A-Za-z][A-Za-z .'-]{1,50}),\s*IL\s+(\d{5}(?:-\d{4})?)/gi));
-    const cityMatch=cityMatches.at(-1);
-    const dateMatches=Array.from(before.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g));
-    if(!cityMatch||!dateMatches.length){carry=raw.slice(-800);continue;}
-    const city=cityMatch[1].trim();
-    const cityStart=cityMatch.index??0;
-    const prefix=before.slice(Math.max(0,cityStart-500),cityStart).replace(/\(?\d{3}\)?[-\s]\d{3}[-\s]\d{4}/g,' ').trim();
-    const addressMatch=prefix.match(/(\d{1,6}\s+[A-Za-z0-9][A-Za-z0-9 .#'&/-]{2,120})$/);
-    const streetAddress=addressMatch?.[1]?.trim();
-    const names=streetAddress?prefix.slice(0,prefix.length-streetAddress.length).trim():'';
-    const name=names.split(/\s{2,}|\|/).map(v=>v.trim()).filter(Boolean).at(-1)||names;
-    if(name&&streetAddress&&city)rows.push({name:normalizeName(name),streetAddress,city,region:'Illinois',country:'USA',licenseNumber:credentialMatch[0].toUpperCase(),dataSource:'Illinois IDFPR Licensed Adult Use Cannabis Dispensaries',sourceUrl:SOURCE_PAGE,sourceLicense:'Official Illinois Department of Financial and Professional Regulation adult-use dispensary license list.',imageryStatus:'missing_coordinates'});
-    carry=raw.slice(-800);
+  let recordStart=0;
+
+  for(let i=0;i<lines.length;i++){
+    const credentialMatch=lines[i].match(/284\.\d{6,7}-AUDO\b/i);
+    if(!credentialMatch)continue;
+    const licenseNumber=credentialMatch[0];
+
+    let dateIndex=i;
+    for(let j=i;j>=recordStart;j--){if(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/.test(lines[j])){dateIndex=j;break;}}
+
+    let cityIndex=-1;
+    let city='';
+    for(let j=dateIndex-1;j>=recordStart;j--){const match=cityMatch(lines[j]);if(match){cityIndex=j;city=match[1].trim();break;}}
+    if(cityIndex<0){recordStart=i+1;continue;}
+
+    let streetEnd=cityIndex-1;
+    while(streetEnd>=recordStart&&phone(lines[streetEnd]))streetEnd--;
+    let streetStart=-1;
+    for(let j=streetEnd;j>=recordStart;j--){if(streetLike(lines[j])){streetStart=j;break;}}
+    if(streetStart<0){recordStart=i+1;continue;}
+
+    const streetAddress=lines.slice(streetStart,cityIndex).filter(v=>!phone(v)).join(' ').replace(/\s+/g,' ').trim();
+    const nameParts=lines.slice(recordStart,streetStart).filter(v=>!phone(v)&&!header(v)&&!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v));
+    const name=normalizeName(nameParts.join(' '));
+    if(name&&streetAddress&&city)rows.push(candidate(name,streetAddress,city,licenseNumber));
+    recordStart=i+1;
   }
+
   return unique(rows);
 }
 
@@ -85,14 +78,9 @@ export async function fetchIllinoisCandidates():Promise<IllinoisCandidate[]>{
   if(buffer.length>25*1024*1024)throw new Error('Illinois IDFPR PDF exceeded the 25 MB safety limit.');
   const parser=new PDFParse({data:buffer});
   try{
-    const tableResult=await parser.getTable();
-    const tableRows:IllinoisCandidate[]=[];
-    for(const page of tableResult.pages||[])for(const table of page.tables||[])for(const row of table||[]){const parsed=candidateFromTableRow(row as unknown[]);if(parsed)tableRows.push(parsed);}
-    const deduped=unique(tableRows);
-    if(deduped.length>=50)return deduped;
     const textResult=await parser.getText();
-    const fallback=fallbackFromText(textResult.text||'');
-    if(fallback.length>=50)return fallback;
-    throw new Error(`Illinois IDFPR PDF parser found only ${Math.max(deduped.length,fallback.length)} valid dispensary rows; refusing a partial import.`);
+    const rows=parseActiveText(textResult.text||'');
+    if(rows.length>=200)return rows;
+    throw new Error(`Illinois IDFPR PDF parser found only ${rows.length} valid active dispensary rows; refusing a partial import.`);
   }finally{await parser.destroy();}
 }
