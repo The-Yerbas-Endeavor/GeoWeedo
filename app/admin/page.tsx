@@ -9,18 +9,18 @@ type ModuleCard = { title:string; description:string; href?:string; status:'live
 const liveModules:ModuleCard[]=[
   {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and move qualified locations toward gameplay.',href:'/admin/data',status:'live',action:'Open data import'},
   {title:'Dispensary information',description:'Review enabled dispensaries, edit business details, validate imagery, and activate or deactivate gameplay locations.',href:'/admin/dispensaries',status:'live',action:'Manage dispensaries'},
+  {title:'User information',description:'Open a consolidated player record with account status, verified YERB address, balance, deposits, withdrawals, rewards, and recorded game history.',href:'/admin/users',status:'live',action:'Manage users'},
+  {title:'Yerbas wallet dashboard',description:'Unified view of player wallets, active deposit addresses, ledger balance, deposits, withdrawals, rewards, and pending finance activity.',href:'/admin/wallet',status:'live',action:'Open wallet dashboard'},
   {title:'Rewards',description:'Review the YERB reward ledger and player reward activity before automatic gameplay rewards are enabled.',href:'/admin/rewards',status:'live',action:'Open rewards'},
   {title:'Withdrawals',description:'Review player withdrawal requests and the custody workflow for YERB leaving GeoWeedo.',href:'/admin/withdrawals',status:'live',action:'Open withdrawals'},
   {title:'Sponsorships',description:'Manage dispensary sponsorship records and featured-location activity.',href:'/admin/sponsorships',status:'live',action:'Open sponsorships'},
-  {title:'Yerbas wallet operations',description:'Wallet-related operations are currently split between rewards and withdrawals. A unified wallet dashboard is the next layer.',href:'/admin/rewards',secondaryHref:'/admin/withdrawals',status:'partial',action:'Rewards',secondaryAction:'Withdrawals'},
 ];
 
 const plannedModules:ModuleCard[]=[
-  {title:'User information',description:'Player accounts, linked Yerbas addresses, balances, deposits, reward history, game history, account status, and administrative notes.',status:'planned'},
-  {title:'Yerbas wallet dashboard',description:'RPC health, hot-wallet balance, deposit addresses, pending deposits, confirmations, custody balance, network fees, and withdrawal worker status.',status:'planned'},
+  {title:'Wallet RPC & worker health',description:'Live Yerbas Core RPC connectivity, hot-wallet on-chain balance, sync height, network fees, deposit scanner status, and withdrawal worker health.',status:'planned'},
   {title:'Game analytics',description:'Games played, completion rate, round inventory, scoring distribution, daily challenge activity, and reward exposure.',status:'planned'},
   {title:'Imagery coverage',description:'State-by-state KartaView and GeoWeedo 360 coverage, failed validation reasons, stale imagery, and locations needing review.',status:'planned'},
-  {title:'System health',description:'Application instances, database health, RPC connectivity, background workers, backups, deployment status, and recent errors.',status:'planned'},
+  {title:'System health',description:'Application instances, database health, background workers, backups, deployment status, and recent errors.',status:'planned'},
   {title:'Admin users & permissions',description:'Create additional administrators, assign roles, manage sessions, and limit access to finance or data-management functions.',status:'planned'},
 ];
 
