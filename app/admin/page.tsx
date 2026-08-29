@@ -31,7 +31,7 @@ export default function AdminHomePage(){
   if(loading)return <main className={styles.shell}><div className={styles.loading}>Loading GeoWeedo Admin…</div></main>;
   return <main className={styles.shell}>
     <header className={styles.header}>
-      <div><span className={styles.eyebrow}>GEOWEEDO ADMIN</span><h1>Control center</h1><p>Manage the live GeoWeedo platform and keep future administration tools organized in one place.</p></div>
+      <div><a href="/admin" className={styles.adminHomeLink} aria-label="GeoWeedo Admin home"><span className={styles.eyebrow}>GEOWEEDO ADMIN</span></a><h1>Control center</h1><p>Manage the live GeoWeedo platform and keep future administration tools organized in one place.</p></div>
       <div className={styles.headerActions}><div className={styles.adminIdentity}><strong>{admin?.displayName||admin?.username||'Administrator'}</strong><span>{admin?.role||'admin'}</span></div><a href="/" className={styles.ghost}>View game</a><button type="button" className={styles.ghost} onClick={logout}>Log out</button></div>
     </header>
 
