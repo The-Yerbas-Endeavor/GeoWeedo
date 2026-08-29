@@ -6,14 +6,23 @@ SOURCE="$ROOT/GeoWeedo"
 NGINX_SITE="${1:-/etc/nginx/sites-available/geoweedo.yerbas.org}"
 UPSTREAM_DST="/etc/nginx/conf.d/geoweedo-upstream.conf"
 SERVICE_DST="/etc/systemd/system/geoweedo@.service"
+WALLET_SERVICE_DST="/etc/systemd/system/geoweedo-wallet-worker.service"
+WALLET_TIMER_DST="/etc/systemd/system/geoweedo-wallet-worker.timer"
 
 [ -f "$SOURCE/deploy/geoweedo@.service" ] || { echo "Missing deploy/geoweedo@.service" >&2; exit 1; }
+[ -f "$SOURCE/deploy/geoweedo-wallet-worker.service" ] || { echo "Missing deploy/geoweedo-wallet-worker.service" >&2; exit 1; }
+[ -f "$SOURCE/deploy/geoweedo-wallet-worker.timer" ] || { echo "Missing deploy/geoweedo-wallet-worker.timer" >&2; exit 1; }
 [ -f "$SOURCE/deploy/nginx-geoweedo-upstream.conf" ] || { echo "Missing nginx upstream config" >&2; exit 1; }
 [ -f "$NGINX_SITE" ] || { echo "Nginx site not found: $NGINX_SITE" >&2; exit 1; }
 
 printf '\n[GeoWeedo setup] Installing blue/green systemd template\n'
 sudo cp "$SOURCE/deploy/geoweedo@.service" "$SERVICE_DST"
+
+printf '\n[GeoWeedo setup] Installing Yerbas wallet scanner service and timer\n'
+sudo cp "$SOURCE/deploy/geoweedo-wallet-worker.service" "$WALLET_SERVICE_DST"
+sudo cp "$SOURCE/deploy/geoweedo-wallet-worker.timer" "$WALLET_TIMER_DST"
 sudo systemctl daemon-reload
+sudo systemctl enable --now geoweedo-wallet-worker.timer
 
 printf '\n[GeoWeedo setup] Installing nginx upstream\n'
 sudo cp "$SOURCE/deploy/nginx-geoweedo-upstream.conf" "$UPSTREAM_DST"
@@ -30,7 +39,6 @@ elif ! grep -q 'proxy_pass http://geoweedo_backend;' "$NGINX_SITE"; then
   exit 1
 fi
 
-# Add retry behavior inside the first location / block if it is not already present.
 if ! grep -q 'proxy_next_upstream.*http_502' "$NGINX_SITE"; then
   sudo python3 - "$NGINX_SITE" <<'PY'
 from pathlib import Path
@@ -56,6 +64,7 @@ if ! sudo nginx -t; then
 fi
 sudo systemctl reload nginx
 
-printf '\n[GeoWeedo setup] Blue/green plumbing installed.\n'
+printf '\n[GeoWeedo setup] Blue/green plumbing and wallet scanner installed.\n'
+printf 'Wallet scanner timer: geoweedo-wallet-worker.timer (every 60 seconds)\n'
 printf 'Run: bash %s/scripts/deploy-zero-downtime.sh\n' "$SOURCE"
 printf 'The current legacy service can remain online; first deploy builds green on port 3001 before retiring it.\n'
