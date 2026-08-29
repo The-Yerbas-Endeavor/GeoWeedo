@@ -59,6 +59,14 @@ rsync -a --delete \
   --exclude='data/runtime' \
   "$SOURCE/" "$target/"
 
+# Do not let an inactive slot inherit stale dependency metadata from an older build.
+if [ ! -f "$SOURCE/package-lock.json" ]; then
+  rm -f "$target/package-lock.json"
+fi
+if [ ! -f "$SOURCE/npm-shrinkwrap.json" ]; then
+  rm -f "$target/npm-shrinkwrap.json"
+fi
+
 mkdir -p "$target/data"
 rm -rf "$target/data/runtime"
 ln -s "$SHARED/data/runtime" "$target/data/runtime"
