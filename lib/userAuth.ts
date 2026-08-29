@@ -3,12 +3,33 @@ import 'server-only';
 import crypto from 'crypto';
 import type { NextRequest } from 'next/server';
 import { getDatabase } from '@/lib/sqlite';
+import type { RequestGeo } from '@/lib/requestGeo';
 
 export const USER_COOKIE = 'geoweedo_user_session';
 const SESSION_DAYS = 30;
 
 function hashToken(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function ensureLoginLocations(db:any){
+  db.exec(`CREATE TABLE IF NOT EXISTS user_login_locations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    session_id TEXT,
+    ip_address TEXT,
+    city TEXT,
+    region TEXT,
+    country TEXT,
+    latitude REAL,
+    longitude REAL,
+    geo_source TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(session_id) REFERENCES user_sessions(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS user_login_locations_user_idx ON user_login_locations(user_id, created_at DESC);`);
 }
 
 export function issueWalletLoginChallenge(address: string) {
@@ -35,16 +56,17 @@ export function consumeWalletLoginChallenge(address: string) {
   return row.challenge as string;
 }
 
-export function createOrLoginUser(handle: string, address: string, userAgent?: string | null) {
+export function createOrLoginUser(handle: string, address: string, userAgent?: string | null, geo?:RequestGeo|null) {
   const db = getDatabase();
+  ensureLoginLocations(db);
   const now = new Date();
   const normalizedHandle = handle.trim();
   let user = db.prepare('SELECT * FROM users WHERE yerbas_address = ?').get(address) as any;
   if (!user) {
     const id = `user-${crypto.randomUUID()}`;
-    db.prepare(`INSERT INTO users (id, username, display_name, yerbas_address, wallet_verified_at, reward_eligible, account_status, created_at, updated_at)
-                VALUES (?, NULL, ?, ?, ?, 1, 'active', ?, ?)`)
-      .run(id, normalizedHandle || null, address, now.toISOString(), now.toISOString(), now.toISOString());
+    db.prepare(`INSERT INTO users (id, username, display_name, yerbas_address, wallet_verified_at, reward_eligible, account_status, last_login_at, created_at, updated_at)
+                VALUES (?, NULL, ?, ?, ?, 1, 'active', ?, ?, ?)`)
+      .run(id, normalizedHandle || null, address, now.toISOString(), now.toISOString(), now.toISOString(), now.toISOString());
     const walletId = `wallet-${crypto.randomUUID()}`;
     db.prepare(`INSERT INTO wallets (id, user_id, currency, status, created_at, updated_at) VALUES (?, ?, 'YERB', 'active', ?, ?)`)
       .run(walletId, id, now.toISOString(), now.toISOString());
@@ -64,9 +86,13 @@ export function createOrLoginUser(handle: string, address: string, userAgent?: s
 
   const rawToken = crypto.randomBytes(32).toString('base64url');
   const expires = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const sessionId=`us-${crypto.randomUUID()}`;
   db.prepare(`INSERT INTO user_sessions (id, user_id, token_hash, user_agent, expires_at, last_seen_at, created_at)
               VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .run(`us-${crypto.randomUUID()}`, user.id, hashToken(rawToken), userAgent || null, expires.toISOString(), now.toISOString(), now.toISOString());
+    .run(sessionId, user.id, hashToken(rawToken), userAgent || null, expires.toISOString(), now.toISOString(), now.toISOString());
+  db.prepare(`INSERT INTO user_login_locations (id,user_id,session_id,ip_address,city,region,country,latitude,longitude,geo_source,user_agent,created_at)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(`ull-${crypto.randomUUID()}`,user.id,sessionId,geo?.ip||null,geo?.city||null,geo?.region||null,geo?.country||null,geo?.latitude??null,geo?.longitude??null,geo?.source||'unavailable',userAgent||null,now.toISOString());
 
   return {
     token: rawToken,
