@@ -67,7 +67,12 @@ rm -f "$target/.env.local"
 
 log "Installing dependencies and building $inactive while production stays online"
 cd "$target"
-npm ci
+if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+  npm ci
+else
+  log "No committed npm lockfile found; using npm install instead of npm ci"
+  npm install --no-audit --no-fund
+fi
 npm run build
 
 log "Starting $inactive"
