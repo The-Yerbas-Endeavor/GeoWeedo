@@ -68,7 +68,19 @@ async function fetchNevada():Promise<CandidateRow[]>{
 async function fetchWashington():Promise<CandidateRow[]>{
   const sourceUrl='https://data.wa.gov/d/brpd-b6zd';
   const data=await getJson('https://data.wa.gov/resource/brpd-b6zd.json?$limit=50000');
-  return (Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{const type=pick(r,['licensetype','privilegetype','privilege','endorsement','type']);if(!/cannabis retailer|marijuana retailer|retail/i.test(type))return null;const licenseNumber=pick(r,['licensenumber','licenseno','licenseid','license']);const name=pick(r,['tradename','businessname','businesslegalname','licenseename','companyname','applicantname','applicant','name'])||`Cannabis Retailer ${licenseNumber}`;const geo=point(r.location??r.geolocation??r.point);const latitude=coord(r.latitude??r.lat)??geo.latitude;const longitude=coord(r.longitude??r.lng??r.lon)??geo.longitude;return{name,streetAddress:pick(r,['streetaddress','address','premiseaddress','locationaddress','physicaladdress'])||undefined,city:pick(r,['city','premisecity','locationcity'])||undefined,region:'Washington',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington Open Data cannabis renewal dataset.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;}).filter(Boolean) as CandidateRow[];
+  const rows=(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{
+    const licenseNumber=pick(r,['licensenumber','license','licenseid','licenseidentifier','ubi']);
+    const name=pick(r,['tradename','businessname','businesslegalname','companyname','licenseename','applicantname','applicant','entityname','name'])||`Washington Cannabis Renewal ${licenseNumber||pick(r,['city','locationcity','premisecity'])||'record'}`;
+    const geo=point(r.location??r.geolocation??r.point??r.geocodedcolumn);
+    const latitude=coord(r.latitude??r.lat)??geo.latitude;
+    const longitude=coord(r.longitude??r.lng??r.lon??r.long)??geo.longitude;
+    const streetAddress=pick(r,['streetaddress','address','premiseaddress','locationaddress','physicaladdress','businessaddress','addressline1'])||undefined;
+    const city=pick(r,['city','premisecity','locationcity','businesscity','locality'])||undefined;
+    return{name,streetAddress,city,region:'Washington',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington State Liquor and Cannabis Board Cannabis Renewal dataset.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;
+  }).filter(r=>Boolean(r.name)&&Boolean(r.city||r.streetAddress||r.licenseNumber));
+  const unique=new Map<string,CandidateRow>();
+  for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}
+  return Array.from(unique.values());
 }
 
 async function fetchConnecticut():Promise<CandidateRow[]>{
