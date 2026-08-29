@@ -4,6 +4,7 @@ import './globals.css';
 import './open-stack.css';
 import './admin.css';
 import './site.css';
+import './map-popup.css';
 
 export const metadata = {
   title: 'GeoWeedo',
