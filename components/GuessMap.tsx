@@ -18,9 +18,9 @@ const GAME_STYLE:StyleSpecification={version:8,sources:{
  [BASE_MAPS.topo.source]:{type:'raster',tiles:BASE_MAPS.topo.tiles,tileSize:256,attribution:BASE_MAPS.topo.attribution,maxzoom:BASE_MAPS.topo.maxzoom},
  [BASE_MAPS.satellite.source]:{type:'raster',tiles:BASE_MAPS.satellite.tiles,tileSize:256,attribution:BASE_MAPS.satellite.attribution,maxzoom:BASE_MAPS.satellite.maxzoom},
 },layers:[
- {id:BASE_MAPS.street.layer,type:'raster',source:BASE_MAPS.street.source,minzoom:0,maxzoom:BASE_MAPS.street.maxzoom,layout:{visibility:'visible'}},
- {id:BASE_MAPS.topo.layer,type:'raster',source:BASE_MAPS.topo.source,minzoom:0,maxzoom:BASE_MAPS.topo.maxzoom,layout:{visibility:'none'}},
- {id:BASE_MAPS.satellite.layer,type:'raster',source:BASE_MAPS.satellite.source,minzoom:0,maxzoom:BASE_MAPS.satellite.maxzoom,layout:{visibility:'none'}},
+ {id:BASE_MAPS.street.layer,type:'raster',source:BASE_MAPS.street.source,minzoom:0,layout:{visibility:'visible'}},
+ {id:BASE_MAPS.topo.layer,type:'raster',source:BASE_MAPS.topo.source,minzoom:0,layout:{visibility:'none'}},
+ {id:BASE_MAPS.satellite.layer,type:'raster',source:BASE_MAPS.satellite.source,minzoom:0,layout:{visibility:'none'}},
 ]};
 const LOCATION_SOURCE='browse-locations',CLUSTER_LAYER='browse-clusters',CLUSTER_COUNT_LAYER='browse-cluster-count',POINT_LAYER='browse-points',LABEL_LAYER='browse-labels';
 function featureCoordinates(feature:MapGeoJSONFeature):[number,number]|null{if(feature.geometry.type!=='Point')return null;const c=feature.geometry.coordinates;if(!Array.isArray(c)||c.length<2)return null;const lng=Number(c[0]),lat=Number(c[1]);return Number.isFinite(lat)&&Number.isFinite(lng)?[lng,lat]:null;}
