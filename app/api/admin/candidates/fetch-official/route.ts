@@ -10,6 +10,8 @@ type CandidateRow = {
   dataSource: string; sourceUrl: string; sourceLicense: string; imageryStatus: 'unchecked' | 'missing_coordinates';
 };
 
+type DccResponse = { data?: unknown[]; metadata?: { hasNext?: boolean; totalPages?: number } };
+
 function parseCsvLine(line: string) { const values:string[]=[]; let value=''; let quoted=false; for(let i=0;i<line.length;i++){const char=line[i]; if(char==='"'){if(quoted&&line[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(char===','&&!quoted){values.push(value.trim());value='';}else value+=char;} values.push(value.trim()); return values; }
 function key(value:string){return value.toLowerCase().replace(/[^a-z0-9]/g,'');}
 function pick(row:Record<string,any>, names:string[]){for(const name of names){const value=row[name]; if(value!==undefined&&value!==null&&String(value).trim()!=='') return String(value).trim();} return '';}
@@ -18,6 +20,59 @@ function readiness(latitude?:number,longitude?:number){return latitude!==undefin
 function point(value:any){if(!value)return {}; if(typeof value==='object'){const latitude=coord(value.latitude??value.lat??value.coordinates?.[1]); const longitude=coord(value.longitude??value.lng??value.lon??value.coordinates?.[0]); return {latitude,longitude};} const m=String(value).match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i); return m?{longitude:Number(m[1]),latitude:Number(m[2])}:{};}
 function normalizeObject(input:Record<string,any>){const out:Record<string,any>={}; for(const [k,v] of Object.entries(input))out[key(k)]=v; return out;}
 async function getJson(url:string){const r=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'}); if(!r.ok)throw new Error(`Official data source returned ${r.status}`); return r.json();}
+
+async function fetchCalifornia():Promise<CandidateRow[]>{
+  const sourceUrl='https://search.cannabis.ca.gov/';
+  const api='https://as-cdt-pub-vip-cannabis-ww-p-002.azurewebsites.net/licenses/filteredSearch';
+  const all:any[]=[];
+  const pageSize=500;
+  let page=1;
+  let hasNext=true;
+  while(hasNext&&page<=100){
+    const url=`${api}?pageSize=${pageSize}&pageNumber=${page}&searchQuery=`;
+    const body=await getJson(url) as DccResponse;
+    const data=Array.isArray(body?.data)?body.data:[];
+    all.push(...data);
+    hasNext=Boolean(body?.metadata?.hasNext);
+    page++;
+  }
+  if(hasNext)throw new Error('California DCC sync stopped after 100 pages; refusing a partial import.');
+  if(!all.length)throw new Error('California DCC returned no license records.');
+
+  const rows=all.map(raw=>normalizeObject(raw as Record<string,any>)).filter(r=>{
+    const licenseNumber=pick(r,['licensenumber','license']);
+    const type=pick(r,['licensetype','type']);
+    const status=pick(r,['licensestatus','status']);
+    const storefront=/^c10-/i.test(licenseNumber)||(/retailer/i.test(type)&&!/nonstorefront|non-storefront|delivery/i.test(type));
+    const active=/^active\b/i.test(status)||/about to expire/i.test(status);
+    return storefront&&active;
+  }).map(r=>{
+    const geo=point(r.georeference??r.location??r.geolocation??r.point);
+    const latitude=coord(r.premiselatitude??r.latitude)??geo.latitude;
+    const longitude=coord(r.premiselongitude??r.longitude)??geo.longitude;
+    const name=pick(r,['businessdbaname','dbaname','businesslegalname','legalbusinessname','businessname','name']);
+    return {
+      name,
+      streetAddress:pick(r,['premisestreetaddress','streetaddress','premiseaddress','address'])||undefined,
+      city:pick(r,['premisecity','city'])||undefined,
+      region:'California',
+      country:'USA',
+      latitude,
+      longitude,
+      website:pick(r,['businesswebsite','website','url'])||undefined,
+      licenseNumber:pick(r,['licensenumber','license'])||undefined,
+      dataSource:'California DCC Unified License Search',
+      sourceUrl,
+      sourceLicense:'Official California Department of Cannabis Control public license-search data; active storefront retailers only.',
+      imageryStatus:readiness(latitude,longitude),
+    };
+  }).filter(r=>r.name);
+
+  const unique=new Map<string,CandidateRow>();
+  for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`; if(!unique.has(id))unique.set(id,row);}
+  if(!unique.size)throw new Error('California DCC responded, but no active storefront retailer records matched the expected C10/type fields.');
+  return Array.from(unique.values());
+}
 
 async function fetchOregon():Promise<CandidateRow[]>{
   const sourceUrl='https://data.oregon.gov/Business/OLCC-Cannabis-Business-Licenses-Endorsements/q32u-cmam';
@@ -48,6 +103,7 @@ async function fetchMontana():Promise<CandidateRow[]>{
 }
 
 const officialSources=[
+  {preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},
   {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
   {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
   {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
