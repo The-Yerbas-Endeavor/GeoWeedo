@@ -115,6 +115,9 @@ export async function fetchColoradoCandidates():Promise<ColoradoCandidate[]>{
   }
 
   const rows=Array.from(byLocation.values()).map(item=>item.candidate);
-  if(rows.length<300)throw new Error(`Colorado MED store parser found only ${rows.length} physical storefronts; refusing a likely partial import.`);
+  // The MED sheet can contain separate medical and retail licenses at one address,
+  // so the deduplicated physical-store count is lower than the raw license count.
+  // Keep a corruption guard without assuming Colorado must always exceed 300 stores.
+  if(rows.length<200)throw new Error(`Colorado MED store parser found only ${rows.length} physical storefronts; refusing a likely partial import.`);
   return rows;
 }
