@@ -1,4 +1,5 @@
 import 'server-only';
+import 'pdf-parse/worker';
 import { PDFParse } from 'pdf-parse';
 
 type IllinoisCandidate = {
