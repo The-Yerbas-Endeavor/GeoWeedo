@@ -8,13 +8,31 @@ export type LatLng={lat:number;lng:number};
 export type MapLocation={id:string;name:string;lat:number;lng:number;city?:string;region?:string;sponsored?:boolean;approved?:boolean;imageryReady?:boolean;source?:string};
 type Props={guess:LatLng|null;actual?:LatLng|null;revealed?:boolean;onGuess:(guess:LatLng)=>void;locations?:MapLocation[];browseMode?:boolean};
 type BaseMap='street'|'topo'|'satellite';
-const GAME_STYLE:StyleSpecification={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap contributors',maxzoom:19},topo:{type:'raster',tiles:['https://tile.opentopomap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenTopoMap contributors',maxzoom:17},satellite:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'Tiles © Esri',maxzoom:19}},layers:[{id:'osm',type:'raster',source:'osm',minzoom:0,maxzoom:19},{id:'topo',type:'raster',source:'topo',minzoom:0,maxzoom:17,layout:{visibility:'none'}},{id:'satellite',type:'raster',source:'satellite',minzoom:0,maxzoom:19,layout:{visibility:'none'}}]};
+const BASE_SOURCE='geoweedo-base-source',BASE_LAYER='geoweedo-base-layer';
+const BASE_MAPS:Record<BaseMap,{tiles:string[];attribution:string;maxzoom:number}>={
+ street:{tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],attribution:'© OpenStreetMap contributors',maxzoom:19},
+ topo:{tiles:['https://tile.opentopomap.org/{z}/{x}/{y}.png'],attribution:'© OpenTopoMap contributors',maxzoom:17},
+ satellite:{tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],attribution:'Tiles © Esri',maxzoom:19},
+};
+const GAME_STYLE:StyleSpecification={version:8,sources:{[BASE_SOURCE]:{type:'raster',tiles:BASE_MAPS.street.tiles,tileSize:256,attribution:BASE_MAPS.street.attribution,maxzoom:BASE_MAPS.street.maxzoom}},layers:[{id:BASE_LAYER,type:'raster',source:BASE_SOURCE,minzoom:0,maxzoom:BASE_MAPS.street.maxzoom}]};
 const LOCATION_SOURCE='browse-locations',CLUSTER_LAYER='browse-clusters',CLUSTER_COUNT_LAYER='browse-cluster-count',POINT_LAYER='browse-points',LABEL_LAYER='browse-labels';
 function featureCoordinates(feature:MapGeoJSONFeature):[number,number]|null{if(feature.geometry.type!=='Point')return null;const c=feature.geometry.coordinates;if(!Array.isArray(c)||c.length<2)return null;const lng=Number(c[0]),lat=Number(c[1]);return Number.isFinite(lat)&&Number.isFinite(lng)?[lng,lat]:null;}
 function validLocation(location:MapLocation){return Number.isFinite(location.lat)&&Number.isFinite(location.lng)&&location.lat>=-90&&location.lat<=90&&location.lng>=-180&&location.lng<=180;}
 function locationData(locations:MapLocation[]){return{type:'FeatureCollection' as const,features:locations.filter(validLocation).map(location=>({type:'Feature' as const,geometry:{type:'Point' as const,coordinates:[location.lng,location.lat] as [number,number]},properties:{id:location.id,name:location.name,city:location.city||'',region:location.region||'',sponsored:Boolean(location.sponsored),approved:Boolean(location.approved),imageryReady:Boolean(location.imageryReady),source:location.source||''}}))};}
 function fitLocations(map:LibreMap,locations:MapLocation[],maxZoom=5.5){const good=locations.filter(validLocation);if(!good.length)return;const bounds=new LngLatBounds();for(const item of good)bounds.extend([item.lng,item.lat]);if(!bounds.isEmpty())map.fitBounds(bounds,{padding:70,maxZoom,duration:500});}
 function categoryVisible(item:MapLocation,showPlayable:boolean,showBrowse:boolean,showSponsored:boolean){if(item.sponsored)return showSponsored;if(item.approved&&item.imageryReady)return showPlayable;return showBrowse;}
+function switchBaseMap(map:LibreMap,baseMap:BaseMap){
+ const config=BASE_MAPS[baseMap];
+ const apply=()=>{
+  if(map.getLayer(BASE_LAYER))map.removeLayer(BASE_LAYER);
+  if(map.getSource(BASE_SOURCE))map.removeSource(BASE_SOURCE);
+  map.addSource(BASE_SOURCE,{type:'raster',tiles:config.tiles,tileSize:256,attribution:config.attribution,maxzoom:config.maxzoom});
+  const beforeId=map.getLayer(CLUSTER_LAYER)?CLUSTER_LAYER:undefined;
+  map.addLayer({id:BASE_LAYER,type:'raster',source:BASE_SOURCE,minzoom:0,maxzoom:config.maxzoom},beforeId);
+ };
+ if(map.isStyleLoaded())apply();else map.once('load',apply);
+ return apply;
+}
 export default function GuessMap({guess,actual=null,revealed=false,onGuess,locations=[],browseMode=false}:Props){
  const nodeRef=useRef<HTMLDivElement|null>(null),mapRef=useRef<LibreMap|null>(null),guessMarkerRef=useRef<Marker|null>(null),actualMarkerRef=useRef<Marker|null>(null),userMarkerRef=useRef<Marker|null>(null),selectedMarkerRef=useRef<Marker|null>(null),hoverPopupRef=useRef<Popup|null>(null);
  const revealedRef=useRef(revealed),browseModeRef=useRef(browseMode),onGuessRef=useRef(onGuess),locationsRef=useRef<MapLocation[]>(locations),fittedBrowseBoundsRef=useRef(false);
@@ -24,7 +42,7 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
  const browseList=useMemo(()=>Array.from(filteredLocations).sort((a,b)=>(a.region||'').localeCompare(b.region||'')||(a.city||'').localeCompare(b.city||'')||a.name.localeCompare(b.name)),[filteredLocations]);
  const stateGroups=useMemo(()=>{const groups=new Map<string,MapLocation[]>();for(const item of browseList){const state=(item.region||'Unknown state').trim()||'Unknown state';const group=groups.get(state);if(group)group.push(item);else groups.set(state,[item]);}return Array.from(groups.entries()).map(([state,items])=>({state,items}));},[browseList]);
  useEffect(()=>{revealedRef.current=revealed;},[revealed]);useEffect(()=>{browseModeRef.current=browseMode;},[browseMode]);useEffect(()=>{onGuessRef.current=onGuess;},[onGuess]);useEffect(()=>{locationsRef.current=filteredLocations;},[filteredLocations]);
- useEffect(()=>{const map=mapRef.current;if(!map)return;const apply=()=>{for(const id of ['osm','topo','satellite'] as const){if(map.getLayer(id)){const next=id===baseMap?'visible':'none';if(map.getLayoutProperty(id,'visibility')!==next)map.setLayoutProperty(id,'visibility',next);}}};if(map.isStyleLoaded())apply();else map.once('load',apply);return()=>{map.off('load',apply);};},[baseMap]);
+ useEffect(()=>{const map=mapRef.current;if(!map)return;const apply=switchBaseMap(map,baseMap);return()=>{map.off('load',apply);};},[baseMap]);
  const showSelectedMarker=(item:MapLocation)=>{const map=mapRef.current;if(!map)return;selectedMarkerRef.current?.remove();selectedMarkerRef.current=new Marker({color:'#67d66e',scale:1.25}).setLngLat([item.lng,item.lat]).setPopup(new Popup({offset:24,closeButton:false}).setText(item.name)).addTo(map);};
  const focusLocation=(item:MapLocation,zoom=14)=>{setSelectedLocation(item);setBrowserOpen(true);setStreetViewOpen(true);showSelectedMarker(item);const map=mapRef.current;if(map)map.easeTo({center:[item.lng,item.lat],zoom:Math.max(map.getZoom(),zoom),duration:550});};
  const toggleState=(state:string,items:MapLocation[])=>{setExpandedStates(current=>({...current,[state]:!current[state]}));const map=mapRef.current;if(map)fitLocations(map,items,10);};
