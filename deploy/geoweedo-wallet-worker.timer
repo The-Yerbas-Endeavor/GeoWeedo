@@ -1,0 +1,12 @@
+[Unit]
+Description=Run GeoWeedo Yerbas wallet deposit scanner every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=geoweedo-wallet-worker.service
+
+[Install]
+WantedBy=timers.target
