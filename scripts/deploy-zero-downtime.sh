@@ -59,11 +59,18 @@ rsync -a --delete \
   --exclude='data/runtime' \
   "$SOURCE/" "$target/"
 
-# Do not let an inactive slot inherit stale dependency metadata from an older build.
-if [ ! -f "$SOURCE/package-lock.json" ]; then
+# Dependency metadata is authoritative only when tracked in Git. An untracked
+# package-lock.json can survive git reset --hard and would otherwise make the
+# inactive slot run npm ci against stale dependency metadata.
+package_lock_tracked=false
+shrinkwrap_tracked=false
+git -C "$SOURCE" ls-files --error-unmatch package-lock.json >/dev/null 2>&1 && package_lock_tracked=true || true
+git -C "$SOURCE" ls-files --error-unmatch npm-shrinkwrap.json >/dev/null 2>&1 && shrinkwrap_tracked=true || true
+
+if ! $package_lock_tracked; then
   rm -f "$target/package-lock.json"
 fi
-if [ ! -f "$SOURCE/npm-shrinkwrap.json" ]; then
+if ! $shrinkwrap_tracked; then
   rm -f "$target/npm-shrinkwrap.json"
 fi
 
@@ -75,7 +82,7 @@ rm -f "$target/.env.local"
 
 log "Installing dependencies and building $inactive while production stays online"
 cd "$target"
-if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+if $package_lock_tracked || $shrinkwrap_tracked; then
   npm ci
 else
   log "No committed npm lockfile found; using npm install instead of npm ci"
