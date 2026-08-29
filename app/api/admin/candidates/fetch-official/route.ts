@@ -12,6 +12,16 @@ type CandidateRow = {
 
 type DccResponse = { data?: unknown[]; metadata?: { hasNext?: boolean; totalPages?: number } };
 
+type SyncDetail = {
+  ok:boolean;
+  source:string;
+  fetched:number;
+  added:number;
+  geocoded:number;
+  total?:number;
+  error?:string;
+};
+
 function parseCsvLine(line: string) { const values:string[]=[]; let value=''; let quoted=false; for(let i=0;i<line.length;i++){const char=line[i]; if(char==='"'){if(quoted&&line[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(char===','&&!quoted){values.push(value.trim());value='';}else value+=char;} values.push(value.trim()); return values; }
 function key(value:string){return value.toLowerCase().replace(/[^a-z0-9]/g,'');}
 function pick(row:Record<string,any>, names:string[]){for(const name of names){const value=row[name]; if(value!==undefined&&value!==null&&String(value).trim()!=='') return String(value).trim();} return '';}
@@ -22,7 +32,7 @@ function normalizeObject(input:Record<string,any>){const out:Record<string,any>=
 async function getJson(url:string){
   let r:Response;
   try{
-    r=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'});
+    r=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});
   }catch(error){
     const host=(()=>{try{return new URL(url).host;}catch{return url;}})();
     const detail=error instanceof Error?error.message:String(error);
@@ -95,11 +105,17 @@ async function fetchOregon():Promise<CandidateRow[]>{
 }
 
 async function fetchNevada():Promise<CandidateRow[]>{
-  const sourceUrl='https://ccb.nv.gov/list-of-licensees/'; const response=await fetch(sourceUrl,{headers:{Accept:'text/html','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'}); if(!response.ok)throw new Error(`Nevada CCB returned ${response.status}`); const html=await response.text(); const plain=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&#8211;|&ndash;/g,'–').replace(/&nbsp;/g,' ').replace(/\s+/g,' '); const rows:CandidateRow[]=[]; const regex=/([A-Z0-9][A-Z0-9 '&.!/()-]{2,80})\s*[–-]\s*([^|]{5,120}?)\s*[–-]\s*(Adult Use|Medical Only)\s*\|?\s*(\d{15,25})/gi; let m:RegExpExecArray|null; while((m=regex.exec(plain))!==null){const name=m[1].trim().replace(/^Y\s+|^N\s+/i,''),licenseNumber=m[4].trim(); if(!name||rows.some(r=>r.licenseNumber===licenseNumber))continue; rows.push({name,streetAddress:m[2].trim(),region:'Nevada',country:'USA',licenseNumber,dataSource:'Nevada CCB Licensed Retail Locations',sourceUrl,sourceLicense:'Official Nevada Cannabis Compliance Board public retail-location list.',imageryStatus:'missing_coordinates'});} if(!rows.length)throw new Error('Nevada CCB page format changed; no retail rows could be parsed.'); return rows;
+  const sourceUrl='https://ccb.nv.gov/list-of-licensees/';
+  let response:Response;
+  try{response=await fetch(sourceUrl,{headers:{Accept:'text/html','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){throw new Error(`Nevada CCB connection failed: ${error instanceof Error?error.message:String(error)}`);}
+  if(!response.ok)throw new Error(`Nevada CCB returned ${response.status}`); const html=await response.text(); const plain=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&#8211;|&ndash;/g,'–').replace(/&nbsp;/g,' ').replace(/\s+/g,' '); const rows:CandidateRow[]=[]; const regex=/([A-Z0-9][A-Z0-9 '&.!/()-]{2,80})\s*[–-]\s*([^|]{5,120}?)\s*[–-]\s*(Adult Use|Medical Only)\s*\|?\s*(\d{15,25})/gi; let m:RegExpExecArray|null; while((m=regex.exec(plain))!==null){const name=m[1].trim().replace(/^Y\s+|^N\s+/i,''),licenseNumber=m[4].trim(); if(!name||rows.some(r=>r.licenseNumber===licenseNumber))continue; rows.push({name,streetAddress:m[2].trim(),region:'Nevada',country:'USA',licenseNumber,dataSource:'Nevada CCB Licensed Retail Locations',sourceUrl,sourceLicense:'Official Nevada Cannabis Compliance Board public retail-location list.',imageryStatus:'missing_coordinates'});} if(!rows.length)throw new Error('Nevada CCB page format changed; no retail rows could be parsed.'); return rows;
 }
 
 async function fetchWashington():Promise<CandidateRow[]>{
-  const sourceUrl='https://data.wa.gov/d/brpd-b6zd'; const response=await fetch('https://data.wa.gov/api/v3/views/brpd-b6zd/export.csv?accessType=DOWNLOAD',{headers:{Accept:'text/csv','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'}); if(!response.ok)throw new Error(`Washington Open Data returned ${response.status}`); const text=await response.text(); const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l=>l.trim()); if(lines.length<2)return []; const headers=parseCsvLine(lines[0]).map(key); return lines.slice(1).map(line=>{const values=parseCsvLine(line),row:Record<string,string>={};headers.forEach((h,i)=>row[h]=values[i]||''); const type=pick(row,['licensetype','privilege','endorsement','license']); const latitude=coord(pick(row,['latitude','lat'])),longitude=coord(pick(row,['longitude','lng','lon','long'])); return {name:pick(row,['tradename','businessname','applicantname','licenseename','name']),streetAddress:pick(row,['address','streetaddress','premiseaddress','locationaddress'])||undefined,city:pick(row,['city','premisecity','locationcity'])||undefined,region:pick(row,['state','region'])||'Washington',country:'USA',latitude,longitude,licenseNumber:pick(row,['licensenumber','licenseid','license'])||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington Open Data.',imageryStatus:readiness(latitude,longitude),_type:type};}).filter((r:any)=>r.name&&(!r._type||/cannabis|marijuana|retail/i.test(r._type))).map(({_type,...r}:any)=>r);
+  const sourceUrl='https://data.wa.gov/d/brpd-b6zd';
+  let response:Response;
+  try{response=await fetch('https://data.wa.gov/api/v3/views/brpd-b6zd/export.csv?accessType=DOWNLOAD',{headers:{Accept:'text/csv','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){throw new Error(`Washington Open Data connection failed: ${error instanceof Error?error.message:String(error)}`);}
+  if(!response.ok)throw new Error(`Washington Open Data returned ${response.status}`); const text=await response.text(); const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l=>l.trim()); if(lines.length<2)return []; const headers=parseCsvLine(lines[0]).map(key); return lines.slice(1).map(line=>{const values=parseCsvLine(line),row:Record<string,string>={};headers.forEach((h,i)=>row[h]=values[i]||''); const type=pick(row,['licensetype','privilege','endorsement','license']); const latitude=coord(pick(row,['latitude','lat'])),longitude=coord(pick(row,['longitude','lng','lon','long'])); return {name:pick(row,['tradename','businessname','applicantname','licenseename','name']),streetAddress:pick(row,['address','streetaddress','premiseaddress','locationaddress'])||undefined,city:pick(row,['city','premisecity','locationcity'])||undefined,region:pick(row,['state','region'])||'Washington',country:'USA',latitude,longitude,licenseNumber:pick(row,['licensenumber','licenseid','license'])||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington Open Data.',imageryStatus:readiness(latitude,longitude),_type:type};}).filter((r:any)=>r.name&&(!r._type||/cannabis|marijuana|retail/i.test(r._type))).map(({_type,...r}:any)=>r);
 }
 
 async function fetchConnecticut():Promise<CandidateRow[]>{
@@ -113,7 +129,10 @@ async function fetchNewYork():Promise<CandidateRow[]>{
 }
 
 async function fetchMontana():Promise<CandidateRow[]>{
-  const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations'; const response=await fetch(sourceUrl,{headers:{Accept:'text/html','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store'}); if(!response.ok)throw new Error(`Montana DOR returned ${response.status}`); const html=await response.text(); const rows:CandidateRow[]=[]; const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi; let m:RegExpExecArray|null; while((m=tr.exec(html))!==null){const cells:string[]=[]; const cellRegex=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi; let cellMatch:RegExpExecArray|null; while((cellMatch=cellRegex.exec(m[1]))!==null){cells.push(cellMatch[1].replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim());} if(cells.length<3||/licensee.?s name/i.test(cells[0]))continue; const name=cells[2]||cells[0],city=cells[1]; if(!name||!city)continue; rows.push({name,city,region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue public dispensary list.',imageryStatus:'missing_coordinates'});} if(!rows.length)throw new Error('Montana DOR page format changed; no dispensary rows could be parsed.'); return rows;
+  const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations';
+  let response:Response;
+  try{response=await fetch(sourceUrl,{headers:{Accept:'text/html','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){throw new Error(`Montana DOR connection failed: ${error instanceof Error?error.message:String(error)}`);}
+  if(!response.ok)throw new Error(`Montana DOR returned ${response.status}`); const html=await response.text(); const rows:CandidateRow[]=[]; const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi; let m:RegExpExecArray|null; while((m=tr.exec(html))!==null){const cells:string[]=[]; const cellRegex=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi; let cellMatch:RegExpExecArray|null; while((cellMatch=cellRegex.exec(m[1]))!==null){cells.push(cellMatch[1].replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim());} if(cells.length<3||/licensee.?s name/i.test(cells[0]))continue; const name=cells[2]||cells[0],city=cells[1]; if(!name||!city)continue; rows.push({name,city,region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue public dispensary list.',imageryStatus:'missing_coordinates'});} if(!rows.length)throw new Error('Montana DOR page format changed; no dispensary rows could be parsed.'); return rows;
 }
 
 const officialSources=[
@@ -126,13 +145,41 @@ const officialSources=[
   {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
 ] as const;
 
-export async function POST(request:NextRequest){
-  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401}); const body=await request.json().catch(()=>null); const preset=String(body?.preset||'');
+async function syncSource(source:(typeof officialSources)[number]):Promise<SyncDetail>{
   try{
-    if(preset==='all'){
-      const settled=await Promise.allSettled(officialSources.map(async source=>{const rows=await source.fetcher(); const result=await importCandidates(rows as any[]); const geocoded=rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).length; return {source:source.label,fetched:rows.length,added:result.added,geocoded,total:result.total};}));
-      const details=settled.map((result,index)=>result.status==='fulfilled'?{ok:true,...result.value}:{ok:false,source:officialSources[index].label,fetched:0,added:0,geocoded:0,error:result.reason instanceof Error?result.reason.message:String(result.reason)}); const successful=details.filter(d=>d.ok) as any[],failed=details.filter(d=>!d.ok); return NextResponse.json({added:successful.reduce((s,d)=>s+d.added,0),fetched:successful.reduce((s,d)=>s+d.fetched,0),geocoded:successful.reduce((s,d)=>s+d.geocoded,0),total:successful.reduce((m,d)=>Math.max(m,d.total||0),0),details,failed:failed.length,source:'Official multi-state sync'},{status:failed.length===officialSources.length?502:201});
-    }
-    const source=officialSources.find(item=>item.preset===preset); if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400}); const rows=await source.fetcher(); const result=await importCandidates(rows as any[]); const geocoded=rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).length; return NextResponse.json({...result,fetched:rows.length,geocoded,source:source.label},{status:201});
-  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Official-data fetch failed.'},{status:502});}
+    const rows=await source.fetcher();
+    const result=await importCandidates(rows as any[]);
+    const geocoded=rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).length;
+    return {ok:true,source:source.label,fetched:rows.length,added:result.added,geocoded,total:result.total};
+  }catch(error){
+    return {ok:false,source:source.label,fetched:0,added:0,geocoded:0,error:error instanceof Error?error.message:String(error)};
+  }
+}
+
+export async function POST(request:NextRequest){
+  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
+  const body=await request.json().catch(()=>null);
+  const preset=String(body?.preset||'');
+  if(preset==='all'){
+    const details:SyncDetail[]=[];
+    for(const source of officialSources){details.push(await syncSource(source));}
+    const successful=details.filter(d=>d.ok),failed=details.filter(d=>!d.ok);
+    const fetched=successful.reduce((sum,d)=>sum+d.fetched,0);
+    const added=successful.reduce((sum,d)=>sum+d.added,0);
+    const geocoded=successful.reduce((sum,d)=>sum+d.geocoded,0);
+    const total=successful.reduce((max,d)=>Math.max(max,d.total||0),0);
+    return NextResponse.json({
+      source:'Official multi-state sync',
+      fetched,added,geocoded,total,
+      succeeded:successful.length,
+      failed:failed.length,
+      details,
+      message:`Synced ${successful.length}/${officialSources.length} official state feeds. ${fetched} records fetched, ${added} new candidates imported.${failed.length?` ${failed.length} source(s) failed but successful imports were kept.`:''}`
+    },{status:successful.length?201:502});
+  }
+  const source=officialSources.find(item=>item.preset===preset);
+  if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400});
+  const detail=await syncSource(source);
+  if(!detail.ok)return NextResponse.json({error:detail.error,details:[detail]},{status:502});
+  return NextResponse.json({...detail,source:detail.source},{status:201});
 }
