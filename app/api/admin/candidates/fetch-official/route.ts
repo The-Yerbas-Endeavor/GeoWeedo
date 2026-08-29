@@ -61,6 +61,31 @@ async function fetchOregon():Promise<CandidateRow[]>{
   return (Array.isArray(data)?data:[]).filter((r:any)=>String(r.license_type||'').toLowerCase().includes('retail')&&!String(r.license_expired||'').toLowerCase().includes('yes')).map((r:any)=>{const latitude=coord(r.latitude),longitude=coord(r.longitude);return{name:String(r.business_name||r.business_licenses||'').trim(),streetAddress:String(r.physical_address||'').trim()||undefined,region:'Oregon',country:'USA',latitude,longitude,licenseNumber:String(r.license_number||'').trim()||undefined,dataSource:'Oregon OLCC Open Data',sourceUrl,sourceLicense:'Official Oregon Open Data.',imageryStatus:readiness(latitude,longitude)};}).filter((r:any)=>r.name);
 }
 
+async function fetchColorado():Promise<CandidateRow[]>{
+  const sourceUrl='https://data.colorado.gov/Government/Licensed-Marijuana-Businesses-in-Colorado/93ae-ftjz';
+  const data=await getJson('https://data.colorado.gov/resource/93ae-ftjz.json?$limit=50000');
+  const rows=(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{
+    const type=pick(r,['licensetype','licensetypecode','facilitytype','businesstype','type','licenseclass']);
+    if(type&&!/retail/i.test(type))return null;
+    const status=pick(r,['licensestatus','status']);
+    if(status&&/expired|revoked|surrendered|cancelled|closed|inactive/i.test(status))return null;
+    const licenseNumber=pick(r,['licensenumber','license','licenseid','credentialnumber']);
+    const name=pick(r,['dbaname','tradename','businessname','businesslegalname','facilityname','licenseename','name']);
+    const geo=point(r.location??r.geolocation??r.point??r.georeference);
+    const latitude=coord(r.latitude??r.lat)??geo.latitude;
+    const longitude=coord(r.longitude??r.lng??r.lon)??geo.longitude;
+    return{name,streetAddress:pick(r,['streetaddress','address','premiseaddress','locationaddress','physicaladdress'])||undefined,city:pick(r,['city','premisecity','locationcity','municipality'])||undefined,region:'Colorado',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Colorado MED Licensed Marijuana Businesses',sourceUrl,sourceLicense:'Official Colorado Department of Revenue Marijuana Enforcement Division open data; retail licenses only.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;
+  }).filter(Boolean).filter((r:any)=>r.name) as CandidateRow[];
+  const unique=new Map<string,CandidateRow>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}return Array.from(unique.values());
+}
+
+async function fetchMassachusetts():Promise<CandidateRow[]>{
+  const sourceUrl='https://masscannabiscontrol.com/open-data/data-catalog/';
+  const data=await getJson('https://masscannabiscontrol.com/resource/l_licenses_commence_ops.json');
+  const rows=(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).filter(r=>{const type=pick(r,['licensetype']);const status=pick(r,['licensestatus','licensestatuscategory']);const commence=pick(r,['commenceops']);return /marijuana retailer/i.test(type)&&(!status||/^active$/i.test(status))&&(!commence||/^yes$/i.test(commence));}).map(r=>{const latitude=coord(r.latitude??r.establishmentlatitude);const longitude=coord(r.longitude??r.establishmentlongitude);return{name:pick(r,['dbaname','businessname','establishmentname'])||pick(r,['businessname']),streetAddress:pick(r,['establishmentaddress1','businessaddress1'])||undefined,city:pick(r,['establishmentcity','businesscity'])||undefined,region:'Massachusetts',country:'USA',latitude,longitude,licenseNumber:pick(r,['licensenumber','licensenumberbase'])||undefined,dataSource:'Massachusetts CCC Commence Operations',sourceUrl,sourceLicense:'Official Massachusetts Cannabis Control Commission open data; active adult-use Marijuana Retailer licenses that commenced operations.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;}).filter(r=>r.name);
+  const unique=new Map<string,CandidateRow>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}return Array.from(unique.values());
+}
+
 async function fetchNevada():Promise<CandidateRow[]>{
   const sourceUrl='https://ccb.nv.gov/list-of-licensees/';const html=await getHtml(sourceUrl,'Nevada CCB');const plain=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&#8211;|&ndash;/g,'–').replace(/&nbsp;/g,' ').replace(/\s+/g,' ');const rows:CandidateRow[]=[];const regex=/([A-Z0-9][A-Z0-9 '&.!/()-]{2,80})\s*[–-]\s*([^|]{5,120}?)\s*[–-]\s*(Adult Use|Medical Only)\s*\|?\s*(\d{15,25})/gi;let m:RegExpExecArray|null;while((m=regex.exec(plain))!==null){const name=m[1].trim().replace(/^Y\s+|^N\s+/i,''),licenseNumber=m[4].trim();if(!name||rows.some(r=>r.licenseNumber===licenseNumber))continue;rows.push({name,streetAddress:m[2].trim(),region:'Nevada',country:'USA',licenseNumber,dataSource:'Nevada CCB Licensed Retail Locations',sourceUrl,sourceLicense:'Official Nevada Cannabis Compliance Board public retail-location list.',imageryStatus:'missing_coordinates'});}return rows;
 }
@@ -78,9 +103,7 @@ async function fetchWashington():Promise<CandidateRow[]>{
     const city=pick(r,['city','premisecity','locationcity','businesscity','locality'])||undefined;
     return{name,streetAddress,city,region:'Washington',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington State Liquor and Cannabis Board Cannabis Renewal dataset.',imageryStatus:readiness(latitude,longitude)} as CandidateRow;
   }).filter(r=>Boolean(r.name)&&Boolean(r.city||r.streetAddress||r.licenseNumber));
-  const unique=new Map<string,CandidateRow>();
-  for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}
-  return Array.from(unique.values());
+  const unique=new Map<string,CandidateRow>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}return Array.from(unique.values());
 }
 
 async function fetchConnecticut():Promise<CandidateRow[]>{
@@ -101,6 +124,8 @@ async function fetchMontana():Promise<CandidateRow[]>{
 const officialSources=[
   {preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},
   {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
+  {preset:'colorado-med',label:'Colorado MED',fetcher:fetchColorado},
+  {preset:'massachusetts-ccc',label:'Massachusetts CCC',fetcher:fetchMassachusetts},
   {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
   {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
   {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticut},
