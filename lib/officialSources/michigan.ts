@@ -6,7 +6,7 @@ type Dataset={module:'Adult_Use'|'Licenses';tab:'Adult_Use'|'Licenses';label:str
 const SOURCE='https://www.michigan.gov/cra/verify-a-license-1';
 const HOSTS=['https://aca3.accela.com','https://aca-prod.accela.com'];
 const DATASETS:Dataset[]=[
- {module:'Adult_Use',tab:'Adult_Use',label:'adult-use establishments',accept:(type,license)=>(/mar(?:i|ij)uana\s+retailer/i.test(type)||/^AU-R-/i.test(license))},
+ {module:'Adult_Use',tab:'Adult_Use',label:'adult-use establishments',accept:(type,license)=>(/mari(?:j|h)uana\s+retailer/i.test(type)||/^AU-R-/i.test(license))},
  {module:'Licenses',tab:'Licenses',label:'medical marijuana facilities',accept:(type)=>/provisioning\s+center/i.test(type)},
 ];
 
