@@ -14,7 +14,6 @@ type Source = {
   preset: Preset;
   label: string;
   description: string;
-  endpoint: '/api/admin/candidates/fetch-official' | '/api/admin/candidates/fetch-bc-ri';
 };
 
 const sources: Source[] = [
@@ -23,39 +22,33 @@ const sources: Source[] = [
     label: 'British Columbia · LCRB',
     description:
       'Official LCRB cannabis retail store map; licensed private non-medical retailers with licence number and street address.',
-    endpoint: '/api/admin/candidates/fetch-bc-ri',
   },
   {
     preset: 'rhode-island-ccc',
     label: 'Rhode Island · CCC',
     description:
       'Official CCC licensed Compassion Centers with licence number, address, and website when published.',
-    endpoint: '/api/admin/candidates/fetch-bc-ri',
   },
   {
     preset: 'michigan-cra',
     label: 'Michigan · CRA',
     description: 'Official CRA adult-use licensing reports; Marihuana Retailer licenses only.',
-    endpoint: '/api/admin/candidates/fetch-official',
   },
   {
     preset: 'minnesota-ocm',
     label: 'Minnesota · OCM',
     description: 'Official OCM public license-holder data; issued Cannabis Retailer licenses only.',
-    endpoint: '/api/admin/candidates/fetch-official',
   },
   {
     preset: 'missouri-dhss',
     label: 'Missouri · DHSS',
     description: 'Official Division of Cannabis Regulation licensed dispensary facilities.',
-    endpoint: '/api/admin/candidates/fetch-official',
   },
   {
     preset: 'new-jersey-crc',
     label: 'New Jersey · CRC',
     description:
       'Official CRC licensed cannabis businesses authorized for Retailer/Dispensing activity.',
-    endpoint: '/api/admin/candidates/fetch-official',
   },
 ];
 
@@ -68,7 +61,7 @@ export default function ExpandedOfficialSourceControls() {
     setStatus(`${source.label}: fetching official data…`);
 
     try {
-      const response = await fetch(source.endpoint, {
+      const response = await fetch('/api/admin/candidates/fetch-official', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ preset: source.preset }),
@@ -100,8 +93,8 @@ export default function ExpandedOfficialSourceControls() {
     <section className="admin-panel" style={{ marginBottom: 18 }}>
       <h2>Additional official sources</h2>
       <p className="admin-help">
-        British Columbia and Rhode Island are available here as direct regulator imports. Imported records
-        enter the normal candidate, coordinate-enrichment, imagery-review, and approval workflow.
+        These sources are included in the main Fetch all available states/jurisdictions sync and can also be refreshed individually here.
+        Imported records enter the normal candidate, coordinate-enrichment, imagery-review, and approval workflow.
       </p>
       {status && (
         <div className="admin-status" style={{ marginBottom: 12 }}>
