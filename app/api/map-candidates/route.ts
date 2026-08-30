@@ -10,7 +10,17 @@ function validCoordinates(latitude: unknown, longitude: unknown) {
     && Number(longitude) >= -180 && Number(longitude) <= 180;
 }
 
+function normalizedCountry(value: unknown) {
+  const country = String(value || '').trim();
+  if (!country) return 'USA';
+  if (/^(us|u\.s\.|u\.s\.a\.|united states(?: of america)?)$/i.test(country)) return 'USA';
+  if (/^(nl|nld|the netherlands)$/i.test(country)) return 'Netherlands';
+  return country;
+}
+
 export async function GET() {
+  // Public browse policy: every non-rejected imported candidate with valid
+  // coordinates is visible, including candidates held in reviewing status.
   const all = (await listCandidates()).filter((item) => item.status !== 'rejected');
   const candidates = all
     .filter((item) => validCoordinates(item.latitude, item.longitude))
@@ -21,7 +31,7 @@ export async function GET() {
       longitude: item.longitude as number,
       city: item.city || '',
       region: item.region || '',
-      country: item.country || 'USA',
+      country: normalizedCountry(item.country),
       dataSource: item.dataSource,
       status: item.status,
       imageryStatus: item.imageryStatus || 'unchecked',
@@ -32,25 +42,42 @@ export async function GET() {
     Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
     && !validCoordinates(item.latitude, item.longitude)
   ).length;
-  const regionMap = new Map<string, { region: string; total: number; mapped: number }>();
+
+  const regionMap = new Map<string, { region: string; country: string; total: number; mapped: number }>();
+  const countryMap = new Map<string, { country: string; total: number; mapped: number; regions: number }>();
   for (const item of all) {
     const region = String(item.region || '').trim();
-    if (!region) continue;
-    const current = regionMap.get(region) || { region, total: 0, mapped: 0 };
-    current.total += 1;
-    if (validCoordinates(item.latitude, item.longitude)) current.mapped += 1;
-    regionMap.set(region, current);
+    const country = normalizedCountry(item.country);
+    const mapped = validCoordinates(item.latitude, item.longitude);
+    if (region) {
+      const regionKey = `${country}\u0000${region}`;
+      const current = regionMap.get(regionKey) || { region, country, total: 0, mapped: 0 };
+      current.total += 1;
+      if (mapped) current.mapped += 1;
+      regionMap.set(regionKey, current);
+    }
+    const currentCountry = countryMap.get(country) || { country, total: 0, mapped: 0, regions: 0 };
+    currentCountry.total += 1;
+    if (mapped) currentCountry.mapped += 1;
+    countryMap.set(country, currentCountry);
   }
-  const regions = Array.from(regionMap.values()).sort((a, b) => a.region.localeCompare(b.region));
+
+  const regions = Array.from(regionMap.values()).sort((a, b) => a.country.localeCompare(b.country) || a.region.localeCompare(b.region));
+  for (const country of countryMap.values()) country.regions = regions.filter((region) => region.country === country.country).length;
+  const countries = Array.from(countryMap.values()).sort((a, b) => a.country.localeCompare(b.country));
+
   return NextResponse.json({
     candidates,
     regions,
+    countries,
     stats: {
       total: all.length,
       mapped: candidates.length,
       missingCoordinates: Math.max(0, all.length - candidates.length - invalidCoordinates),
       invalidCoordinates,
-      states: regions.length,
+      states: regions.filter((item) => item.country === 'USA').length,
+      regions: regions.length,
+      countries: countries.length,
     },
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }
