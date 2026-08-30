@@ -1,0 +1,37 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+type Detail={
+ location:{id:string;name:string;streetAddress?:string;city:string;region:string;postalCode?:string;country:string;website?:string;phone?:string;overview?:string;licenseNumber?:string;dataSource?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>};
+ ratings:{count:number;average:number};
+ reviews:Array<{id:string;author:string;rating:number;title?:string;body?:string;images:string[];createdAt:string}>;
+};
+
+function stars(value:number){return '★★★★★'.split('').map((star,index)=><span key={index} className={index<Math.round(value)?'community-star active':'community-star'}>{star}</span>);}
+function normalizeWebsite(value?:string){if(!value)return null;return /^https?:\/\//i.test(value)?value:`https://${value}`;}
+
+export default function DispensaryCommunityDetails({locationId}:{locationId:string}){
+ const[data,setData]=useState<Detail|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[showReview,setShowReview]=useState(false),[rating,setRating]=useState(5),[title,setTitle]=useState(''),[body,setBody]=useState(''),[submitting,setSubmitting]=useState(false),[message,setMessage]=useState<string|null>(null);
+ useEffect(()=>{let alive=true;setLoading(true);setError(null);fetch(`/api/dispensaries/${encodeURIComponent(locationId)}`,{cache:'no-store'}).then(async r=>{const text=await r.text();let parsed:any={};try{parsed=text?JSON.parse(text):{};}catch{throw new Error(`Location details returned HTTP ${r.status}.`);}if(!r.ok)throw new Error(parsed.error||'Could not load location details.');return parsed;}).then(v=>{if(alive)setData(v);}).catch(e=>{if(alive)setError(e instanceof Error?e.message:'Could not load location details.');}).finally(()=>{if(alive)setLoading(false);});return()=>{alive=false;};},[locationId]);
+ async function submit(){setSubmitting(true);setMessage(null);try{const r=await fetch(`/api/dispensaries/${encodeURIComponent(locationId)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating,title,body})});const text=await r.text();let parsed:any={};try{parsed=text?JSON.parse(text):{};}catch{throw new Error(`Review request returned HTTP ${r.status}.`);}if(!r.ok)throw new Error(parsed.error||'Review failed.');setMessage(parsed.message||'Review submitted.');setTitle('');setBody('');setShowReview(false);}catch(e){setMessage(e instanceof Error?e.message:'Review failed.');}finally{setSubmitting(false);}}
+ if(loading)return <div className="community-details-loading">Loading shop details…</div>;
+ if(error||!data)return <div className="community-details-loading">{error||'Details unavailable.'}</div>;
+ const l=data.location,website=normalizeWebsite(l.website);const address=[l.streetAddress,l.city,l.region,l.postalCode,l.country].filter(Boolean).join(', ');
+ return <div className="community-details">
+  <div className="community-rating"><span className="community-stars">{stars(data.ratings.average)}</span><strong>{data.ratings.count?data.ratings.average.toFixed(1):'New'}</strong><small>{data.ratings.count?`${data.ratings.count} review${data.ratings.count===1?'':'s'}`:'No reviews yet'}</small></div>
+  {l.overview&&<p className="community-overview">{l.overview}</p>}
+  <div className="community-contact">
+   {address&&<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">📍 {address}</a>}
+   {l.phone&&<a href={`tel:${l.phone.replace(/[^+\d]/g,'')}`}>☎ {l.phone}</a>}
+   {website&&<a href={website} target="_blank" rel="noreferrer">↗ Visit website</a>}
+  </div>
+  {l.amenities&&l.amenities.length>0&&<div className="community-amenities">{l.amenities.map(item=><span key={item}>{item}</span>)}</div>}
+  {l.hours&&Object.keys(l.hours).length>0&&<details className="community-hours"><summary>Hours</summary>{Object.entries(l.hours).map(([day,hours])=><div key={day}><span>{day}</span><strong>{hours}</strong></div>)}</details>}
+  <div className="community-review-head"><strong>Community reviews</strong><button type="button" onClick={()=>setShowReview(v=>!v)}>★ Write a review</button></div>
+  {showReview&&<div className="community-review-form"><div className="community-rating-picker">{[1,2,3,4,5].map(v=><button type="button" key={v} className={v<=rating?'active':''} onClick={()=>setRating(v)}>★</button>)}</div><input value={title} onChange={e=>setTitle(e.target.value)} maxLength={120} placeholder="Review title (optional)"/><textarea value={body} onChange={e=>setBody(e.target.value)} maxLength={3000} placeholder="What should other visitors know?"/><button type="button" disabled={submitting} onClick={submit}>{submitting?'Submitting…':'Submit for moderation'}</button></div>}
+  {message&&<div className="community-review-message">{message}</div>}
+  <div className="community-reviews">{data.reviews.length===0?<small>Be the first to review this dispensary.</small>:data.reviews.slice(0,5).map(review=><article key={review.id}><div><span className="community-stars">{stars(review.rating)}</span><strong>{review.author}</strong></div>{review.title&&<h4>{review.title}</h4>}{review.body&&<p>{review.body}</p>}{review.images.length>0&&<div className="community-review-images">{review.images.map(src=><img key={src} src={src} alt="User submitted dispensary review" loading="lazy"/>)}</div>}</article>)}</div>
+  <div className="community-source-note">{l.licenseNumber&&<span>License {l.licenseNumber}</span>}{l.dataSource&&<span>Source: {l.dataSource}</span>}</div>
+ </div>;
+}
