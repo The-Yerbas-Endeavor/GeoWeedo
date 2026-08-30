@@ -72,6 +72,7 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
   const findByFingerprint = db.prepare('SELECT * FROM dispensary_candidates WHERE fingerprint = ? LIMIT 1');
+  const findByLicense = db.prepare('SELECT * FROM dispensary_candidates WHERE license_number = ? LIMIT 1');
   const refreshExisting = db.prepare(`
     UPDATE dispensary_candidates SET
       street_address=COALESCE(?,street_address),
@@ -93,7 +94,9 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
   for (const row of rows) {
     if (!row.name?.trim()) continue;
     const fp = fingerprint(row);
-    const existingRow = findByFingerprint.get(fp) as Record<string, unknown> | undefined;
+    const licenseNumber = row.licenseNumber?.trim();
+    const existingRow = (licenseNumber ? findByLicense.get(licenseNumber) : undefined) as Record<string, unknown> | undefined
+      || findByFingerprint.get(fp) as Record<string, unknown> | undefined;
     if (existingRow) {
       const hadCoordinates = Number.isFinite(existingRow.latitude) && Number.isFinite(existingRow.longitude);
       const hasIncomingCoordinates = Number.isFinite(row.latitude) && Number.isFinite(row.longitude);
@@ -102,7 +105,7 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
       const result = refreshExisting.run(
         row.streetAddress ?? null, row.city ?? null, row.region ?? null, row.country ?? null,
         incomingLatitude, incomingLongitude,
-        row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
+        row.website ?? null, licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
         row.sourceLicense ?? null, hasIncomingCoordinates ? 1 : 0, now, String(existingRow.id),
       );
       updated += Number(result.changes);
@@ -113,7 +116,7 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
     const result = insert.run(
       `candidate-${crypto.randomUUID()}`, fp, row.name.trim(), row.streetAddress ?? null,
       row.city ?? null, row.region ?? null, row.country ?? null, row.latitude ?? null, row.longitude ?? null,
-      row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
+      row.website ?? null, licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
       row.sourceLicense ?? null, 'candidate', row.imageryStatus || 'unchecked', row.imageryCount ?? null,
       row.imageryCheckedAt ?? null, row.imageryMessage ?? null, now, now,
     );
