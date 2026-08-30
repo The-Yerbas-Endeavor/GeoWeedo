@@ -22,15 +22,15 @@ export default function LoadedRegionCoveragePortal(){
     return()=>{cancelled=true;observer.disconnect();};
   },[]);
 
-  const incomplete=useMemo(()=>regions.filter(item=>item.total>item.mapped),[regions]);
-  if(!target||incomplete.length===0)return null;
+  const unmapped=useMemo(()=>regions.filter(item=>item.total>0&&item.mapped===0),[regions]);
+  if(!target||unmapped.length===0)return null;
 
   return createPortal(<div className="map-browser-loaded-coverage" style={{borderTop:'1px solid var(--line)'}}>
     <div style={{padding:'10px 12px',fontSize:11,fontWeight:800,letterSpacing:'.08em',color:'var(--muted)'}}>LOADED · AWAITING COORDINATES</div>
-    {incomplete.map(item=>{const missing=Math.max(0,item.total-item.mapped);const tone=item.mapped===0?'#8d9690':'#d4aa4b';return <section className="map-browser-state" key={`coverage-${item.region}`}>
+    {unmapped.map(item=>{const missing=item.total;return <section className="map-browser-state" key={`coverage-${item.region}`}>
       <div className="map-browser-state-head" style={{cursor:'default'}}>
-        <span><strong><i style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:tone,marginRight:7}}/>{item.region}</strong><small>{item.total.toLocaleString()} loaded · {item.mapped.toLocaleString()} mapped · {missing.toLocaleString()} need coordinates</small></span>
-        <b title="No map movement until coordinates are available">{item.mapped===0?'○':'◐'}</b>
+        <span><strong><i style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:'#8d9690',marginRight:7}}/>{item.region}</strong><small>{item.total.toLocaleString()} loaded · 0 mapped · {missing.toLocaleString()} need coordinates</small></span>
+        <b title="No map movement until coordinates are available">○</b>
       </div>
     </section>;})}
   </div>,target);
