@@ -154,13 +154,23 @@ if ! $nginx_healthy; then
 fi
 rm -f "$nginx_backup"
 
-log "Nginx is serving $inactive; retiring $active"
-case "$active" in
-  blue|green) sudo systemctl stop "geoweedo@$active.service" ;;
-  legacy) sudo systemctl stop geoweedo.service ;;
-esac
-
+log "Nginx is serving $inactive; updating reboot target and retiring $active"
 sudo systemctl enable "geoweedo@$inactive.service" >/dev/null
 
+case "$active" in
+  blue|green)
+    sudo systemctl disable "geoweedo@$active.service" >/dev/null 2>&1 || true
+    sudo systemctl stop "geoweedo@$active.service"
+    ;;
+  legacy)
+    sudo systemctl disable geoweedo.service >/dev/null 2>&1 || true
+    sudo systemctl stop geoweedo.service
+    ;;
+esac
+
+# nginx and the wallet worker timer should also survive a host reboot.
+sudo systemctl enable nginx >/dev/null 2>&1 || true
+sudo systemctl enable geoweedo-wallet-worker.timer >/dev/null 2>&1 || true
+
 log "Deployment complete without taking the serving instance down during build or cutover."
-log "Live slot: $inactive ($port)"
+log "Live slot: $inactive ($port); enabled for reboot"
