@@ -147,7 +147,7 @@ async function lookupGoogle(lat: number, lng: number) {
     sequenceIndex: index,
     shotDate: metadata.date ?? null,
     width: 640,
-    height: 640,
+    height: 400,
     qualityLevel: 1,
     qualityStatus: 'GOOGLE',
     status: 'GOOGLE',
