@@ -145,12 +145,12 @@ export default function FloatingStreetViewEnhancer() {
 
     const scan = () => {
       document.querySelectorAll<HTMLElement>('.map-streetview-panel').forEach(enhance);
-      for (const [panel, cleanup] of cleanups) {
+      Array.from(cleanups.entries()).forEach(([panel, cleanup]) => {
         if (!panel.isConnected) {
           cleanup();
           cleanups.delete(panel);
         }
-      }
+      });
     };
 
     scan();
@@ -159,7 +159,7 @@ export default function FloatingStreetViewEnhancer() {
 
     return () => {
       observer.disconnect();
-      cleanups.forEach((cleanup) => cleanup());
+      Array.from(cleanups.values()).forEach((cleanup) => cleanup());
       cleanups.clear();
     };
   }, []);

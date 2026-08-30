@@ -20,14 +20,16 @@ export default function AdminHeaderHomeLink() {
     };
 
     const click = (event: MouseEvent) => {
-      const target = (event.target as Element | null)?.closest('.eyebrow');
+      const source = event.target instanceof Element ? event.target : null;
+      const target = source?.closest('.eyebrow') ?? null;
       if (!isAdminHeader(target) || target?.closest('a')) return;
       window.location.href = '/admin';
     };
 
     const keydown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
-      const target = (event.target as Element | null)?.closest('.eyebrow');
+      const source = event.target instanceof Element ? event.target : null;
+      const target = source?.closest('.eyebrow') ?? null;
       if (!isAdminHeader(target) || target?.closest('a')) return;
       event.preventDefault();
       window.location.href = '/admin';
