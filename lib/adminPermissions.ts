@@ -76,7 +76,7 @@ export function permissionForAdminRequest(pathname:string,method:string):AdminPe
   if(pathname.startsWith('/api/admin/database'))return 'system.manage';
   if(pathname.includes('/fetch-official')||pathname.includes('/pipeline'))return 'data.manage';
   if(pathname.startsWith('/api/admin/candidates'))return verb==='GET'?'locations.view':'locations.manage';
-  if(pathname.startsWith('/api/admin/dispensaries')||pathname.startsWith('/api/admin/geocode')||pathname.startsWith('/api/admin/imagery'))return verb==='GET'?'locations.view':'locations.manage';
+  if(pathname.startsWith('/api/admin/dispensaries')||pathname.startsWith('/api/admin/dispensary-records')||pathname.startsWith('/api/admin/geocode')||pathname.startsWith('/api/admin/imagery'))return verb==='GET'?'locations.view':'locations.manage';
   if(pathname.startsWith('/api/admin/users'))return verb==='GET'?'users.view':'users.manage';
   if(pathname.startsWith('/api/admin/rewards'))return 'rewards.manage';
   if(pathname.startsWith('/api/admin/sponsorships'))return 'sponsorships.manage';
