@@ -100,7 +100,36 @@ async function fetchConnecticut():Promise<CandidateRow[]>{
 }
 
 async function fetchNewYork():Promise<CandidateRow[]>{
-  const sourceUrl='https://data.ny.gov/d/jskf-tt3q';const data=await getJson('https://data.ny.gov/resource/jskf-tt3q.json?$limit=10000');return (Array.isArray(data)?data:[]).map((raw:any)=>{const r=normalizeObject(raw);const type=pick(r,['licensetype','licensecategory','type']);const status=pick(r,['licensestatus','status']);if(type&&!/retail|dispensary/i.test(type))return null;if(status&&/expired|revoked|surrendered|cancelled|denied/i.test(status))return null;const geo=point(r.georeference??r.location??r.geolocation);const latitude=coord(r.latitude)??geo.latitude,longitude=coord(r.longitude)??geo.longitude;return{name:pick(r,['dbaname','tradename','businessname','licenseename','entityname','name']),streetAddress:pick(r,['premiseaddress','streetaddress','address'])||undefined,city:pick(r,['premisecity','city','municipality'])||undefined,region:'New York',country:'USA',latitude,longitude,website:pick(r,['website','url'])||undefined,licenseNumber:pick(r,['licensenumber','licenseid'])||undefined,dataSource:'New York OCM Current Licenses',sourceUrl,sourceLicense:'Official New York Open Data.',imageryStatus:readiness(latitude,longitude)};}).filter(Boolean).filter((r:any)=>r.name) as CandidateRow[];
+  const sourceUrl='https://data.ny.gov/d/jskf-tt3q';
+  const data=await getJson('https://data.ny.gov/resource/jskf-tt3q.json?$limit=10000');
+  const rows=(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{
+    const type=pick(r,['licensetype']);
+    const status=pick(r,['licensestatus']);
+    const operationalStatus=pick(r,['operationalstatus']);
+    if(type&&!/retail dispensary|registered organization dispensary/i.test(type))return null;
+    if(status&&/inactive|expired|revoked|surrendered|cancelled|denied/i.test(status))return null;
+    if(operationalStatus&&/non-operational/i.test(operationalStatus))return null;
+    const address1=pick(r,['addressline1']);
+    const address2=pick(r,['addressline2']);
+    const streetAddress=[address1,address2].filter(Boolean).join(', ')||undefined;
+    const name=pick(r,['dba','entityname'])||`New York Cannabis Retailer ${pick(r,['licensenumber','locationid'])}`;
+    return{
+      name,
+      streetAddress,
+      city:pick(r,['city'])||undefined,
+      region:'New York',
+      country:'USA',
+      website:pick(r,['businesswebsite'])||undefined,
+      licenseNumber:pick(r,['licensenumber'])||undefined,
+      dataSource:'New York OCM Current Licenses',
+      sourceUrl,
+      sourceLicense:'Official New York Office of Cannabis Management Current OCM Licenses dataset; retail-dispensary records using the published operating-address schema.',
+      imageryStatus:'missing_coordinates' as const,
+    };
+  }).filter(Boolean).filter((r:any)=>r.name) as CandidateRow[];
+  const unique=new Map<string,CandidateRow>();
+  for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}
+  return Array.from(unique.values());
 }
 
 async function fetchMontana():Promise<CandidateRow[]>{
