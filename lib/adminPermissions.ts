@@ -14,7 +14,7 @@ export const ADMIN_PERMISSIONS=[
 ] as const;
 
 export type AdminPermission=(typeof ADMIN_PERMISSIONS)[number];
-export type AdminRole='admin'|'moderator';
+export type AdminRole='admin'|'moderator'|'verified_dispensary';
 
 export const ROLE_PERMISSIONS:Record<AdminRole,AdminPermission[]>={
   admin:[...ADMIN_PERMISSIONS],
@@ -25,6 +25,17 @@ export const ROLE_PERMISSIONS:Record<AdminRole,AdminPermission[]>={
     'users.view',
     'sponsorships.manage',
   ],
+  verified_dispensary:[
+    'dashboard.view',
+    'locations.view',
+    'sponsorships.manage',
+  ],
+};
+
+export const ROLE_LABELS:Record<AdminRole,string>={
+  admin:'Administrator',
+  moderator:'Moderator',
+  verified_dispensary:'Verified Dispensary',
 };
 
 export const PERMISSION_LABELS:Record<AdminPermission,string>={
@@ -42,17 +53,21 @@ export const PERMISSION_LABELS:Record<AdminPermission,string>={
   'staff.manage':'Create staff and change roles/permissions',
 };
 
-export function normalizeAdminRole(value?:string|null):AdminRole{return value==='moderator'?'moderator':'admin';}
+export function normalizeAdminRole(value?:string|null):AdminRole{
+  if(value==='moderator')return 'moderator';
+  if(value==='verified_dispensary')return 'verified_dispensary';
+  return 'admin';
+}
 
 export function effectivePermissions(role?:string|null,permissionsJson?:string|null):AdminPermission[]{
   const normalized=normalizeAdminRole(role);
   if(normalized==='admin')return [...ADMIN_PERMISSIONS];
-  if(!permissionsJson)return [...ROLE_PERMISSIONS.moderator];
+  if(!permissionsJson)return [...ROLE_PERMISSIONS[normalized]];
   try{
     const parsed=JSON.parse(permissionsJson);
-    if(!Array.isArray(parsed))return [...ROLE_PERMISSIONS.moderator];
+    if(!Array.isArray(parsed))return [...ROLE_PERMISSIONS[normalized]];
     return parsed.filter((value):value is AdminPermission=>ADMIN_PERMISSIONS.includes(value as AdminPermission));
-  }catch{return [...ROLE_PERMISSIONS.moderator];}
+  }catch{return [...ROLE_PERMISSIONS[normalized]];}
 }
 
 export function permissionForAdminRequest(pathname:string,method:string):AdminPermission|null{
