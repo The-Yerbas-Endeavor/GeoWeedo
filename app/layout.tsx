@@ -5,6 +5,7 @@ import './open-stack.css';
 import './admin.css';
 import './site.css';
 import './map-popup.css';
+import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -14,7 +15,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{children}<LoadedRegionCoveragePortal/></body>
     </html>
   );
 }
