@@ -6,6 +6,7 @@ import './admin.css';
 import './site.css';
 import './map-popup.css';
 import './community.css';
+import './profile-details.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
