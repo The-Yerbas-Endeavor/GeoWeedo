@@ -7,6 +7,7 @@ import './site.css';
 import './map-popup.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
+import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -16,7 +17,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
