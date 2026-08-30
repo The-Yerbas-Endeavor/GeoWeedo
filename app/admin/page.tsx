@@ -9,6 +9,7 @@ type AdminUser = { id:string; username:string; displayName?:string; role:string;
 type ModuleCard = { title:string; description:string; href?:string; status:'live'|'partial'|'planned'; action?:string; secondaryHref?:string; secondaryAction?:string; permission?:AdminPermission };
 
 const liveModules:ModuleCard[]=[
+  {title:'Analytics',description:'First-party visitor, session, page-view, duration, referral, coarse-location, and client reliability analytics stored by GeoWeedo.',href:'/admin/analytics',status:'live',action:'Open analytics',permission:'dashboard.view'},
   {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and move qualified locations toward gameplay.',href:'/admin/data',status:'live',action:'Open data import',permission:'data.manage'},
   {title:'Dispensary information',description:'Review enabled dispensaries, edit business details, validate imagery, and activate or deactivate gameplay locations.',href:'/admin/dispensaries',status:'live',action:'Manage dispensaries',permission:'locations.view'},
   {title:'User information',description:'Open a consolidated player record with account status, verified YERB address, balance, deposits, withdrawals, rewards, and recorded game history.',href:'/admin/users',status:'live',action:'Manage users',permission:'users.view'},
@@ -21,7 +22,6 @@ const liveModules:ModuleCard[]=[
 
 const plannedModules:ModuleCard[]=[
   {title:'Wallet RPC & worker health',description:'Live Yerbas Core RPC connectivity, hot-wallet on-chain balance, sync height, network fees, deposit scanner status, and withdrawal worker health.',status:'planned'},
-  {title:'Game analytics',description:'Games played, completion rate, round inventory, scoring distribution, daily challenge activity, and reward exposure.',status:'planned'},
   {title:'Imagery coverage',description:'State-by-state KartaView and GeoWeedo 360 coverage, failed validation reasons, stale imagery, and locations needing review.',status:'planned'},
   {title:'System health',description:'Application instances, database health, background workers, backups, deployment status, and recent errors.',status:'planned'},
 ];
