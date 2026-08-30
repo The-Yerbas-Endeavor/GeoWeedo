@@ -6,7 +6,8 @@ export default function HomeMapLocationDeepLink(){
  useEffect(()=>{
   const profileMatch=window.location.pathname.match(/^\/dispensary\/([^/]+)/);
   if(profileMatch){
-   const locationId=decodeURIComponent(profileMatch[1]);
+   const locationId=decodeURIComponent(profileMatch[1] ?? '');
+   if(!locationId)return;
    const rewrite=()=>{
     const addressCard=Array.from(document.querySelectorAll<HTMLElement>('.profile-info-card')).find(card=>(card.querySelector(':scope > span')?.textContent||'').trim()==='ADDRESS');
     const link=addressCard?.querySelector<HTMLAnchorElement>('a');
@@ -26,8 +27,9 @@ export default function HomeMapLocationDeepLink(){
    return;
   }
 
-  const params=new URLSearchParams(window.location.search),locationId=params.get('location');
-  if(!locationId)return;
+  const params=new URLSearchParams(window.location.search),locationParam=params.get('location');
+  if(!locationParam)return;
+  const locationId=locationParam;
   let disposed=false;
   async function focus(){
    try{
