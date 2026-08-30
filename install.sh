@@ -99,7 +99,7 @@ WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env.local
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/usr/bin/npm start
+ExecStart=/usr/bin/npm start -- -H 127.0.0.1
 Restart=always
 RestartSec=5
 PrivateTmp=true
@@ -120,7 +120,7 @@ User=$APP_USER
 WorkingDirectory=$APP_HOME/GeoWeedo-%i
 EnvironmentFile=$APP_HOME/GeoWeedo-shared/.env.local
 Environment=NODE_ENV=production
-ExecStart=/bin/bash -lc 'case "%i" in blue) export PORT=3000 ;; green) export PORT=3001 ;; *) exit 64 ;; esac; exec /usr/bin/npm start'
+ExecStart=/bin/bash -lc 'case "%i" in blue) export PORT=3000 ;; green) export PORT=3001 ;; *) exit 64 ;; esac; exec /usr/bin/npm start -- -H 127.0.0.1'
 Restart=always
 RestartSec=5
 PrivateTmp=true
@@ -177,6 +177,9 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 }
 EOF
