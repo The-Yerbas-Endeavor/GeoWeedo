@@ -97,9 +97,11 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
     if (existingRow) {
       const hadCoordinates = Number.isFinite(existingRow.latitude) && Number.isFinite(existingRow.longitude);
       const hasIncomingCoordinates = Number.isFinite(row.latitude) && Number.isFinite(row.longitude);
+      const incomingLatitude: number | null = hasIncomingCoordinates ? Number(row.latitude) : null;
+      const incomingLongitude: number | null = hasIncomingCoordinates ? Number(row.longitude) : null;
       const result = refreshExisting.run(
         row.streetAddress ?? null, row.city ?? null, row.region ?? null, row.country ?? null,
-        hasIncomingCoordinates ? row.latitude : null, hasIncomingCoordinates ? row.longitude : null,
+        incomingLatitude, incomingLongitude,
         row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
         row.sourceLicense ?? null, hasIncomingCoordinates ? 1 : 0, now, String(existingRow.id),
       );
