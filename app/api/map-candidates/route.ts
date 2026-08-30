@@ -32,15 +32,25 @@ export async function GET() {
     Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
     && !validCoordinates(item.latitude, item.longitude)
   ).length;
-  const states = new Set(all.map((item) => item.region).filter(Boolean));
+  const regionMap = new Map<string, { region: string; total: number; mapped: number }>();
+  for (const item of all) {
+    const region = String(item.region || '').trim();
+    if (!region) continue;
+    const current = regionMap.get(region) || { region, total: 0, mapped: 0 };
+    current.total += 1;
+    if (validCoordinates(item.latitude, item.longitude)) current.mapped += 1;
+    regionMap.set(region, current);
+  }
+  const regions = Array.from(regionMap.values()).sort((a, b) => a.region.localeCompare(b.region));
   return NextResponse.json({
     candidates,
+    regions,
     stats: {
       total: all.length,
       mapped: candidates.length,
       missingCoordinates: Math.max(0, all.length - candidates.length - invalidCoordinates),
       invalidCoordinates,
-      states: states.size,
+      states: regions.length,
     },
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }
