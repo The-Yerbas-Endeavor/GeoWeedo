@@ -16,6 +16,7 @@ type Row = {
 const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
 const CSV_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-csv';
 const JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-json';
+const FEED_TIMEOUT_MS = 20000;
 
 function text(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -121,7 +122,7 @@ function toRows(sourceRows: Record<string, unknown>[]) {
   return rows;
 }
 
-async function fetchWithTimeout(url: string, accept: string, timeoutMs: number) {
+async function fetchWithTimeout(url: string, accept: string) {
   return fetch(url, {
     headers: {
       Accept: accept,
@@ -130,42 +131,48 @@ async function fetchWithTimeout(url: string, accept: string, timeoutMs: number) 
       Referer: SOURCE,
     },
     cache: 'no-store',
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
   });
 }
 
 async function fetchCsvRows() {
-  const response = await fetchWithTimeout(CSV_SOURCE, 'text/csv,text/plain;q=0.9,*/*;q=0.8', 60000);
+  const response = await fetchWithTimeout(CSV_SOURCE, 'text/csv,text/plain;q=0.9,*/*;q=0.8');
   if (!response.ok) throw new Error(`CSV feed returned ${response.status}`);
-  const rows = parseCsv(await response.text());
+  const body = await response.text();
+  if (/^\s*</.test(body)) throw new Error('CSV endpoint returned HTML instead of CSV');
+  const rows = parseCsv(body);
   if (!rows.length) throw new Error('CSV feed returned no rows');
   return rows;
 }
 
 async function fetchJsonRows() {
-  const response = await fetchWithTimeout(JSON_SOURCE, 'application/json,text/plain;q=0.9,*/*;q=0.8', 60000);
+  const response = await fetchWithTimeout(JSON_SOURCE, 'application/json,text/plain;q=0.9,*/*;q=0.8');
   if (!response.ok) throw new Error(`JSON feed returned ${response.status}`);
-  const payload = await response.json();
+  const body = await response.text();
+  if (/^\s*</.test(body)) throw new Error('JSON endpoint returned HTML instead of JSON');
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new Error(`JSON endpoint returned invalid JSON (${response.headers.get('content-type') || 'unknown content type'})`);
+  }
   const rows = asArray(payload);
   if (!rows.length) throw new Error('JSON feed returned no rows');
   return rows;
 }
 
 export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
-  const errors: string[] = [];
-  let sourceRows: Record<string, unknown>[] = [];
-
-  for (const loader of [fetchCsvRows, fetchJsonRows]) {
-    try {
-      sourceRows = await loader();
-      if (sourceRows.length) break;
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  if (!sourceRows.length) {
-    throw new Error(`British Columbia LCRB official feeds were unavailable: ${errors.join(' ; ')}`);
+  let sourceRows: Record<string, unknown>[];
+  try {
+    // The two official downloads are mirrors of the same LCRB retail-store
+    // dataset. Request them concurrently so a stalled endpoint cannot make the
+    // entire multi-jurisdiction sync wait through two consecutive timeouts.
+    sourceRows = await Promise.any([fetchCsvRows(), fetchJsonRows()]);
+  } catch (error) {
+    const reasons = error instanceof AggregateError
+      ? error.errors.map((item) => item instanceof Error ? item.message : String(item)).join(' ; ')
+      : error instanceof Error ? error.message : String(error);
+    throw new Error(`British Columbia LCRB official feeds were unavailable: ${reasons}`);
   }
 
   const rows = toRows(sourceRows);
