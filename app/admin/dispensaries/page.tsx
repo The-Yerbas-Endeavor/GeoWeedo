@@ -1,5 +1,6 @@
 import AdminDispensaryManager from '@/components/AdminDispensaryManager';
 import AdminStateGroupsPortal from '@/components/AdminStateGroupsPortal';
+import AdminFullDispensaryEditor from '@/components/AdminFullDispensaryEditor';
 
 export const metadata = {
   title: 'GeoWeedo Admin · Dispensaries',
@@ -37,6 +38,13 @@ export default function AdminDispensariesPage() {
         display: none;
       }
     `}</style>
+    <main className="admin-shell">
+      <header className="admin-header">
+        <div><a href="/admin" className="eyebrow" style={{textDecoration:'none',color:'inherit'}}>GEOWEEDO ADMIN</a><h1>Dispensaries</h1></div>
+        <div className="admin-links"><a href="/admin">Control center</a><a href="/admin/data">Data import</a><a href="/admin/community">Community</a><a href="/">Game</a></div>
+      </header>
+      <AdminFullDispensaryEditor />
+    </main>
     <AdminDispensaryManager />
     <AdminStateGroupsPortal />
   </div>;
