@@ -1,1 +1,0 @@
-GeoWeedo dispensary profile address links use `/?location=<location-id>` so the homepage can focus the corresponding shop on the GeoWeedo map.
