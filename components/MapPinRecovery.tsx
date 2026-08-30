@@ -2,8 +2,15 @@
 
 import { useEffect } from 'react';
 
-function nudgeMap() {
+function forceMapSync(homeMap: Element) {
   window.dispatchEvent(new Event('resize'));
+
+  const zoomIn = homeMap.querySelector<HTMLButtonElement>('.maplibregl-ctrl-zoom-in');
+  const zoomOut = homeMap.querySelector<HTMLButtonElement>('.maplibregl-ctrl-zoom-out');
+  if (!zoomIn || !zoomOut) return;
+
+  zoomIn.click();
+  window.setTimeout(() => zoomOut.click(), 140);
 }
 
 export default function MapPinRecovery() {
@@ -17,9 +24,17 @@ export default function MapPinRecovery() {
       if (!homeMap) return;
 
       scheduled = true;
-      const delays = [80, 350, 900, 1800];
+      const delays = [120, 700, 1600];
       timers.push(...delays.map((delay) => window.setTimeout(() => {
-        nudgeMap();
+        const currentMap = document.querySelector('.home-map-canvas .guess-map-wrap');
+        if (!currentMap) return;
+
+        const status = currentMap.querySelector('.map-data-status')?.textContent || '';
+        const mappedMatch = status.match(/([\d,]+)\s+mapped/i);
+        const mapped = mappedMatch ? Number(mappedMatch[1].replace(/,/g, '')) : 0;
+        const markerCount = currentMap.querySelectorAll('.maplibregl-marker').length;
+
+        if (mapped > 0 && markerCount === 0) forceMapSync(currentMap);
         if (delay === delays[delays.length - 1]) scheduled = false;
       }, delay)));
     };
