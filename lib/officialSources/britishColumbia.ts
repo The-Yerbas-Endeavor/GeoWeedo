@@ -6,11 +6,13 @@ type Row = {
   city?: string;
   region: string;
   country: string;
+  latitude?: number;
+  longitude?: number;
   licenseNumber?: string;
   dataSource: string;
   sourceUrl: string;
   sourceLicense: string;
-  imageryStatus: 'missing_coordinates';
+  imageryStatus: 'unchecked' | 'missing_coordinates';
 };
 
 const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
@@ -30,6 +32,16 @@ function bool(value: unknown) {
   if (['true', '1', 'yes', 'open'].includes(normalized)) return true;
   if (['false', '0', 'no', 'closed', 'coming soon'].includes(normalized)) return false;
   return undefined;
+}
+
+function number(value: unknown) {
+  if (value == null || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function validBritishColumbiaCoordinates(latitude?: number, longitude?: number) {
+  return latitude !== undefined && longitude !== undefined && latitude >= 48.2 && latitude <= 60.1 && longitude >= -139.1 && longitude <= -113.8;
 }
 
 function asArray(payload: unknown): Record<string, unknown>[] {
@@ -101,6 +113,9 @@ function toRows(sourceRows: Record<string, unknown>[]) {
     const streetAddress = pick(item, 'addressstreet', 'streetaddress', 'address');
     const city = pick(item, 'addresscity', 'city');
     const open = bool(item.isopen ?? item.open ?? item.status);
+    const latitude = number(item.latitude ?? item.lat);
+    const longitude = number(item.longitude ?? item.lng ?? item.lon);
+    const hasCoordinates = validBritishColumbiaCoordinates(latitude, longitude);
 
     if (open === false) continue;
     if (!licenseNumber || !name || !streetAddress || !city) continue;
@@ -111,12 +126,14 @@ function toRows(sourceRows: Record<string, unknown>[]) {
       city,
       region: 'British Columbia',
       country: 'Canada',
+      latitude: hasCoordinates ? latitude : undefined,
+      longitude: hasCoordinates ? longitude : undefined,
       licenseNumber,
       dataSource: 'British Columbia LCRB Cannabis Retail Stores',
       sourceUrl: SOURCE,
       sourceLicense:
         'Official Government of British Columbia Liquor and Cannabis Regulation Branch licensed cannabis retail store feed; open stores only.',
-      imageryStatus: 'missing_coordinates',
+      imageryStatus: hasCoordinates ? 'unchecked' : 'missing_coordinates',
     });
   }
   return rows;
@@ -162,16 +179,17 @@ async function fetchJsonRows() {
 }
 
 export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
-  let sourceRows: Record<string, unknown>[];
-  try {
-    // The two official downloads are mirrors of the same LCRB retail-store
-    // dataset. Request them concurrently so a stalled endpoint cannot make the
-    // entire multi-jurisdiction sync wait through two consecutive timeouts.
-    sourceRows = await Promise.any([fetchCsvRows(), fetchJsonRows()]);
-  } catch (error) {
-    const reasons = error instanceof AggregateError
-      ? error.errors.map((item) => item instanceof Error ? item.message : String(item)).join(' ; ')
-      : error instanceof Error ? error.message : String(error);
+  const [jsonResult, csvResult] = await Promise.allSettled([fetchJsonRows(), fetchCsvRows()]);
+  let sourceRows: Record<string, unknown>[] = [];
+
+  // Prefer JSON because the official LCRB JSON feed includes latitude/longitude.
+  // CSV remains a resilience fallback when JSON is temporarily unavailable.
+  if (jsonResult.status === 'fulfilled') sourceRows = jsonResult.value;
+  else if (csvResult.status === 'fulfilled') sourceRows = csvResult.value;
+  else {
+    const reasons = [jsonResult.reason, csvResult.reason]
+      .map((item) => item instanceof Error ? item.message : String(item))
+      .join(' ; ');
     throw new Error(`British Columbia LCRB official feeds were unavailable: ${reasons}`);
   }
 
