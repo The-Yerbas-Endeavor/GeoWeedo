@@ -11,6 +11,20 @@ GeoWeedo treats regulator data as a candidate source, not an automatic game-pool
 5. Choose the exact starting frame.
 6. Approve the dispensary into the live pool.
 
+## British Columbia
+
+`/admin/data` includes a direct British Columbia Liquor and Cannabis Regulation Branch (LCRB) import from the official Cannabis Retail Stores map.
+
+The importer keeps licensed private non-medical cannabis retailers, including establishment name, street address, city, and provincial licence number. The LCRB map does not expose coordinates in its table export, so imported candidates enter coordinate enrichment before imagery review.
+
+The importer is fail-closed: if the government page changes and no valid licensed retail rows can be parsed, GeoWeedo rejects the sync instead of importing an empty or unverified result.
+
+## Rhode Island
+
+`/admin/data` includes a direct Rhode Island Cannabis Control Commission import from the official Licensed Compassion Centers page.
+
+The importer preserves the CCC licence number, establishment name, full published address, and website when present. These records enter coordinate enrichment before imagery review.
+
 ## Oregon
 
 `/admin/data` includes a direct Oregon OLCC import using the official Oregon Open Data dataset **OLCC Cannabis Business Licenses & Endorsements**.
