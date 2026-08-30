@@ -7,6 +7,7 @@ import { getDatabase } from '@/lib/sqlite';
 
 export type DispensaryCommunityProfile={locationId:string;overview?:string;phone?:string;website?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>;updatedAt?:string};
 export type PublicReview={id:string;locationId:string;userId:string;author:string;rating:number;title?:string;body?:string;images:string[];createdAt:string;updatedAt:string};
+export type OwnerClaimStatus='pending'|'approved'|'rejected';
 const imageDir=path.join(process.cwd(),'data','runtime','community-images');
 
 function ensureSchema(){
@@ -16,8 +17,40 @@ function ensureSchema(){
   CREATE TABLE IF NOT EXISTS dispensary_reviews(id TEXT PRIMARY KEY,location_id TEXT NOT NULL,user_id TEXT NOT NULL,author_name TEXT NOT NULL,rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),title TEXT,body TEXT,status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(location_id,user_id));
   CREATE TABLE IF NOT EXISTS dispensary_review_images(id TEXT PRIMARY KEY,review_id TEXT NOT NULL,image_path TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL,FOREIGN KEY(review_id) REFERENCES dispensary_reviews(id) ON DELETE CASCADE);
   CREATE TABLE IF NOT EXISTS dispensary_owner_assignments(id TEXT PRIMARY KEY,admin_user_id TEXT NOT NULL,location_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',verification_note TEXT,verified_by_admin_id TEXT,verified_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(admin_user_id,location_id));
+  CREATE TABLE IF NOT EXISTS dispensary_owner_claims(
+   id TEXT PRIMARY KEY,
+   location_id TEXT NOT NULL,
+   user_id TEXT NOT NULL,
+   claimant_name TEXT NOT NULL,
+   business_email TEXT,
+   business_phone TEXT,
+   role_title TEXT,
+   business_website TEXT,
+   evidence_text TEXT,
+   status TEXT NOT NULL DEFAULT 'pending',
+   admin_note TEXT,
+   reviewed_by_admin_id TEXT,
+   reviewed_at TEXT,
+   created_at TEXT NOT NULL,
+   updated_at TEXT NOT NULL,
+   UNIQUE(location_id,user_id)
+  );
+  CREATE TABLE IF NOT EXISTS dispensary_user_owner_assignments(
+   id TEXT PRIMARY KEY,
+   user_id TEXT NOT NULL,
+   location_id TEXT NOT NULL,
+   claim_id TEXT,
+   status TEXT NOT NULL DEFAULT 'verified',
+   verified_by_admin_id TEXT,
+   verified_at TEXT NOT NULL,
+   created_at TEXT NOT NULL,
+   updated_at TEXT NOT NULL,
+   UNIQUE(user_id,location_id)
+  );
   CREATE INDEX IF NOT EXISTS dispensary_reviews_location_idx ON dispensary_reviews(location_id,status,created_at DESC);
   CREATE INDEX IF NOT EXISTS dispensary_owner_location_idx ON dispensary_owner_assignments(location_id,status);
+  CREATE INDEX IF NOT EXISTS dispensary_owner_claim_status_idx ON dispensary_owner_claims(status,created_at);
+  CREATE INDEX IF NOT EXISTS dispensary_user_owner_location_idx ON dispensary_user_owner_assignments(location_id,status);
  `);
 }
 function parseJson<T>(value:unknown,fallback:T):T{try{return value?JSON.parse(String(value)) as T:fallback;}catch{return fallback;}}
@@ -31,6 +64,12 @@ export async function addReviewImage(input:{locationId:string;userId:string;byte
 export async function readCommunityImage(file:string){if(!/^[a-f0-9-]+\.(?:jpg|png|webp)$/i.test(file))return null;try{return await fs.readFile(path.join(imageDir,file));}catch{return null;}}
 export function upsertCommunityProfile(locationId:string,input:{overview?:string;phone?:string;website?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>},actor:{type:'admin'|'owner';id:string}){ensureSchema();if(!getLocationBase(locationId))throw new Error('Location not found.');const now=new Date().toISOString();getDatabase().prepare(`INSERT INTO dispensary_profiles(location_id,overview,phone,website,hours_json,amenities_json,social_json,updated_by_type,updated_by_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(location_id) DO UPDATE SET overview=excluded.overview,phone=excluded.phone,website=excluded.website,hours_json=excluded.hours_json,amenities_json=excluded.amenities_json,social_json=excluded.social_json,updated_by_type=excluded.updated_by_type,updated_by_id=excluded.updated_by_id,updated_at=excluded.updated_at`).run(locationId,input.overview?.slice(0,5000)||null,input.phone?.slice(0,80)||null,input.website?.slice(0,500)||null,JSON.stringify(input.hours||{}),JSON.stringify((input.amenities||[]).slice(0,50)),JSON.stringify(input.social||{}),actor.type,actor.id,now);return getCommunityProfile(locationId);}
 export function ownerCanEdit(adminUserId:string,locationId:string){ensureSchema();return Boolean(getDatabase().prepare(`SELECT 1 ok FROM dispensary_owner_assignments WHERE admin_user_id=? AND location_id=? AND status='verified'`).get(adminUserId,locationId));}
+export function userOwnerCanEdit(userId:string,locationId:string){ensureSchema();return Boolean(getDatabase().prepare(`SELECT 1 ok FROM dispensary_user_owner_assignments WHERE user_id=? AND location_id=? AND status='verified'`).get(userId,locationId));}
+export function listUserOwnedLocations(userId:string){ensureSchema();const rows=getDatabase().prepare(`SELECT a.location_id,a.verified_at FROM dispensary_user_owner_assignments a WHERE a.user_id=? AND a.status='verified' ORDER BY a.verified_at DESC`).all(userId) as {location_id:string;verified_at:string}[];return rows.map(row=>({locationId:row.location_id,verifiedAt:row.verified_at,location:getLocationBase(row.location_id),profile:getCommunityProfile(row.location_id)})).filter(row=>row.location);}
 export function assignDispensaryOwner(input:{adminUserId:string;locationId:string;verifiedBy:string;note?:string}){ensureSchema();if(!getLocationBase(input.locationId))throw new Error('Location not found.');const db=getDatabase();const owner=db.prepare(`SELECT id,role FROM admin_users WHERE id=? AND active=1`).get(input.adminUserId) as {id:string;role:string}|undefined;if(!owner)throw new Error('Owner account not found.');const now=new Date().toISOString(),id=`owner-${crypto.randomUUID()}`;db.prepare(`INSERT INTO dispensary_owner_assignments(id,admin_user_id,location_id,status,verification_note,verified_by_admin_id,verified_at,created_at,updated_at) VALUES(?,?,?,'verified',?,?,?,?,?) ON CONFLICT(admin_user_id,location_id) DO UPDATE SET status='verified',verification_note=excluded.verification_note,verified_by_admin_id=excluded.verified_by_admin_id,verified_at=excluded.verified_at,updated_at=excluded.updated_at`).run(id,input.adminUserId,input.locationId,input.note?.slice(0,1000)||null,input.verifiedBy,now,now,now);db.prepare(`UPDATE admin_users SET role='verified_dispensary',updated_at=? WHERE id=?`).run(now,input.adminUserId);return{adminUserId:input.adminUserId,locationId:input.locationId,status:'verified' as const};}
+export function submitOwnerClaim(input:{locationId:string;userId:string;claimantName:string;businessEmail?:string;businessPhone?:string;roleTitle?:string;businessWebsite?:string;evidenceText?:string}){ensureSchema();if(!getLocationBase(input.locationId))throw new Error('Location not found.');const db=getDatabase(),now=new Date().toISOString();const existing=db.prepare('SELECT id,status FROM dispensary_owner_claims WHERE location_id=? AND user_id=?').get(input.locationId,input.userId) as {id:string;status:string}|undefined;if(existing?.status==='approved')throw new Error('You are already verified for this dispensary.');const id=existing?.id||`claim-${crypto.randomUUID()}`;const values=[input.claimantName.trim().slice(0,100),input.businessEmail?.trim().slice(0,180)||null,input.businessPhone?.trim().slice(0,80)||null,input.roleTitle?.trim().slice(0,120)||null,input.businessWebsite?.trim().slice(0,500)||null,input.evidenceText?.trim().slice(0,5000)||null];if(!values[0])throw new Error('Your name is required.');if(!values[1]&&!values[2])throw new Error('Provide a business email or business phone number.');if(existing)db.prepare(`UPDATE dispensary_owner_claims SET claimant_name=?,business_email=?,business_phone=?,role_title=?,business_website=?,evidence_text=?,status='pending',admin_note=NULL,reviewed_by_admin_id=NULL,reviewed_at=NULL,updated_at=? WHERE id=?`).run(...values,now,id);else db.prepare(`INSERT INTO dispensary_owner_claims(id,location_id,user_id,claimant_name,business_email,business_phone,role_title,business_website,evidence_text,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)`).run(id,input.locationId,input.userId,...values,now,now);return{id,status:'pending' as const};}
+export function getOwnerClaimForUser(locationId:string,userId:string){ensureSchema();const row=getDatabase().prepare(`SELECT id,status,admin_note,reviewed_at,created_at,updated_at FROM dispensary_owner_claims WHERE location_id=? AND user_id=?`).get(locationId,userId) as Record<string,unknown>|undefined;return row?{id:String(row.id),status:String(row.status) as OwnerClaimStatus,adminNote:optional(row.admin_note),reviewedAt:optional(row.reviewed_at),createdAt:String(row.created_at),updatedAt:String(row.updated_at)}:null;}
+export function listOwnerClaims(status?:OwnerClaimStatus){ensureSchema();const db=getDatabase();const rows=(status?db.prepare(`SELECT c.*,u.display_name,u.username,u.email,u.yerbas_address FROM dispensary_owner_claims c JOIN users u ON u.id=c.user_id WHERE c.status=? ORDER BY c.created_at ASC`).all(status):db.prepare(`SELECT c.*,u.display_name,u.username,u.email,u.yerbas_address FROM dispensary_owner_claims c JOIN users u ON u.id=c.user_id ORDER BY CASE c.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,c.updated_at DESC`).all()) as Record<string,unknown>[];return rows.map(row=>({...row,location:getLocationBase(String(row.location_id))}));}
+export function moderateOwnerClaim(input:{claimId:string;status:'approved'|'rejected';adminId:string;note?:string}){ensureSchema();const db=getDatabase();const claim=db.prepare(`SELECT id,user_id,location_id,status FROM dispensary_owner_claims WHERE id=?`).get(input.claimId) as {id:string;user_id:string;location_id:string;status:string}|undefined;if(!claim)throw new Error('Claim not found.');const now=new Date().toISOString();db.exec('BEGIN IMMEDIATE');try{db.prepare(`UPDATE dispensary_owner_claims SET status=?,admin_note=?,reviewed_by_admin_id=?,reviewed_at=?,updated_at=? WHERE id=?`).run(input.status,input.note?.slice(0,2000)||null,input.adminId,now,now,input.claimId);if(input.status==='approved'){const assignmentId=`user-owner-${crypto.randomUUID()}`;db.prepare(`INSERT INTO dispensary_user_owner_assignments(id,user_id,location_id,claim_id,status,verified_by_admin_id,verified_at,created_at,updated_at) VALUES(?,?,?,?, 'verified',?,?,?,?) ON CONFLICT(user_id,location_id) DO UPDATE SET claim_id=excluded.claim_id,status='verified',verified_by_admin_id=excluded.verified_by_admin_id,verified_at=excluded.verified_at,updated_at=excluded.updated_at`).run(assignmentId,claim.user_id,claim.location_id,claim.id,input.adminId,now,now,now);}else{db.prepare(`UPDATE dispensary_user_owner_assignments SET status='revoked',updated_at=? WHERE user_id=? AND location_id=?`).run(now,claim.user_id,claim.location_id);}db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}return{claimId:input.claimId,status:input.status,userId:claim.user_id,locationId:claim.location_id};}
 export function listPendingReviews(){ensureSchema();return getDatabase().prepare(`SELECT r.*,l.image_path FROM dispensary_reviews r LEFT JOIN dispensary_review_images l ON l.review_id=r.id WHERE r.status='pending' ORDER BY r.created_at ASC`).all();}
 export function moderateReview(reviewId:string,status:'approved'|'rejected'){ensureSchema();const db=getDatabase(),now=new Date().toISOString();db.prepare('UPDATE dispensary_reviews SET status=?,updated_at=? WHERE id=?').run(status,now,reviewId);db.prepare('UPDATE dispensary_review_images SET status=? WHERE review_id=?').run(status,reviewId);return{reviewId,status};}
