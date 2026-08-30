@@ -7,14 +7,20 @@ import { getDatabase } from '@/lib/sqlite';
 export const runtime='nodejs';
 
 function cleanPermissions(value:unknown,role:string):AdminPermission[]{
-  if(normalizeAdminRole(role)==='admin')return [...ROLE_PERMISSIONS.admin];
-  if(!Array.isArray(value))return [...ROLE_PERMISSIONS.moderator];
+  const normalized=normalizeAdminRole(role);
+  if(normalized==='admin')return [...ROLE_PERMISSIONS.admin];
+  if(!Array.isArray(value))return [...ROLE_PERMISSIONS[normalized]];
   return value.filter((item):item is AdminPermission=>typeof item==='string'&&ADMIN_PERMISSIONS.includes(item as AdminPermission));
+}
+
+function parsePermissions(value:string|null){
+  if(!value)return null;
+  try{return JSON.parse(value);}catch{return null;}
 }
 
 function listStaff(){
   const rows=getDatabase().prepare(`SELECT id,username,display_name,role,permissions_json,active,last_login_at,created_at,updated_at FROM admin_users ORDER BY active DESC, role, username COLLATE NOCASE`).all() as any[];
-  return rows.map(row=>({id:row.id,username:row.username,displayName:row.display_name||'',role:normalizeAdminRole(row.role),permissions:cleanPermissions(row.permissions_json?JSON.parse(row.permissions_json):null,row.role),active:Boolean(row.active),lastLoginAt:row.last_login_at,createdAt:row.created_at,updatedAt:row.updated_at}));
+  return rows.map(row=>({id:row.id,username:row.username,displayName:row.display_name||'',role:normalizeAdminRole(row.role),permissions:cleanPermissions(parsePermissions(row.permissions_json),row.role),active:Boolean(row.active),lastLoginAt:row.last_login_at,createdAt:row.created_at,updatedAt:row.updated_at}));
 }
 
 export async function GET(request:NextRequest){
@@ -39,7 +45,7 @@ export async function PATCH(request:NextRequest){
   const nextRole=body.role===undefined?normalizeAdminRole(existing.role):normalizeAdminRole(body.role),nextActive=body.active===undefined?Boolean(existing.active):Boolean(body.active);
   if(normalizeAdminRole(existing.role)==='admin'&&Boolean(existing.active)&&(!nextActive||nextRole!=='admin')){const activeAdmins=(db.prepare("SELECT COUNT(*) AS count FROM admin_users WHERE active=1 AND role='admin'").get() as any).count;if(Number(activeAdmins)<=1)return NextResponse.json({error:'GeoWeedo must keep at least one active administrator.'},{status:400});}
   if(id===admin.id&&!nextActive)return NextResponse.json({error:'You cannot deactivate your own staff account.'},{status:400});
-  const current=db.prepare('SELECT permissions_json,display_name FROM admin_users WHERE id=?').get(id) as any;const permissions=cleanPermissions(body.permissions===undefined?(current.permissions_json?JSON.parse(current.permissions_json):null):body.permissions,nextRole),now=new Date().toISOString();
+  const current=db.prepare('SELECT permissions_json,display_name FROM admin_users WHERE id=?').get(id) as any;const permissions=cleanPermissions(body.permissions===undefined?parsePermissions(current.permissions_json):body.permissions,nextRole),now=new Date().toISOString();
   db.prepare('UPDATE admin_users SET display_name=?, role=?, permissions_json=?, active=?, updated_at=? WHERE id=?').run(body.displayName===undefined?current.display_name:String(body.displayName||'').trim()||null,nextRole,JSON.stringify(nextRole==='admin'?[]:permissions),nextActive?1:0,now,id);
   if(typeof body.password==='string'&&body.password){if(body.password.length<12)return NextResponse.json({error:'Staff passwords must be at least 12 characters.'},{status:400});db.prepare('UPDATE admin_users SET password_hash=?, updated_at=? WHERE id=?').run(hashAdminPassword(body.password),now,id);db.prepare('UPDATE admin_sessions SET revoked_at=? WHERE admin_user_id=? AND revoked_at IS NULL').run(now,id);}
   return NextResponse.json({staff:listStaff()});
