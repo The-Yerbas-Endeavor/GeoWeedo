@@ -13,7 +13,7 @@ fi
 
 echo "==> Installing GeoWeedo dependencies"
 apt-get update
-apt-get install -y git curl build-essential nginx sqlite3 ca-certificates openssl
+apt-get install -y git curl build-essential nginx sqlite3 ca-certificates openssl rsync
 
 if ! command -v sqlite3 >/dev/null 2>&1; then
   echo "SQLite CLI installation failed; sqlite3 is required."
@@ -109,6 +109,27 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 EOF
 
+cat >/etc/systemd/system/geoweedo@.service <<EOF
+[Unit]
+Description=GeoWeedo Next.js (%i slot)
+After=network.target
+
+[Service]
+Type=simple
+User=$APP_USER
+WorkingDirectory=$APP_HOME/GeoWeedo-%i
+EnvironmentFile=$APP_HOME/GeoWeedo-shared/.env.local
+Environment=NODE_ENV=production
+ExecStart=/bin/bash -lc 'case "%i" in blue) export PORT=3000 ;; green) export PORT=3001 ;; *) exit 64 ;; esac; exec /usr/bin/npm start'
+Restart=always
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 cat >/etc/systemd/system/geoweedo-wallet-worker.service <<EOF
 [Unit]
 Description=GeoWeedo restricted YERB wallet worker
@@ -118,6 +139,7 @@ After=network.target geoweedo.service
 Type=oneshot
 User=$APP_USER
 WorkingDirectory=$APP_DIR
+EnvironmentFile=$APP_DIR/.env.local
 ExecStart=/usr/bin/npm run wallet:worker
 PrivateTmp=true
 NoNewPrivileges=true
@@ -175,4 +197,5 @@ echo "Database: $APP_DIR/data/runtime/geoweedo.sqlite"
 echo "Admin login: https://$DOMAIN/admin/login"
 echo "App status: systemctl status geoweedo --no-pager"
 echo "Wallet timer: systemctl status geoweedo-wallet-worker.timer --no-pager"
+echo "Blue/green unit template: systemctl status geoweedo@green --no-pager"
 echo "Withdrawals remain disabled until YERB_WITHDRAWALS_ENABLED=true is set in .env.local."
