@@ -71,12 +71,45 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
       imagery_count,imagery_checked_at,imagery_message,created_at,updated_at
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
+  const findByFingerprint = db.prepare('SELECT * FROM dispensary_candidates WHERE fingerprint = ? LIMIT 1');
+  const refreshExisting = db.prepare(`
+    UPDATE dispensary_candidates SET
+      street_address=COALESCE(?,street_address),
+      city=COALESCE(?,city),
+      region=COALESCE(?,region),
+      country=COALESCE(?,country),
+      latitude=COALESCE(?,latitude),
+      longitude=COALESCE(?,longitude),
+      website=COALESCE(?,website),
+      license_number=COALESCE(?,license_number),
+      data_source=?,source_url=COALESCE(?,source_url),source_license=COALESCE(?,source_license),
+      imagery_status=CASE WHEN ? = 1 AND (latitude IS NULL OR longitude IS NULL) THEN 'unchecked' ELSE imagery_status END,
+      updated_at=? WHERE id=?
+  `);
 
   let added = 0;
+  let updated = 0;
+  let coordinatesUpdated = 0;
   for (const row of rows) {
     if (!row.name?.trim()) continue;
+    const fp = fingerprint(row);
+    const existingRow = findByFingerprint.get(fp) as Record<string, unknown> | undefined;
+    if (existingRow) {
+      const hadCoordinates = Number.isFinite(existingRow.latitude) && Number.isFinite(existingRow.longitude);
+      const hasIncomingCoordinates = Number.isFinite(row.latitude) && Number.isFinite(row.longitude);
+      const result = refreshExisting.run(
+        row.streetAddress ?? null, row.city ?? null, row.region ?? null, row.country ?? null,
+        hasIncomingCoordinates ? row.latitude : null, hasIncomingCoordinates ? row.longitude : null,
+        row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
+        row.sourceLicense ?? null, hasIncomingCoordinates ? 1 : 0, now, String(existingRow.id),
+      );
+      updated += Number(result.changes);
+      if (!hadCoordinates && hasIncomingCoordinates) coordinatesUpdated++;
+      continue;
+    }
+
     const result = insert.run(
-      `candidate-${crypto.randomUUID()}`, fingerprint(row), row.name.trim(), row.streetAddress ?? null,
+      `candidate-${crypto.randomUUID()}`, fp, row.name.trim(), row.streetAddress ?? null,
       row.city ?? null, row.region ?? null, row.country ?? null, row.latitude ?? null, row.longitude ?? null,
       row.website ?? null, row.licenseNumber ?? null, row.dataSource, row.sourceUrl ?? null,
       row.sourceLicense ?? null, 'candidate', row.imageryStatus || 'unchecked', row.imageryCount ?? null,
@@ -86,7 +119,7 @@ export async function importCandidates(rows: Omit<DispensaryCandidate, 'id' | 's
   }
 
   const count = db.prepare('SELECT COUNT(*) AS count FROM dispensary_candidates').get() as { count: number } | undefined;
-  return { added, total: Number(count?.count ?? 0) };
+  return { added, updated, coordinatesUpdated, total: Number(count?.count ?? 0) };
 }
 
 export async function updateCandidate(id: string, patch: Partial<DispensaryCandidate>) {
