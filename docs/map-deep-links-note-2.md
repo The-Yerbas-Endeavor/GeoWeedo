@@ -1,0 +1,1 @@
+Profile address navigation remains inside GeoWeedo and focuses the matching dispensary on the homepage map.
