@@ -3,7 +3,10 @@ import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { fetchAlaskaCandidates } from '@/lib/officialSources/alaska';
 import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
+import { fetchDelawareCandidates } from '@/lib/officialSources/delaware';
 import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
+import { fetchMaineCandidates } from '@/lib/officialSources/maine';
+import { fetchMarylandCandidates } from '@/lib/officialSources/maryland';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
 
 export const runtime = 'nodejs';
@@ -37,7 +40,7 @@ function browserHeaders(){return {Accept:'text/html,application/xhtml+xml,applic
 
 async function getJson(url:string){
   let response:Response;
-  try{response=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){const host=(()=>{try{return new URL(url).host;}catch{return url;}})();throw new Error(`Could not connect to official data source ${host}: ${error instanceof Error?error.message:String(error)}`);}
+  try{response=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.5 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){const host=(()=>{try{return new URL(url).host;}catch{return url;}})();throw new Error(`Could not connect to official data source ${host}: ${error instanceof Error?error.message:String(error)}`);}
   if(!response.ok){const detail=(await response.text().catch(()=>''))?.slice(0,180).replace(/\s+/g,' ').trim();throw new Error(`Official data source ${new URL(url).host} returned ${response.status}${detail?`: ${detail}`:''}`);}
   try{return await response.json();}catch{throw new Error(`Official data source ${new URL(url).host} returned invalid JSON.`);}
 }
@@ -115,23 +118,9 @@ async function fetchNewYork():Promise<CandidateRow[]>{
     const address2=pick(r,['addressline2']);
     const streetAddress=[address1,address2].filter(Boolean).join(', ')||undefined;
     const name=pick(r,['dba','entityname'])||`New York Cannabis Retailer ${pick(r,['licensenumber','locationid'])}`;
-    return{
-      name,
-      streetAddress,
-      city:pick(r,['city'])||undefined,
-      region:'New York',
-      country:'USA',
-      website:pick(r,['businesswebsite'])||undefined,
-      licenseNumber:pick(r,['licensenumber'])||undefined,
-      dataSource:'New York OCM Current Licenses',
-      sourceUrl,
-      sourceLicense:'Official New York Office of Cannabis Management Current OCM Licenses dataset; retail-dispensary records using the published operating-address schema.',
-      imageryStatus:'missing_coordinates' as const,
-    };
+    return{name,streetAddress,city:pick(r,['city'])||undefined,region:'New York',country:'USA',website:pick(r,['businesswebsite'])||undefined,licenseNumber:pick(r,['licensenumber'])||undefined,dataSource:'New York OCM Current Licenses',sourceUrl,sourceLicense:'Official New York Office of Cannabis Management Current OCM Licenses dataset; retail-dispensary records using the published operating-address schema.',imageryStatus:'missing_coordinates' as const};
   }).filter(Boolean).filter((r:any)=>r.name) as CandidateRow[];
-  const unique=new Map<string,CandidateRow>();
-  for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}
-  return Array.from(unique.values());
+  const unique=new Map<string,CandidateRow>();for(const row of rows){const id=row.licenseNumber||`${row.name}|${row.streetAddress||''}|${row.city||''}`;if(!unique.has(id))unique.set(id,row);}return Array.from(unique.values());
 }
 
 async function fetchMontana():Promise<CandidateRow[]>{
@@ -139,6 +128,9 @@ async function fetchMontana():Promise<CandidateRow[]>{
 }
 
 async function fetchAlaska():Promise<CandidateRow[]>{return fetchAlaskaCandidates() as Promise<CandidateRow[]>;}
+async function fetchDelaware():Promise<CandidateRow[]>{return fetchDelawareCandidates() as Promise<CandidateRow[]>;}
+async function fetchMaine():Promise<CandidateRow[]>{return fetchMaineCandidates() as Promise<CandidateRow[]>;}
+async function fetchMaryland():Promise<CandidateRow[]>{return fetchMarylandCandidates() as Promise<CandidateRow[]>;}
 async function fetchVirginia():Promise<CandidateRow[]>{return fetchVirginiaCandidates() as Promise<CandidateRow[]>;}
 
 const officialSources=[
@@ -154,6 +146,9 @@ const officialSources=[
   {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
   {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
   {preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginia},
+  {preset:'delaware-omc',label:'Delaware OMC',fetcher:fetchDelaware},
+  {preset:'maine-ocp',label:'Maine OCP',fetcher:fetchMaine},
+  {preset:'maryland-mca',label:'Maryland MCA',fetcher:fetchMaryland},
 ] as const;
 
 async function syncSource(source:(typeof officialSources)[number]):Promise<SyncDetail>{
@@ -164,14 +159,10 @@ export async function POST(request:NextRequest){
   if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
   const body=await request.json().catch(()=>null);const preset=String(body?.preset||'');
   if(preset==='all'){
-    const details:SyncDetail[]=[];
-    for(const source of officialSources)details.push(await syncSource(source));
+    const details:SyncDetail[]=[];for(const source of officialSources)details.push(await syncSource(source));
     const successful=details.filter(d=>d.ok),failed=details.filter(d=>!d.ok);
     return NextResponse.json({added:successful.reduce((s,d)=>s+d.added,0),fetched:successful.reduce((s,d)=>s+d.fetched,0),geocoded:successful.reduce((s,d)=>s+d.geocoded,0),total:successful.reduce((m,d)=>Math.max(m,d.total||0),0),details,failed:failed.length,succeeded:successful.length,source:'Official multi-state sync'},{status:successful.length?201:502});
   }
-  const source=officialSources.find(item=>item.preset===preset);
-  if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400});
-  const detail=await syncSource(source);
-  if(!detail.ok)return NextResponse.json({error:detail.error,details:[detail]},{status:502});
-  return NextResponse.json({...detail,source:source.label},{status:201});
+  const source=officialSources.find(item=>item.preset===preset);if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400});
+  const detail=await syncSource(source);if(!detail.ok)return NextResponse.json({error:detail.error,details:[detail]},{status:502});return NextResponse.json({...detail,source:source.label},{status:201});
 }
