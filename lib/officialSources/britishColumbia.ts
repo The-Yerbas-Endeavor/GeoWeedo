@@ -21,7 +21,7 @@ const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
 const MAP_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map';
 const MAP_JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map-json';
 const DATA_SOURCE = 'British Columbia LCRB Cannabis Retail Stores';
-const FEED_TIMEOUT_MS = 20000;
+const FEED_TIMEOUT_MS = 12000;
 
 function text(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -129,8 +129,6 @@ function quarantineStaleLegacyRows(currentRows: Row[]) {
   const update = db.prepare(`UPDATE dispensary_candidates SET status='rejected', imagery_status='missing_coordinates', imagery_message=?, updated_at=? WHERE id=?`);
   const now = new Date().toISOString();
 
-  // Node's built-in DatabaseSync API does not expose better-sqlite3's transaction() helper.
-  // Use an explicit transaction so all stale legacy rows are quarantined atomically.
   db.exec('BEGIN IMMEDIATE');
   try {
     for (const item of stale) {
@@ -145,14 +143,22 @@ function quarantineStaleLegacyRows(currentRows: Row[]) {
 }
 
 export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
-  const attempts = await Promise.allSettled([fetchOfficialMapRows(MAP_SOURCE), fetchOfficialMapRows(MAP_JSON_SOURCE)]);
-  const fulfilled = attempts.find((result): result is PromiseFulfilledResult<Record<string, unknown>[]> => result.status === 'fulfilled');
-  if (!fulfilled) {
-    const reasons = attempts.map(result => result.status === 'rejected' ? (result.reason instanceof Error ? result.reason.message : String(result.reason)) : '').filter(Boolean).join(' ; ');
+  let sourceRows: Record<string, unknown>[];
+  try {
+    // Both endpoints expose the same official cannabis-map dataset. Return as
+    // soon as either succeeds instead of waiting for a stalled mirror.
+    sourceRows = await Promise.any([
+      fetchOfficialMapRows(MAP_SOURCE),
+      fetchOfficialMapRows(MAP_JSON_SOURCE),
+    ]);
+  } catch (error) {
+    const reasons = error instanceof AggregateError
+      ? error.errors.map(item => item instanceof Error ? item.message : String(item)).join(' ; ')
+      : error instanceof Error ? error.message : String(error);
     throw new Error(`British Columbia LCRB cannabis map feeds were unavailable: ${reasons}`);
   }
 
-  const rows = toRows(fulfilled.value);
+  const rows = toRows(sourceRows);
   const unique = new Map(rows.map(row => [row.licenseNumber, row]));
   if (unique.size < 300) {
     throw new Error(`British Columbia LCRB cannabis map returned only ${unique.size} valid retail stores; refusing a suspiciously incomplete import.`);

@@ -16,6 +16,8 @@ type Source = {
   description: string;
 };
 
+type JsonRecord = Record<string, any>;
+
 const sources: Source[] = [
   {
     preset: 'british-columbia-lcrb',
@@ -52,6 +54,35 @@ const sources: Source[] = [
   },
 ];
 
+async function readApiResponse(response: Response): Promise<JsonRecord> {
+  const body = await response.text();
+  if (!body.trim()) return {};
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(body) as JsonRecord;
+    } catch {
+      throw new Error(`GeoWeedo API returned malformed JSON (HTTP ${response.status}).`);
+    }
+  }
+
+  const plain = body
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const detail = plain.slice(0, 300);
+  throw new Error(
+    detail
+      ? `GeoWeedo API returned HTTP ${response.status} instead of JSON: ${detail}`
+      : `GeoWeedo API returned HTTP ${response.status} instead of JSON.`,
+  );
+}
+
 export default function ExpandedOfficialSourceControls() {
   const [busy, setBusy] = useState<Preset | null>(null);
   const [status, setStatus] = useState('');
@@ -63,7 +94,7 @@ export default function ExpandedOfficialSourceControls() {
     try {
       const response = await fetch('/api/admin/candidates/fetch-official', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ preset: source.preset }),
       });
 
@@ -72,8 +103,8 @@ export default function ExpandedOfficialSourceControls() {
         return;
       }
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `${source.label} fetch failed.`);
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || data.message || `${source.label} fetch failed.`);
 
       setStatus(
         `${source.label}: ${data.fetched || 0} fetched · ${data.added || 0} newly imported · ${Math.max(
