@@ -3,6 +3,7 @@ import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
+import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
 
 export const runtime = 'nodejs';
 
@@ -133,8 +134,10 @@ async function fetchNewYork():Promise<CandidateRow[]>{
 }
 
 async function fetchMontana():Promise<CandidateRow[]>{
-  const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations';const html=await getHtml(sourceUrl,'Montana DOR');const rows:CandidateRow[]=[];const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi;let m:RegExpExecArray|null;while((m=tr.exec(html))!==null){const cells:string[]=[];const cellRegex=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;let cellMatch:RegExpExecArray|null;while((cellMatch=cellRegex.exec(m[1]))!==null){cells.push(cellMatch[1].replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim());}if(cells.length<3||/licensee.?s name/i.test(cells[0]))continue;const city=cells[1],name=cells[2]||cells[0];if(!name||!city)continue;rows.push({name,city,region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue licensed dispensary list.',imageryStatus:'missing_coordinates'});}return rows;
+  const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations';const html=await getHtml(sourceUrl,'Montana DOR');const rows:CandidateRow[]=[];const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi;let m:RegExpExecArray|null;while((m=tr.exec(html))!==null){const cells:string[]=[];const cellRegex=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;let cellMatch:RegExpExecArray|null;while((cellMatch=cellRegex.exec(m[1]))!==null){cells.push(cellMatch[1].replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim());}if(cells.length<3||/licensee.?s name/i.test(cells[0]))continue;const city=cells[1],name=cells[2]||cells[0];if(!name||!city)continue;rows.push({name,city,region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue licensed dispensary list; official feed supplies city/location name but not street address.',imageryStatus:'missing_coordinates'});}return rows;
 }
+
+async function fetchVirginia():Promise<CandidateRow[]>{return fetchVirginiaCandidates() as Promise<CandidateRow[]>;}
 
 const officialSources=[
   {preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},
@@ -147,6 +150,7 @@ const officialSources=[
   {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticut},
   {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
   {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
+  {preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginia},
 ] as const;
 
 async function syncSource(source:(typeof officialSources)[number]):Promise<SyncDetail>{
