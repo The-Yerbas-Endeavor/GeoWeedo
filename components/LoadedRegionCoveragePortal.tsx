@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type RegionStat={region:string;total:number;mapped:number};
+type RegionStat={region:string;country:string;total:number;mapped:number};
 
 export default function LoadedRegionCoveragePortal(){
   const [regions,setRegions]=useState<RegionStat[]>([]);
@@ -16,22 +16,38 @@ export default function LoadedRegionCoveragePortal(){
       .then(data=>{if(!cancelled)setRegions(Array.isArray(data.regions)?data.regions:[]);})
       .catch(()=>{});
     void load();
+    const onUpdate=()=>void load();
+    window.addEventListener('geoweedo-candidates-updated',onUpdate);
     const observer=new MutationObserver(()=>setTarget(document.querySelector('.map-browser-list')));
     observer.observe(document.body,{childList:true,subtree:true});
     setTarget(document.querySelector('.map-browser-list'));
-    return()=>{cancelled=true;observer.disconnect();};
+    return()=>{cancelled=true;window.removeEventListener('geoweedo-candidates-updated',onUpdate);observer.disconnect();};
   },[]);
 
-  const unmapped=useMemo(()=>regions.filter(item=>item.total>0&&item.mapped===0),[regions]);
-  if(!target||unmapped.length===0)return null;
+  const grouped=useMemo(()=>{
+    const unmapped=regions.filter(item=>item.total>0&&item.mapped===0);
+    const map=new Map<string,RegionStat[]>();
+    for(const item of unmapped){
+      const country=item.country||'USA';
+      const rows=map.get(country)||[];
+      rows.push(item);
+      map.set(country,rows);
+    }
+    return Array.from(map.entries()).sort(([a],[b])=>a.localeCompare(b));
+  },[regions]);
+
+  if(!target||grouped.length===0)return null;
 
   return createPortal(<div className="map-browser-loaded-coverage" style={{borderTop:'1px solid var(--line)'}}>
     <div style={{padding:'10px 12px',fontSize:11,fontWeight:800,letterSpacing:'.08em',color:'var(--muted)'}}>LOADED · AWAITING COORDINATES</div>
-    {unmapped.map(item=>{const missing=item.total;return <section className="map-browser-state" key={`coverage-${item.region}`}>
-      <div className="map-browser-state-head" style={{cursor:'default'}}>
-        <span><strong><i style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:'#8d9690',marginRight:7}}/>{item.region}</strong><small>{item.total.toLocaleString()} loaded · 0 mapped · {missing.toLocaleString()} need coordinates</small></span>
-        <b title="No map movement until coordinates are available">○</b>
-      </div>
-    </section>;})}
+    {grouped.map(([country,items])=><div key={country}>
+      <div style={{padding:'8px 12px 5px',fontSize:10,fontWeight:900,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--muted)'}}>{country}</div>
+      {items.map(item=>{const missing=item.total;return <section className="map-browser-state" key={`coverage-${country}-${item.region}`}>
+        <div className="map-browser-state-head" style={{cursor:'default'}}>
+          <span><strong><i style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:'#8d9690',marginRight:7}}/>{item.region}</strong><small>{item.total.toLocaleString()} loaded · 0 mapped · {missing.toLocaleString()} need coordinates</small></span>
+          <b title="No map movement until coordinates are available">○</b>
+        </div>
+      </section>;})}
+    </div>)}
   </div>,target);
 }
