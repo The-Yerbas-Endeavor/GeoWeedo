@@ -63,8 +63,11 @@ export async function GET() {
   }
 
   const regions = Array.from(regionMap.values()).sort((a, b) => a.country.localeCompare(b.country) || a.region.localeCompare(b.region));
-  for (const country of countryMap.values()) country.regions = regions.filter((region) => region.country === country.country).length;
-  const countries = Array.from(countryMap.values()).sort((a, b) => a.country.localeCompare(b.country));
+  const countryRows = Array.from(countryMap.values());
+  for (const country of countryRows) {
+    country.regions = regions.filter((region) => region.country === country.country).length;
+  }
+  const countries = countryRows.sort((a, b) => a.country.localeCompare(b.country));
 
   return NextResponse.json({
     candidates,
