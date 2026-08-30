@@ -86,14 +86,14 @@ export function recordAnalyticsEvent(input:{
  }
  database.prepare(`INSERT INTO analytics_events(id,session_id,visitor_id,user_id,event_type,path,duration_ms,properties_json,created_at) VALUES(?,?,?,?,?,?,?,?,?)`)
   .run(randomUUID(),input.sessionId,input.visitorId,input.userId||null,input.eventType,input.path||null,input.durationMs||null,input.properties?JSON.stringify(input.properties):null,now);
- if(input.eventType==='page_leave'||input.eventType==='session_end')database.prepare('UPDATE analytics_sessions SET ended_at=?,last_seen_at=? WHERE id=?').run(now,now,input.sessionId);
+ if(input.eventType==='session_end')database.prepare('UPDATE analytics_sessions SET ended_at=?,last_seen_at=? WHERE id=?').run(now,now,input.sessionId);
 }
 
 export function analyticsSummary(days=30){
  const database=getAnalyticsDb();
  const since=new Date(Date.now()-Math.max(1,days)*86400000).toISOString();
  const oneMinuteAgo=new Date(Date.now()-60000).toISOString();
- const scalar=(sql:string,...params:unknown[])=>Number((database.prepare(sql).get(...params) as Record<string,unknown>|undefined)?.value||0);
+ const scalar=(sql:string,...params:any[])=>Number((database.prepare(sql).get(...params) as Record<string,unknown>|undefined)?.value||0);
  const totals={
   visitors:scalar('SELECT COUNT(DISTINCT visitor_id) value FROM analytics_sessions WHERE started_at>=?',since),
   sessions:scalar('SELECT COUNT(*) value FROM analytics_sessions WHERE started_at>=?',since),
