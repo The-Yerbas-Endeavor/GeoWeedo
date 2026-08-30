@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { getDatabase } from '@/lib/sqlite';
+
 type Row = {
   name: string;
   streetAddress: string;
@@ -16,22 +18,13 @@ type Row = {
 };
 
 const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
-const CSV_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-csv';
-const JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-json';
+const MAP_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map';
+const MAP_JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map-json';
 const FEED_TIMEOUT_MS = 20000;
+const DATA_SOURCE = 'British Columbia LCRB Cannabis Retail Stores';
 
 function text(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
-}
-
-function bool(value: unknown) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  const normalized = text(value).toLowerCase();
-  if (!normalized) return undefined;
-  if (['true', '1', 'yes', 'open'].includes(normalized)) return true;
-  if (['false', '0', 'no', 'closed', 'coming soon'].includes(normalized)) return false;
-  return undefined;
 }
 
 function number(value: unknown) {
@@ -40,15 +33,15 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function validBritishColumbiaCoordinates(latitude?: number, longitude?: number) {
-  return latitude !== undefined && longitude !== undefined && latitude >= 48.2 && latitude <= 60.1 && longitude >= -139.1 && longitude <= -113.8;
+function normalizeHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function asArray(payload: unknown): Record<string, unknown>[] {
   if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
   if (!payload || typeof payload !== 'object') return [];
   const object = payload as Record<string, unknown>;
-  for (const key of ['data', 'results', 'items', 'establishments', 'licenseeRetailStores', 'lrsData']) {
+  for (const key of ['data', 'results', 'items', 'establishments']) {
     if (Array.isArray(object[key])) return (object[key] as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
   }
   return [];
@@ -62,44 +55,8 @@ function pick(item: Record<string, unknown>, ...keys: string[]) {
   return '';
 }
 
-function normalizeHeader(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function parseCsvLine(line: string) {
-  const cells: string[] = [];
-  let current = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (quoted && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (ch === ',' && !quoted) {
-      cells.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  cells.push(current.trim());
-  return cells;
-}
-
-function parseCsv(csv: string) {
-  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return [];
-  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
-  return lines.slice(1).map((line) => {
-    const cells = parseCsvLine(line);
-    const row: Record<string, unknown> = {};
-    headers.forEach((header, index) => { row[header] = cells[index] ?? ''; });
-    return row;
-  });
+function validBritishColumbiaCoordinates(latitude?: number, longitude?: number) {
+  return latitude !== undefined && longitude !== undefined && latitude >= 48.2 && latitude <= 60.1 && longitude >= -139.1 && longitude <= -113.8;
 }
 
 function toRows(sourceRows: Record<string, unknown>[]) {
@@ -112,12 +69,10 @@ function toRows(sourceRows: Record<string, unknown>[]) {
     const name = pick(item, 'name', 'establishmentname', 'businessname');
     const streetAddress = pick(item, 'addressstreet', 'streetaddress', 'address');
     const city = pick(item, 'addresscity', 'city');
-    const open = bool(item.isopen ?? item.open ?? item.status);
-    const latitude = number(item.latitude ?? item.lat);
-    const longitude = number(item.longitude ?? item.lng ?? item.lon);
+    const latitude = number(item.latitude ?? item.lat ?? item.y);
+    const longitude = number(item.longitude ?? item.lng ?? item.lon ?? item.x);
     const hasCoordinates = validBritishColumbiaCoordinates(latitude, longitude);
 
-    if (open === false) continue;
     if (!licenseNumber || !name || !streetAddress || !city) continue;
 
     rows.push({
@@ -129,20 +84,19 @@ function toRows(sourceRows: Record<string, unknown>[]) {
       latitude: hasCoordinates ? latitude : undefined,
       longitude: hasCoordinates ? longitude : undefined,
       licenseNumber,
-      dataSource: 'British Columbia LCRB Cannabis Retail Stores',
+      dataSource: DATA_SOURCE,
       sourceUrl: SOURCE,
-      sourceLicense:
-        'Official Government of British Columbia Liquor and Cannabis Regulation Branch licensed cannabis retail store feed; open stores only.',
+      sourceLicense: 'Official Government of British Columbia LCRB Map of Cannabis Retail Stores in B.C.; private non-medical cannabis retail stores only.',
       imageryStatus: hasCoordinates ? 'unchecked' : 'missing_coordinates',
     });
   }
   return rows;
 }
 
-async function fetchWithTimeout(url: string, accept: string) {
-  return fetch(url, {
+async function fetchOfficialMapRows(url: string) {
+  const response = await fetch(url, {
     headers: {
-      Accept: accept,
+      Accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
       'User-Agent': 'GeoWeedo/0.8 (https://geoweedo.com)',
       'Accept-Language': 'en-CA,en;q=0.9',
       Referer: SOURCE,
@@ -150,56 +104,48 @@ async function fetchWithTimeout(url: string, accept: string) {
     cache: 'no-store',
     signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
   });
-}
-
-async function fetchCsvRows() {
-  const response = await fetchWithTimeout(CSV_SOURCE, 'text/csv,text/plain;q=0.9,*/*;q=0.8');
-  if (!response.ok) throw new Error(`CSV feed returned ${response.status}`);
+  if (!response.ok) throw new Error(`${new URL(url).pathname} returned ${response.status}`);
   const body = await response.text();
-  if (/^\s*</.test(body)) throw new Error('CSV endpoint returned HTML instead of CSV');
-  const rows = parseCsv(body);
-  if (!rows.length) throw new Error('CSV feed returned no rows');
-  return rows;
-}
-
-async function fetchJsonRows() {
-  const response = await fetchWithTimeout(JSON_SOURCE, 'application/json,text/plain;q=0.9,*/*;q=0.8');
-  if (!response.ok) throw new Error(`JSON feed returned ${response.status}`);
-  const body = await response.text();
-  if (/^\s*</.test(body)) throw new Error('JSON endpoint returned HTML instead of JSON');
+  if (/^\s*</.test(body)) throw new Error(`${new URL(url).pathname} returned HTML instead of JSON`);
   let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    throw new Error(`JSON endpoint returned invalid JSON (${response.headers.get('content-type') || 'unknown content type'})`);
-  }
+  try { payload = JSON.parse(body); }
+  catch { throw new Error(`${new URL(url).pathname} returned invalid JSON`); }
   const rows = asArray(payload);
-  if (!rows.length) throw new Error('JSON feed returned no rows');
+  if (!rows.length) throw new Error(`${new URL(url).pathname} returned no records`);
   return rows;
+}
+
+function quarantineStaleLegacyRows(currentRows: Row[]) {
+  const currentLicenses = new Set(currentRows.map(row => row.licenseNumber?.trim().toLowerCase()).filter(Boolean));
+  if (!currentLicenses.size) return 0;
+  const db = getDatabase();
+  const existing = db.prepare(`SELECT id, license_number FROM dispensary_candidates WHERE data_source = ? AND country = 'Canada' AND region = 'British Columbia' AND status != 'rejected'`).all(DATA_SOURCE) as {id:string;license_number?:string|null}[];
+  const stale = existing.filter(row => !row.license_number || !currentLicenses.has(String(row.license_number).trim().toLowerCase()));
+  if (!stale.length) return 0;
+  const update = db.prepare(`UPDATE dispensary_candidates SET status='rejected', imagery_status='missing_coordinates', imagery_message=?, updated_at=? WHERE id=?`);
+  const now = new Date().toISOString();
+  const transaction = db.transaction((items: typeof stale) => {
+    for (const item of items) update.run('Quarantined after GeoWeedo corrected the B.C. source from the LRS liquor-store export to the official Cannabis Retail Stores map.', now, item.id);
+  });
+  transaction(stale);
+  return stale.length;
 }
 
 export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
-  const [jsonResult, csvResult] = await Promise.allSettled([fetchJsonRows(), fetchCsvRows()]);
-  let sourceRows: Record<string, unknown>[] = [];
-
-  // Prefer JSON because the official LCRB JSON feed includes latitude/longitude.
-  // CSV remains a resilience fallback when JSON is temporarily unavailable.
-  if (jsonResult.status === 'fulfilled') sourceRows = jsonResult.value;
-  else if (csvResult.status === 'fulfilled') sourceRows = csvResult.value;
-  else {
-    const reasons = [jsonResult.reason, csvResult.reason]
-      .map((item) => item instanceof Error ? item.message : String(item))
-      .join(' ; ');
-    throw new Error(`British Columbia LCRB official feeds were unavailable: ${reasons}`);
+  const attempts = await Promise.allSettled([fetchOfficialMapRows(MAP_SOURCE), fetchOfficialMapRows(MAP_JSON_SOURCE)]);
+  const fulfilled = attempts.find((result): result is PromiseFulfilledResult<Record<string, unknown>[]> => result.status === 'fulfilled');
+  if (!fulfilled) {
+    const reasons = attempts.map(result => result.status === 'rejected' ? (result.reason instanceof Error ? result.reason.message : String(result.reason)) : '').filter(Boolean).join(' ; ');
+    throw new Error(`British Columbia LCRB cannabis map feeds were unavailable: ${reasons}`);
   }
 
-  const rows = toRows(sourceRows);
-  const unique = new Map(rows.map((row) => [row.licenseNumber, row]));
-  if (!unique.size) {
-    throw new Error(
-      `British Columbia LCRB feed returned ${sourceRows.length} record(s) but zero verified open retail stores; refusing an unverified import.`,
-    );
+  const rows = toRows(fulfilled.value);
+  const unique = new Map(rows.map(row => [row.licenseNumber, row]));
+  if (unique.size < 300) {
+    throw new Error(`British Columbia LCRB cannabis map returned only ${unique.size} valid retail stores; refusing a suspiciously incomplete import.`);
   }
 
-  return Array.from(unique.values());
+  const verified = Array.from(unique.values());
+  quarantineStaleLegacyRows(verified);
+  return verified;
 }
