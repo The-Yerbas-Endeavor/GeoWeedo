@@ -10,10 +10,13 @@ function parseCsvLine(line: string) { const values:string[]=[]; let value=''; le
 function oneLineAddress(item: DispensaryCandidate) { return [item.streetAddress, item.city, item.region, item.country || 'USA'].filter(Boolean).join(', '); }
 function parsedLocality(matchedAddress: string) { const parts=matchedAddress.split(',').map(p=>p.trim()).filter(Boolean); if(parts.length<3)return{}; const zipLike=/^\d{5}(?:-\d{4})?$/; let end=parts.length-1; if(zipLike.test(parts[end]))end--; const region=parts[end]||''; const city=parts[end-1]||''; return {city,region}; }
 function normalizeName(value:string){return value.toLowerCase().replace(/\b(llc|inc|ltd|dispensary|cannabis|marijuana|medical|adult use|company|corp|corporation)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();}
+function normalizedCountry(item:DispensaryCandidate){return String(item.country||'USA').trim().toLowerCase();}
+function isUsCandidate(item:DispensaryCandidate){return ['usa','us','united states','united states of america'].includes(normalizedCountry(item));}
 function supportsLocationFallback(region:string){return ['montana','alaska','new jersey'].includes(region.trim().toLowerCase());}
 function stateBounds(region:string,latitude:number,longitude:number){const r=region.trim().toLowerCase();if(r==='montana')return latitude>=44.35&&latitude<=49.1&&longitude>=-116.2&&longitude<=-103.9;if(r==='alaska')return latitude>=51.0&&latitude<=72.0&&longitude>=-180&&longitude<=-129.0;if(r==='new jersey')return latitude>=38.85&&latitude<=41.36&&longitude>=-75.65&&longitude<=-73.85;return false;}
 
 async function oneLineLookup(item: DispensaryCandidate) {
+  if(!isUsCandidate(item))return null;
   const address=oneLineAddress(item); if(!address)return null;
   const url=new URL('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress');
   url.searchParams.set('address',address); url.searchParams.set('benchmark','Public_AR_Current'); url.searchParams.set('format','json');
@@ -25,6 +28,7 @@ async function oneLineLookup(item: DispensaryCandidate) {
 }
 
 async function locationNameLookup(item:DispensaryCandidate){
+  if(!isUsCandidate(item))return null;
   const region=String(item.region||'').trim();if(!supportsLocationFallback(region)||!item.city?.trim()||!item.name?.trim())return null;
   const url=new URL('https://nominatim.openstreetmap.org/search');
   url.searchParams.set('q',`${item.name}, ${item.city}, ${region}, USA`);url.searchParams.set('format','jsonv2');url.searchParams.set('addressdetails','1');url.searchParams.set('limit','5');url.searchParams.set('countrycodes','us');
@@ -38,12 +42,33 @@ async function runWithConcurrency<T>(items:T[],concurrency:number,worker:(item:T
 
 export async function POST(request:NextRequest){
   if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
-  const body=await request.json().catch(()=>({})); const limit=Math.max(1,Math.min(Number(body?.limit)||1000,2000)); const fallbackLimit=Math.max(0,Math.min(Number(body?.fallbackLimit)||200,500)); const requestedRegion=String(body?.region||'').trim();
-  const all=await listCandidates(); const missingAll=all.filter(item=>item.status==='candidate'&&(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))); const missing=requestedRegion?missingAll.filter(item=>String(item.region||'').trim().toLowerCase()===requestedRegion.toLowerCase()):missingAll; const addressCandidates=missing.filter(item=>Boolean(item.streetAddress?.trim())).slice(0,limit); const locationFallbackCandidates=missing.filter(item=>supportsLocationFallback(String(item.region||''))&&!item.streetAddress?.trim()&&Boolean(item.city?.trim())&&Boolean(item.name?.trim())).slice(0,fallbackLimit); const candidates=addressCandidates; const candidateById=new Map(candidates.map(item=>[item.id,item])); const skippedWithoutStreet=Math.max(0,missing.filter(item=>!item.streetAddress?.trim()).length-locationFallbackCandidates.length);
+  const body=await request.json().catch(()=>({}));
+  const limit=Math.max(1,Math.min(Number(body?.limit)||1000,2000));
+  const fallbackLimit=Math.max(0,Math.min(Number(body?.fallbackLimit)||200,500));
+  const requestedRegion=String(body?.region||'').trim();
+  const all=await listCandidates();
+  const missingAll=all.filter(item=>item.status==='candidate'&&(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude)));
+  const missing=requestedRegion?missingAll.filter(item=>String(item.region||'').trim().toLowerCase()===requestedRegion.toLowerCase()):missingAll;
+  const nonUsMissing=missing.filter(item=>!isUsCandidate(item));
+  const usMissing=missing.filter(isUsCandidate);
+  const addressCandidates=usMissing.filter(item=>Boolean(item.streetAddress?.trim())).slice(0,limit);
+  const locationFallbackCandidates=usMissing.filter(item=>supportsLocationFallback(String(item.region||''))&&!item.streetAddress?.trim()&&Boolean(item.city?.trim())&&Boolean(item.name?.trim())).slice(0,fallbackLimit);
+  const candidates=addressCandidates;
+  const candidateById=new Map(candidates.map(item=>[item.id,item]));
+  const skippedWithoutStreet=Math.max(0,usMissing.filter(item=>!item.streetAddress?.trim()).length-locationFallbackCandidates.length);
   let locationFallbackMatched=0;
+
   await runWithConcurrency(locationFallbackCandidates,1,async item=>{try{const match=await locationNameLookup(item);if(!match){await updateCandidate(item.id,{imageryStatus:'missing_coordinates',imageryMessage:`${item.region} name+city fallback did not find a high-confidence in-state OpenStreetMap match; manual review required.`});return;}await updateCandidate(item.id,{latitude:match.latitude,longitude:match.longitude,streetAddress:match.streetAddress||item.streetAddress,city:match.city||item.city,imageryStatus:'unchecked',imageryCount:0,imageryCheckedAt:undefined,imageryMessage:`Coordinates matched by strict ${item.region} OpenStreetMap name+city fallback: ${match.matchedAddress}`});locationFallbackMatched++;}catch{}});
-  if(!candidates.length){const after=await listCandidates();const afterMissingAll=after.filter(item=>item.status==='candidate'&&(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude)));const remaining=requestedRegion?afterMissingAll.filter(item=>String(item.region||'').trim().toLowerCase()===requestedRegion.toLowerCase()).length:afterMissingAll.length;return NextResponse.json({submitted:locationFallbackCandidates.length,matched:locationFallbackMatched,batchMatched:0,fallbackMatched:0,locationFallbackMatched,locationFallbackAttempted:locationFallbackCandidates.length,unmatched:locationFallbackCandidates.length-locationFallbackMatched,skippedWithoutStreet,remaining,remainingAll:afterMissingAll.length,region:requestedRegion||null,provider:locationFallbackCandidates.length?'OpenStreetMap/Nominatim strict state fallback':'U.S. Census Geocoder'});}
-  const lines=candidates.map(item=>[item.id,item.streetAddress||'',item.city||'',item.region||'',''].map(csvEscape).join(',')); const form=new FormData(); form.set('benchmark','Public_AR_Current'); form.set('addressFile',new Blob([lines.join('\n')],{type:'text/csv'}),'geoweedo-addresses.csv');
+
+  if(!candidates.length){
+    const after=await listCandidates();
+    const afterMissingAll=after.filter(item=>item.status==='candidate'&&(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude)));
+    const remaining=requestedRegion?afterMissingAll.filter(item=>String(item.region||'').trim().toLowerCase()===requestedRegion.toLowerCase()).length:afterMissingAll.length;
+    return NextResponse.json({submitted:locationFallbackCandidates.length,matched:locationFallbackMatched,batchMatched:0,fallbackMatched:0,locationFallbackMatched,locationFallbackAttempted:locationFallbackCandidates.length,unmatched:locationFallbackCandidates.length-locationFallbackMatched,skippedWithoutStreet,skippedNonUs:nonUsMissing.length,remaining,remainingAll:afterMissingAll.length,region:requestedRegion||null,provider:locationFallbackCandidates.length?'OpenStreetMap/Nominatim strict state fallback':'U.S. Census Geocoder (U.S. candidates only)'});
+  }
+
+  const lines=candidates.map(item=>[item.id,item.streetAddress||'',item.city||'',item.region||'',''].map(csvEscape).join(','));
+  const form=new FormData(); form.set('benchmark','Public_AR_Current'); form.set('addressFile',new Blob([lines.join('\n')],{type:'text/csv'}),'geoweedo-addresses.csv');
   try{
     const response=await fetch('https://geocoding.geo.census.gov/geocoder/locations/addressbatch',{method:'POST',body:form,headers:{'User-Agent':'GeoWeedo/0.8 (https://geoweedo.com)'},cache:'no-store'}); if(!response.ok)throw new Error(`U.S. Census Geocoder returned ${response.status}`);
     const text=await response.text(); const rows=text.split(/\r?\n/).filter(line=>line.trim()); const matchedIds=new Set<string>(); let batchMatched=0;
@@ -52,6 +77,6 @@ export async function POST(request:NextRequest){
     await runWithConcurrency(fallbackCandidates,5,async item=>{try{const match=await oneLineLookup(item);if(!match)return;await updateCandidate(item.id,{latitude:match.latitude,longitude:match.longitude,city:item.city||match.city||undefined,region:item.region||match.region||undefined,imageryStatus:'unchecked',imageryCount:0,imageryCheckedAt:undefined,imageryMessage:`Coordinates matched by U.S. Census one-line geocoder: ${match.matchedAddress}`});if(!matchedIds.has(item.id))fallbackMatched++;matchedIds.add(item.id);}catch{}});
     const unresolved=candidates.filter(item=>!matchedIds.has(item.id)); for(const item of unresolved){await updateCandidate(item.id,{imageryStatus:'missing_coordinates',imageryMessage:fallbackCandidates.some(candidate=>candidate.id===item.id)?'U.S. Census batch and one-line geocoders did not return an address match; manual review may be required.':'Batch geocoder did not return a match; one-line fallback will be attempted in a later run.'});}
     const after=await listCandidates(); const afterMissingAll=after.filter(item=>item.status==='candidate'&&(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))); const remaining=requestedRegion?afterMissingAll.filter(item=>String(item.region||'').trim().toLowerCase()===requestedRegion.toLowerCase()).length:afterMissingAll.length; const matched=batchMatched+fallbackMatched+locationFallbackMatched;
-    return NextResponse.json({submitted:candidates.length+locationFallbackCandidates.length,matched,batchMatched,fallbackMatched,locationFallbackMatched,locationFallbackAttempted:locationFallbackCandidates.length,fallbackAttempted:fallbackCandidates.length,unmatched:candidates.length+locationFallbackCandidates.length-matched,skippedWithoutStreet,remaining,remainingAll:afterMissingAll.length,region:requestedRegion||null,provider:locationFallbackCandidates.length?'U.S. Census Geocoder + OpenStreetMap/Nominatim strict state fallback':'U.S. Census Geocoder'},{headers:{'Cache-Control':'no-store'}});
+    return NextResponse.json({submitted:candidates.length+locationFallbackCandidates.length,matched,batchMatched,fallbackMatched,locationFallbackMatched,locationFallbackAttempted:locationFallbackCandidates.length,fallbackAttempted:fallbackCandidates.length,unmatched:candidates.length+locationFallbackCandidates.length-matched,skippedWithoutStreet,skippedNonUs:nonUsMissing.length,remaining,remainingAll:afterMissingAll.length,region:requestedRegion||null,provider:locationFallbackCandidates.length?'U.S. Census Geocoder + OpenStreetMap/Nominatim strict state fallback (U.S. only)':'U.S. Census Geocoder (U.S. candidates only)'},{headers:{'Cache-Control':'no-store'}});
   }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Batch geocoding failed.'},{status:502});}
 }
