@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { incrementImageryProviderUsage } from '@/lib/imageryProviderSettings';
 
 export const runtime = 'nodejs';
 
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
   url.searchParams.set('key', apiKey);
 
   try {
+    incrementImageryProviderUsage('google', 'image');
     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
     if (!response.ok) {
       return NextResponse.json({ error: `Google Street View image returned ${response.status}.` }, { status: 502 });
