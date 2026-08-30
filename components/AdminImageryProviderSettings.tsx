@@ -25,7 +25,7 @@ async function readJson(response: Response) {
   catch { throw new Error(`Server returned ${response.status} ${response.statusText} instead of JSON.`); }
 }
 
-export default function AdminImageryProviderSettings() {
+export default function AdminImageryProviderSettings({ compact = false }: { compact?: boolean }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [provider, setProvider] = useState<Provider>('kartaview');
   const [warningLimit, setWarningLimit] = useState(500);
@@ -68,35 +68,42 @@ export default function AdminImageryProviderSettings() {
   const usage = settings?.usage;
   const pct = settings && settings.warningLimit > 0 ? Math.round((settings.usage.googleImagesToday / settings.warningLimit) * 100) : 0;
 
+  const controls = <>
+    <div style={{ display: 'grid', gap: 9 }}>
+      <select value={provider} onChange={event => setProvider(event.target.value as Provider)} style={{ width: '100%' }}>
+        <option value="google">Google Street View</option>
+        <option value="kartaview">KartaView</option>
+        <option value="auto">Auto · Google → KartaView</option>
+      </select>
+      <label style={{ display: 'grid', gap: 5, fontSize: 13 }}>
+        <span>Daily Google image warning threshold</span>
+        <input type="number" min="0" max="1000000" value={warningLimit} onChange={event => setWarningLimit(Math.max(0, Number(event.target.value) || 0))} style={{ width: '100%' }} />
+      </label>
+      <button className="primary" disabled={busy || (provider === 'google' && settings?.googleConfigured === false)} onClick={save}>{busy ? 'Saving…' : 'Save provider'}</button>
+    </div>
+    {settings && <div style={{ display: 'grid', gap: 7, marginTop: 11 }}>
+      {!settings.googleConfigured && <div className="admin-status">Google is not configured on this server.</div>}
+      {settings.warning && <div className="admin-status"><strong>Usage warning:</strong> {settings.usage.googleImagesToday} Google image requests today reached the {settings.warningLimit} request threshold.</div>}
+      <div className="admin-help" style={{ fontSize: 12.5 }}>
+        Active: <strong>{settings.provider}</strong> · Google today: {settings.usage.googleImagesToday} image + {settings.usage.googleMetadataToday} metadata{settings.warningLimit > 0 ? ` · ${pct}% of warning threshold` : ' · warning disabled'}.
+      </div>
+    </div>}
+    {status && <div className="admin-status" style={{ marginTop: 10 }}>{status}</div>}
+  </>;
+
+  if (compact) return controls;
+
   return (
     <section className="admin-panel" style={{ marginBottom: 18 }}>
       <h2 style={{ marginTop: 0 }}>Street imagery provider</h2>
       <p className="admin-help">Switch providers immediately without editing environment files. Google API credentials remain server-side. Auto tries Google first and falls back to KartaView.</p>
-      <div className="admin-form" style={{ maxWidth: 620 }}>
-        <select value={provider} onChange={event => setProvider(event.target.value as Provider)}>
-          <option value="google">Google Street View</option>
-          <option value="kartaview">KartaView</option>
-          <option value="auto">Auto · Google → KartaView</option>
-        </select>
-        <label style={{ display: 'grid', gap: 6 }}>
-          <span>Daily Google image warning threshold</span>
-          <input type="number" min="0" max="1000000" value={warningLimit} onChange={event => setWarningLimit(Math.max(0, Number(event.target.value) || 0))} />
-        </label>
-        <button className="primary" disabled={busy || (provider === 'google' && settings?.googleConfigured === false)} onClick={save}>{busy ? 'Saving…' : 'Save provider'}</button>
-      </div>
-
-      {settings && <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-        {!settings.googleConfigured && <div className="admin-status">Google is not configured on this server. Add GOOGLE_MAPS_API_KEY before selecting Google.</div>}
-        {settings.warning && <div className="admin-status"><strong>Google usage warning:</strong> {settings.usage.googleImagesToday} image requests today has reached the configured {settings.warningLimit} request warning threshold.</div>}
-        <div className="admin-help">Active provider: <strong>{settings.provider}</strong> · Env default: {settings.envDefault} · Google today: {settings.usage.googleImagesToday} image + {settings.usage.googleMetadataToday} metadata requests{settings.warningLimit > 0 ? ` · ${pct}% of warning threshold` : ' · warning disabled'}.</div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr><th style={{ textAlign: 'left' }}>Date</th><th style={{ textAlign: 'left' }}>Provider</th><th style={{ textAlign: 'left' }}>Type</th><th style={{ textAlign: 'right' }}>Requests</th></tr></thead>
-            <tbody>{usage?.rows.slice(0, 21).map(row => <tr key={`${row.usage_date}-${row.provider}-${row.request_type}`}><td>{row.usage_date}</td><td>{row.provider}</td><td>{row.request_type}</td><td style={{ textAlign: 'right' }}>{row.request_count}</td></tr>)}</tbody>
-          </table>
-        </div>
+      <div className="admin-form" style={{ maxWidth: 620 }}>{controls}</div>
+      {settings && usage && <div style={{ overflowX: 'auto', marginTop: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead><tr><th style={{ textAlign: 'left' }}>Date</th><th style={{ textAlign: 'left' }}>Provider</th><th style={{ textAlign: 'left' }}>Type</th><th style={{ textAlign: 'right' }}>Requests</th></tr></thead>
+          <tbody>{usage.rows.slice(0, 21).map(row => <tr key={`${row.usage_date}-${row.provider}-${row.request_type}`}><td>{row.usage_date}</td><td>{row.provider}</td><td>{row.request_type}</td><td style={{ textAlign: 'right' }}>{row.request_count}</td></tr>)}</tbody>
+        </table>
       </div>}
-      {status && <div className="admin-status" style={{ marginTop: 12 }}>{status}</div>}
     </section>
   );
 }

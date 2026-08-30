@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import AdminImageryProviderSettings from '@/components/AdminImageryProviderSettings';
 import type { AdminPermission } from '@/lib/adminPermissions';
 import styles from './admin.module.css';
 
@@ -29,6 +30,7 @@ export default function AdminHomePage(){
   const[admin,setAdmin]=useState<AdminUser|null>(null),[loading,setLoading]=useState(true);
   useEffect(()=>{fetch('/api/admin/auth/me',{cache:'no-store'}).then(async r=>{if(r.status===401){window.location.href='/admin/login';return null;}const d=await r.json();if(!r.ok)throw new Error(d.error||'Admin session check failed.');return d.admin||d;}).then(value=>{if(value)setAdmin(value);}).catch(()=>{window.location.href='/admin/login';}).finally(()=>setLoading(false));},[]);
   const visibleModules=useMemo(()=>liveModules.filter(card=>!card.permission||admin?.permissions?.includes(card.permission)),[admin]);
+  const canManageImagery=Boolean(admin?.permissions?.includes('data.manage'));
   async function logout(){await fetch('/api/admin/auth/logout',{method:'POST'});window.location.href='/admin/login';}
   if(loading)return <main className={styles.shell}><div className={styles.loading}>Loading GeoWeedo Admin…</div></main>;
   return <main className={styles.shell}>
@@ -38,8 +40,15 @@ export default function AdminHomePage(){
     </header>
 
     <section className={styles.section}>
-      <div className={styles.sectionHead}><div><span className={styles.eyebrow}>AVAILABLE NOW</span><h2>Current operations</h2></div><span className={styles.count}>{visibleModules.length} modules</span></div>
-      <div className={styles.grid}>{visibleModules.map(card=><article className={styles.card} key={card.title}><div className={styles.cardTop}><span className={card.status==='live'?styles.liveBadge:styles.partialBadge}>{card.status==='live'?'LIVE':'PARTIAL'}</span><h3>{card.title}</h3></div><p>{card.description}</p><div className={styles.cardActions}>{card.href&&<a className={styles.primaryLink} href={card.href}>{card.action||'Open'}</a>}{card.secondaryHref&&<a className={styles.secondaryLink} href={card.secondaryHref}>{card.secondaryAction||'Open'}</a>}</div></article>)}</div>
+      <div className={styles.sectionHead}><div><span className={styles.eyebrow}>AVAILABLE NOW</span><h2>Current operations</h2></div><span className={styles.count}>{visibleModules.length+(canManageImagery?1:0)} modules</span></div>
+      <div className={styles.grid}>
+        {visibleModules.map(card=><article className={styles.card} key={card.title}><div className={styles.cardTop}><span className={card.status==='live'?styles.liveBadge:styles.partialBadge}>{card.status==='live'?'LIVE':'PARTIAL'}</span><h3>{card.title}</h3></div><p>{card.description}</p><div className={styles.cardActions}>{card.href&&<a className={styles.primaryLink} href={card.href}>{card.action||'Open'}</a>}{card.secondaryHref&&<a className={styles.secondaryLink} href={card.secondaryHref}>{card.secondaryAction||'Open'}</a>}</div></article>)}
+        {canManageImagery&&<article className={styles.card}>
+          <div className={styles.cardTop}><span className={styles.liveBadge}>LIVE</span><h3>Street imagery provider</h3></div>
+          <p>Switch live Street View between Google, KartaView, or automatic fallback and watch today's Google request usage.</p>
+          <AdminImageryProviderSettings compact />
+        </article>}
+      </div>
     </section>
 
     {admin?.role==='admin'&&<section className={styles.section}>
