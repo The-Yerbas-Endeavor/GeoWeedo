@@ -14,6 +14,7 @@ type Row = {
 };
 
 const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
+const CSV_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-csv';
 const JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/lrs-json';
 
 function text(value: unknown) {
@@ -48,41 +49,58 @@ function pick(item: Record<string, unknown>, ...keys: string[]) {
   return '';
 }
 
-export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
-  const response = await fetch(JSON_SOURCE, {
-    headers: {
-      Accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
-      'User-Agent': 'GeoWeedo/0.7 (https://geoweedo.com)',
-      'Accept-Language': 'en-CA,en;q=0.9',
-      Referer: SOURCE,
-    },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(30000),
+function normalizeHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function parseCsvLine(line: string) {
+  const cells: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (ch === ',' && !quoted) {
+      cells.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseCsv(csv: string) {
+  const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    const row: Record<string, unknown> = {};
+    headers.forEach((header, index) => { row[header] = cells[index] ?? ''; });
+    return row;
   });
+}
 
-  if (!response.ok) {
-    throw new Error(`British Columbia LCRB JSON feed returned ${response.status}`);
-  }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error('British Columbia LCRB JSON feed did not return valid JSON.');
-  }
-
-  const sourceRows = asArray(payload);
+function toRows(sourceRows: Record<string, unknown>[]) {
   const rows: Row[] = [];
+  for (const original of sourceRows) {
+    const item: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(original)) item[normalizeHeader(key)] = value;
 
-  for (const item of sourceRows) {
-    const licenseNumber = pick(item, 'license', 'licence', 'licenseNumber', 'licenceNumber');
-    const name = pick(item, 'name', 'establishmentName', 'businessName');
-    const streetAddress = pick(item, 'addressStreet', 'streetAddress', 'address');
-    const city = pick(item, 'addressCity', 'city');
-    const open = bool(item.isOpen ?? item.open ?? item.status);
+    const licenseNumber = pick(item, 'license', 'licence', 'licensenumber', 'licencenumber');
+    const name = pick(item, 'name', 'establishmentname', 'businessname');
+    const streetAddress = pick(item, 'addressstreet', 'streetaddress', 'address');
+    const city = pick(item, 'addresscity', 'city');
+    const open = bool(item.isopen ?? item.open ?? item.status);
 
-    // The official page distinguishes stores that are open from stores that are
-    // merely coming soon. GeoWeedo only imports operating storefronts.
     if (open === false) continue;
     if (!licenseNumber || !name || !streetAddress || !city) continue;
 
@@ -96,15 +114,65 @@ export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
       dataSource: 'British Columbia LCRB Cannabis Retail Stores',
       sourceUrl: SOURCE,
       sourceLicense:
-        'Official Government of British Columbia Liquor and Cannabis Regulation Branch licensed cannabis retail store JSON feed; open stores only.',
+        'Official Government of British Columbia Liquor and Cannabis Regulation Branch licensed cannabis retail store feed; open stores only.',
       imageryStatus: 'missing_coordinates',
     });
   }
+  return rows;
+}
 
+async function fetchWithTimeout(url: string, accept: string, timeoutMs: number) {
+  return fetch(url, {
+    headers: {
+      Accept: accept,
+      'User-Agent': 'GeoWeedo/0.8 (https://geoweedo.com)',
+      'Accept-Language': 'en-CA,en;q=0.9',
+      Referer: SOURCE,
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
+async function fetchCsvRows() {
+  const response = await fetchWithTimeout(CSV_SOURCE, 'text/csv,text/plain;q=0.9,*/*;q=0.8', 60000);
+  if (!response.ok) throw new Error(`CSV feed returned ${response.status}`);
+  const rows = parseCsv(await response.text());
+  if (!rows.length) throw new Error('CSV feed returned no rows');
+  return rows;
+}
+
+async function fetchJsonRows() {
+  const response = await fetchWithTimeout(JSON_SOURCE, 'application/json,text/plain;q=0.9,*/*;q=0.8', 60000);
+  if (!response.ok) throw new Error(`JSON feed returned ${response.status}`);
+  const payload = await response.json();
+  const rows = asArray(payload);
+  if (!rows.length) throw new Error('JSON feed returned no rows');
+  return rows;
+}
+
+export async function fetchBritishColumbiaCandidates(): Promise<Row[]> {
+  const errors: string[] = [];
+  let sourceRows: Record<string, unknown>[] = [];
+
+  for (const loader of [fetchCsvRows, fetchJsonRows]) {
+    try {
+      sourceRows = await loader();
+      if (sourceRows.length) break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (!sourceRows.length) {
+    throw new Error(`British Columbia LCRB official feeds were unavailable: ${errors.join(' ; ')}`);
+  }
+
+  const rows = toRows(sourceRows);
   const unique = new Map(rows.map((row) => [row.licenseNumber, row]));
   if (!unique.size) {
     throw new Error(
-      `British Columbia LCRB JSON feed returned ${sourceRows.length} record(s) but zero verified open retail stores; refusing an unverified import.`,
+      `British Columbia LCRB feed returned ${sourceRows.length} record(s) but zero verified open retail stores; refusing an unverified import.`,
     );
   }
 
