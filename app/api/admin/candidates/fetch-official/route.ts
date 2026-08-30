@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { fetchAlaskaCandidates } from '@/lib/officialSources/alaska';
+import { fetchBritishColumbiaCandidates } from '@/lib/officialSources/britishColumbia';
 import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchConnecticutCandidates } from '@/lib/officialSources/connecticut';
 import { fetchDelawareCandidates } from '@/lib/officialSources/delaware';
@@ -12,6 +13,7 @@ import { fetchMichiganCandidates } from '@/lib/officialSources/michigan';
 import { fetchMinnesotaCandidates } from '@/lib/officialSources/minnesota';
 import { fetchMissouriCandidates } from '@/lib/officialSources/missouri';
 import { fetchNewJerseyCandidates } from '@/lib/officialSources/newJersey';
+import { fetchRhodeIslandCandidates } from '@/lib/officialSources/rhodeIsland';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
 
 export const runtime='nodejs';
@@ -35,7 +37,27 @@ async function fetchNewYork():Promise<CandidateRow[]>{const sourceUrl='https://d
 async function fetchMontana():Promise<CandidateRow[]>{const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations',html=await getHtml(sourceUrl,'Montana DOR'),rows:CandidateRow[]=[];const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi;let m:RegExpExecArray|null;while((m=tr.exec(html))!==null){const cells:string[]=[];const td=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;let c:RegExpExecArray|null;while((c=td.exec(m[1]))!==null)cells.push(c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());if(cells.length>=3&&!/licensee.?s name/i.test(cells[0]))rows.push({name:cells[2]||cells[0],city:cells[1],region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue licensed dispensary list.',imageryStatus:'missing_coordinates'});}return rows;}
 
 const officialSources=[
- {preset:'alaska-amco',label:'Alaska AMCO',fetcher:fetchAlaskaCandidates},{preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},{preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},{preset:'colorado-med',label:'Colorado MED',fetcher:fetchColoradoCandidates},{preset:'massachusetts-ccc',label:'Massachusetts CCC',fetcher:fetchMassachusetts},{preset:'illinois-idfpr',label:'Illinois IDFPR',fetcher:fetchIllinoisCandidates},{preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},{preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},{preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticutCandidates},{preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},{preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},{preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginiaCandidates},{preset:'delaware-omc',label:'Delaware OMC',fetcher:fetchDelawareCandidates},{preset:'maine-ocp',label:'Maine OCP',fetcher:fetchMaineCandidates},{preset:'maryland-mca',label:'Maryland MCA',fetcher:fetchMarylandCandidates},{preset:'michigan-cra',label:'Michigan CRA',fetcher:fetchMichiganCandidates},{preset:'minnesota-ocm',label:'Minnesota OCM',fetcher:fetchMinnesotaCandidates},{preset:'missouri-dhss',label:'Missouri DHSS',fetcher:fetchMissouriCandidates},{preset:'new-jersey-crc',label:'New Jersey CRC',fetcher:fetchNewJerseyCandidates}
+ {preset:'alaska-amco',label:'Alaska AMCO',fetcher:fetchAlaskaCandidates},
+ {preset:'british-columbia-lcrb',label:'British Columbia LCRB',fetcher:fetchBritishColumbiaCandidates},
+ {preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},
+ {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
+ {preset:'colorado-med',label:'Colorado MED',fetcher:fetchColoradoCandidates},
+ {preset:'massachusetts-ccc',label:'Massachusetts CCC',fetcher:fetchMassachusetts},
+ {preset:'illinois-idfpr',label:'Illinois IDFPR',fetcher:fetchIllinoisCandidates},
+ {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
+ {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
+ {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticutCandidates},
+ {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
+ {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
+ {preset:'rhode-island-ccc',label:'Rhode Island CCC',fetcher:fetchRhodeIslandCandidates},
+ {preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginiaCandidates},
+ {preset:'delaware-omc',label:'Delaware OMC',fetcher:fetchDelawareCandidates},
+ {preset:'maine-ocp',label:'Maine OCP',fetcher:fetchMaineCandidates},
+ {preset:'maryland-mca',label:'Maryland MCA',fetcher:fetchMarylandCandidates},
+ {preset:'michigan-cra',label:'Michigan CRA',fetcher:fetchMichiganCandidates},
+ {preset:'minnesota-ocm',label:'Minnesota OCM',fetcher:fetchMinnesotaCandidates},
+ {preset:'missouri-dhss',label:'Missouri DHSS',fetcher:fetchMissouriCandidates},
+ {preset:'new-jersey-crc',label:'New Jersey CRC',fetcher:fetchNewJerseyCandidates}
 ] as const;
 async function syncSource(source:(typeof officialSources)[number]):Promise<SyncDetail>{try{const rows=await source.fetcher() as CandidateRow[];if(!rows.length)throw new Error(`${source.label} returned zero valid dispensary records.`);const result=await importCandidates(rows as any[]);return{ok:true,source:source.label,fetched:rows.length,added:result.added,geocoded:rows.filter(r=>Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)).length,total:result.total};}catch(error){return{ok:false,source:source.label,fetched:0,added:0,geocoded:0,error:error instanceof Error?error.message:String(error)};}}
-export async function POST(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null),preset=String(body?.preset||'');if(preset==='all'){const details:SyncDetail[]=[];for(const source of officialSources)details.push(await syncSource(source));const successful=details.filter(d=>d.ok);return NextResponse.json({added:successful.reduce((s,d)=>s+d.added,0),fetched:successful.reduce((s,d)=>s+d.fetched,0),geocoded:successful.reduce((s,d)=>s+d.geocoded,0),details,failed:details.length-successful.length,succeeded:successful.length,source:'Official multi-state sync'},{status:successful.length?201:502});}const source=officialSources.find(item=>item.preset===preset);if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400});const detail=await syncSource(source);return detail.ok?NextResponse.json({...detail,source:source.label},{status:201}):NextResponse.json({error:detail.error,details:[detail]},{status:502});}
+export async function POST(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null),preset=String(body?.preset||'');if(preset==='all'){const details:SyncDetail[]=[];for(const source of officialSources)details.push(await syncSource(source));const successful=details.filter(d=>d.ok);return NextResponse.json({added:successful.reduce((s,d)=>s+d.added,0),fetched:successful.reduce((s,d)=>s+d.fetched,0),geocoded:successful.reduce((s,d)=>s+d.geocoded,0),details,failed:details.length-successful.length,succeeded:successful.length,source:'Official multi-jurisdiction sync'},{status:successful.length?201:502});}const source=officialSources.find(item=>item.preset===preset);if(!source)return NextResponse.json({error:'Unknown official-data preset.'},{status:400});const detail=await syncSource(source);return detail.ok?NextResponse.json({...detail,source:source.label},{status:201}):NextResponse.json({error:detail.error,details:[detail]},{status:502});}
