@@ -27,15 +27,13 @@ export const ROLE_PERMISSIONS:Record<AdminRole,AdminPermission[]>={
   ],
   verified_dispensary:[
     'dashboard.view',
-    'locations.view',
-    'sponsorships.manage',
   ],
 };
 
 export const ROLE_LABELS:Record<AdminRole,string>={
   admin:'Administrator',
   moderator:'Moderator',
-  verified_dispensary:'Verified Dispensary',
+  verified_dispensary:'Verified Dispensary Owner',
 };
 
 export const PERMISSION_LABELS:Record<AdminPermission,string>={
@@ -62,6 +60,7 @@ export function normalizeAdminRole(value?:string|null):AdminRole{
 export function effectivePermissions(role?:string|null,permissionsJson?:string|null):AdminPermission[]{
   const normalized=normalizeAdminRole(role);
   if(normalized==='admin')return [...ADMIN_PERMISSIONS];
+  if(normalized==='verified_dispensary')return [...ROLE_PERMISSIONS.verified_dispensary];
   if(!permissionsJson)return [...ROLE_PERMISSIONS[normalized]];
   try{
     const parsed=JSON.parse(permissionsJson);
