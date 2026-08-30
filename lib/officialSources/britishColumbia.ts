@@ -20,8 +20,8 @@ type Row = {
 const SOURCE = 'https://justice.gov.bc.ca/lcrb/map';
 const MAP_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map';
 const MAP_JSON_SOURCE = 'https://justice.gov.bc.ca/lcrb/api/establishments/map-json';
-const FEED_TIMEOUT_MS = 20000;
 const DATA_SOURCE = 'British Columbia LCRB Cannabis Retail Stores';
+const FEED_TIMEOUT_MS = 20000;
 
 function text(value: unknown) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -33,18 +33,22 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function normalizeHeader(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+function validBritishColumbiaCoordinates(latitude?: number, longitude?: number) {
+  return latitude !== undefined && longitude !== undefined && latitude >= 48.2 && latitude <= 60.1 && longitude >= -139.1 && longitude <= -113.8;
 }
 
 function asArray(payload: unknown): Record<string, unknown>[] {
   if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
   if (!payload || typeof payload !== 'object') return [];
   const object = payload as Record<string, unknown>;
-  for (const key of ['data', 'results', 'items', 'establishments']) {
+  for (const key of ['data', 'results', 'items', 'establishments', 'mapData']) {
     if (Array.isArray(object[key])) return (object[key] as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
   }
   return [];
+}
+
+function normalizeHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function pick(item: Record<string, unknown>, ...keys: string[]) {
@@ -53,10 +57,6 @@ function pick(item: Record<string, unknown>, ...keys: string[]) {
     if (value) return value;
   }
   return '';
-}
-
-function validBritishColumbiaCoordinates(latitude?: number, longitude?: number) {
-  return latitude !== undefined && longitude !== undefined && latitude >= 48.2 && latitude <= 60.1 && longitude >= -139.1 && longitude <= -113.8;
 }
 
 function toRows(sourceRows: Record<string, unknown>[]) {
@@ -69,8 +69,8 @@ function toRows(sourceRows: Record<string, unknown>[]) {
     const name = pick(item, 'name', 'establishmentname', 'businessname');
     const streetAddress = pick(item, 'addressstreet', 'streetaddress', 'address');
     const city = pick(item, 'addresscity', 'city');
-    const latitude = number(item.latitude ?? item.lat ?? item.y);
-    const longitude = number(item.longitude ?? item.lng ?? item.lon ?? item.x);
+    const latitude = number(item.latitude ?? item.lat);
+    const longitude = number(item.longitude ?? item.lng ?? item.lon);
     const hasCoordinates = validBritishColumbiaCoordinates(latitude, longitude);
 
     if (!licenseNumber || !name || !streetAddress || !city) continue;
@@ -86,15 +86,15 @@ function toRows(sourceRows: Record<string, unknown>[]) {
       licenseNumber,
       dataSource: DATA_SOURCE,
       sourceUrl: SOURCE,
-      sourceLicense: 'Official Government of British Columbia LCRB Map of Cannabis Retail Stores in B.C.; private non-medical cannabis retail stores only.',
+      sourceLicense: 'Official Government of British Columbia Liquor and Cannabis Regulation Branch Cannabis Retail Stores map; licensed cannabis retail stores only.',
       imageryStatus: hasCoordinates ? 'unchecked' : 'missing_coordinates',
     });
   }
   return rows;
 }
 
-async function fetchOfficialMapRows(url: string) {
-  const response = await fetch(url, {
+async function fetchWithTimeout(url: string) {
+  return fetch(url, {
     headers: {
       Accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
       'User-Agent': 'GeoWeedo/0.8 (https://geoweedo.com)',
@@ -104,6 +104,10 @@ async function fetchOfficialMapRows(url: string) {
     cache: 'no-store',
     signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
   });
+}
+
+async function fetchOfficialMapRows(url: string) {
+  const response = await fetchWithTimeout(url);
   if (!response.ok) throw new Error(`${new URL(url).pathname} returned ${response.status}`);
   const body = await response.text();
   if (/^\s*</.test(body)) throw new Error(`${new URL(url).pathname} returned HTML instead of JSON`);
@@ -124,10 +128,19 @@ function quarantineStaleLegacyRows(currentRows: Row[]) {
   if (!stale.length) return 0;
   const update = db.prepare(`UPDATE dispensary_candidates SET status='rejected', imagery_status='missing_coordinates', imagery_message=?, updated_at=? WHERE id=?`);
   const now = new Date().toISOString();
-  const transaction = db.transaction((items: typeof stale) => {
-    for (const item of items) update.run('Quarantined after GeoWeedo corrected the B.C. source from the LRS liquor-store export to the official Cannabis Retail Stores map.', now, item.id);
-  });
-  transaction(stale);
+
+  // Node's built-in DatabaseSync API does not expose better-sqlite3's transaction() helper.
+  // Use an explicit transaction so all stale legacy rows are quarantined atomically.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const item of stale) {
+      update.run('Quarantined after GeoWeedo corrected the B.C. source from the LRS liquor-store export to the official Cannabis Retail Stores map.', now, item.id);
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
   return stale.length;
 }
 
