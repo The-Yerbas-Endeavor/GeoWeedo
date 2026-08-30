@@ -27,7 +27,6 @@ export default function StreetViewStage({latitude,longitude,heading=0,photoId,im
  const zoom=(d:number)=>setFlatZoom(v=>Math.min(3.5,Math.max(1,v+d)));
  useEffect(()=>{const key=(e:KeyboardEvent)=>{const t=e.target as HTMLElement|null;if(t&&/INPUT|TEXTAREA|SELECT|BUTTON/.test(t.tagName))return;const k=e.key.toLowerCase(),v=viewerRef.current;if((k==='arrowleft'||k==='a')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw-.12,pitch:p.pitch});}else if(k==='arrowleft'||k==='a')step(-1);else if((k==='arrowright'||k==='d')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw+.12,pitch:p.pitch});}else if(k==='arrowright'||k==='d')step(1);else if(k==='arrowup'||k==='w'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.min(Math.PI/2,p.pitch+.1)});}else step(1);}else if(k==='arrowdown'||k==='s'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.max(-Math.PI/2,p.pitch-.1)});}else step(-1);}else return;e.preventDefault();};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[isSphere,photos.length]);
  const label=actualProvider==='geoweedo'?'GeoWeedo hosted':actualProvider==='google'?'Google Street View':'KartaView';
- const viewType=actualProvider==='google'?'Street View':isSphere?'360°':'street sequence';
  return <div className={`streetview-wrap ${isSphere?'streetview-spherical':'streetview-sequence'}`}>
   {loading&&<div className="map-error"><strong>Loading street imagery…</strong></div>}
   {!loading&&current&&<>{isSphere?<><div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0}/><div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div></>:<div className="street-photo-stage" tabIndex={0} onWheel={e=>{e.preventDefault();zoom(e.deltaY<0?.2:-.2);}}>
@@ -35,8 +34,7 @@ export default function StreetViewStage({latitude,longitude,heading=0,photoId,im
    <button type="button" className="street-nav street-nav-prev" onClick={()=>step(-1)} disabled={index<=0}>‹</button><button type="button" className="street-nav street-nav-next" onClick={()=>step(1)} disabled={index>=photos.length-1}>›</button>
    <div className="street-zoom-controls"><button onClick={()=>zoom(-.25)} disabled={flatZoom<=1}>−</button><button onClick={()=>setFlatZoom(1)} disabled={flatZoom===1}>Reset</button><button onClick={()=>zoom(.25)} disabled={flatZoom>=3.5}>+</button></div>
    <div className="street-drag-hint">← → or A/D: travel street · wheel: zoom</div>
-  </div>}
-  <div className="street-imagery-toolbar"><button onClick={()=>step(-1)} disabled={index<=0}>← Previous</button><span>{index+1} / {photos.length} · {label} · {viewType}</span><button onClick={()=>step(1)} disabled={index>=photos.length-1}>Next →</button></div></>}
+  </div>}</>}
   {!loading&&error&&<div className="map-error"><strong>Street imagery unavailable</strong><span>{error}</span></div>}
  </div>;
 }
