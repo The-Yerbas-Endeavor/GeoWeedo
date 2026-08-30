@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
   }
 
   const url = new URL('https://maps.googleapis.com/maps/api/streetview');
-  url.searchParams.set('size', '640x640');
+  url.searchParams.set('size', '640x400');
   url.searchParams.set('pano', pano);
   url.searchParams.set('heading', String(heading));
-  url.searchParams.set('pitch', '0');
+  url.searchParams.set('pitch', '-12');
   url.searchParams.set('fov', '90');
   url.searchParams.set('return_error_code', 'true');
   url.searchParams.set('key', apiKey);
