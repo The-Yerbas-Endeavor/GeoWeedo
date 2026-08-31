@@ -3,10 +3,12 @@ export default function SiteHeader() {
     <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
       <a className="brand brand-link geoweedo-header-brand" href="/" aria-label="GeoWeedo home">
         <img
-          src="/assets/geoweedo/geoweedo-horizontal.webp"
-          alt="GeoWeedo — WEEDO SEARCH. WEEDO FIND. WEEDO PLAY."
-          className="geoweedo-header-logo"
+          src="/assets/geoweedo/geoweedo-icon-48.png"
+          alt=""
+          aria-hidden="true"
+          className="geoweedo-header-icon"
         />
+        <span className="geoweedo-header-wordmark">GEOWEEDO</span>
       </a>
       <div className="nav-actions">
         <a className="ghost nav-link" href="/how-to-play">How to play</a>
