@@ -12,6 +12,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center bottom;
+  transform-origin: center bottom;
   user-select: none;
   pointer-events: none;
 }
