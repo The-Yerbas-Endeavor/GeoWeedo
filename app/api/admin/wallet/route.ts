@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { getDatabase } from '@/lib/sqlite';
 import { yerbasRpc } from '@/lib/yerbasRpc';
+import {
+  ensureDepositScanSchema,
+  getDepositScanStatus,
+  scanYerbasDeposits,
+} from '@/lib/yerbasDepositScanner';
 
 export const runtime = 'nodejs';
 
@@ -137,11 +142,14 @@ export async function GET(request: NextRequest) {
   }
 
   const db = getDatabase();
+  ensureDepositScanSchema(db);
+
   const counts = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM wallets) wallets,
       (SELECT COUNT(*) FROM wallet_addresses WHERE active = 1) activeAddresses,
-      (SELECT COUNT(*) FROM deposits WHERE status NOT IN ('credited', 'confirmed')) pendingDeposits,
+      (SELECT COUNT(*) FROM deposits WHERE status NOT IN ('credited', 'confirmed')) pendingPlayerDeposits,
+      (SELECT COUNT(*) FROM treasury_deposits WHERE status = 'pending') pendingTreasuryDeposits,
       (SELECT COUNT(*) FROM withdrawals WHERE status IN ('requested', 'held', 'approved', 'processing')) pendingWithdrawals,
       (SELECT COUNT(*) FROM reward_claims WHERE status IN ('pending', 'held')) pendingRewards
   `).get() as any;
@@ -150,6 +158,7 @@ export async function GET(request: NextRequest) {
     SELECT
       COALESCE((SELECT SUM(amount_atomic) FROM wallet_ledger WHERE status = 'posted'), 0) ledgerBalance,
       COALESCE((SELECT SUM(amount_atomic) FROM deposits WHERE status IN ('credited', 'confirmed')), 0) deposits,
+      COALESCE((SELECT SUM(amount_atomic) FROM treasury_deposits WHERE status IN ('pending', 'confirmed')), 0) treasuryDeposits,
       COALESCE((SELECT SUM(amount_atomic + fee_atomic) FROM withdrawals WHERE status IN ('sent', 'completed')), 0) withdrawals,
       COALESCE((SELECT SUM(amount_atomic) FROM wallet_ledger
         WHERE status = 'posted'
@@ -186,11 +195,20 @@ export async function GET(request: NextRequest) {
   `).all();
 
   const recentDeposits = db.prepare(`
-    SELECT d.id, d.address, d.txid, d.amount_atomic, d.confirmations, d.status, d.detected_at, w.user_id
+    SELECT d.id, d.address, d.txid, d.vout, d.amount_atomic, d.confirmations, d.status,
+           d.detected_at, d.confirmed_at, w.user_id
     FROM deposits d
     JOIN wallets w ON w.id = d.wallet_id
     ORDER BY d.detected_at DESC
-    LIMIT 25
+    LIMIT 50
+  `).all();
+
+  const treasuryDeposits = db.prepare(`
+    SELECT id, address, txid, vout, amount_atomic, confirmations, status,
+           block_hash, detected_at, confirmed_at, updated_at
+    FROM treasury_deposits
+    ORDER BY detected_at DESC
+    LIMIT 50
   `).all();
 
   const recentWithdrawals = db.prepare(`
@@ -204,32 +222,40 @@ export async function GET(request: NextRequest) {
 
   const recentLedger = db.prepare(`
     SELECT l.id, l.entry_type, l.amount_atomic, l.status, l.reference_type,
-           l.reference_id, l.txid, l.created_at, w.user_id
+           l.reference_id, l.txid, l.confirmations, l.created_at, w.user_id
     FROM wallet_ledger l
     JOIN wallets w ON w.id = l.wallet_id
     ORDER BY l.created_at DESC
-    LIMIT 30
+    LIMIT 50
   `).all();
 
   const rpc = await getRpcStatus();
+  const depositScan = getDepositScanStatus(db);
+  const pendingPlayerDeposits = Number(counts.pendingPlayerDeposits || 0);
+  const pendingTreasuryDeposits = Number(counts.pendingTreasuryDeposits || 0);
 
   return NextResponse.json(
     {
       rpc,
+      depositScan,
       summary: {
         wallets: Number(counts.wallets || 0),
         activeAddresses: Number(counts.activeAddresses || 0),
-        pendingDeposits: Number(counts.pendingDeposits || 0),
+        pendingDeposits: pendingPlayerDeposits + pendingTreasuryDeposits,
+        pendingPlayerDeposits,
+        pendingTreasuryDeposits,
         pendingWithdrawals: Number(counts.pendingWithdrawals || 0),
         pendingRewards: Number(counts.pendingRewards || 0),
         ledgerBalanceYerb: y(totals.ledgerBalance),
         confirmedDepositsYerb: y(totals.deposits),
+        treasuryDepositsYerb: y(totals.treasuryDeposits),
         sentWithdrawalsYerb: y(totals.withdrawals),
         postedRewardsYerb: y(totals.rewards),
       },
       walletUsers,
       depositAddresses,
       recentDeposits: recentDeposits.map((r: any) => ({ ...r, amountYerb: y(r.amount_atomic) })),
+      treasuryDeposits: treasuryDeposits.map((r: any) => ({ ...r, amountYerb: y(r.amount_atomic) })),
       recentWithdrawals: recentWithdrawals.map((r: any) => ({
         ...r,
         amountYerb: y(r.amount_atomic),
@@ -246,6 +272,20 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
+  const action = String(body?.action || 'assignAddress');
+
+  if (action === 'scanDeposits') {
+    try {
+      const scan = await scanYerbasDeposits();
+      return NextResponse.json({ scan });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Could not scan Yerbas wallet.' },
+        { status: 502 },
+      );
+    }
+  }
+
   const walletId = String(body?.walletId || '').trim();
   if (!walletId) return NextResponse.json({ error: 'walletId is required.' }, { status: 400 });
 
