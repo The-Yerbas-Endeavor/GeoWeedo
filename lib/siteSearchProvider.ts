@@ -1,32 +1,16 @@
 import 'server-only';
 
-export type SiteSearchProvider='brave'|'google';
+export type SiteSearchProvider='google';
 export type SiteSearchResult={link:string;title:string;snippet:string};
 
 export function configuredSiteSearchProvider():SiteSearchProvider|null{
- if(process.env.BRAVE_SEARCH_API_KEY)return 'brave';
  if(process.env.GOOGLE_CUSTOM_SEARCH_API_KEY&&process.env.GOOGLE_CUSTOM_SEARCH_CX)return 'google';
  return null;
 }
 
 export function siteSearchProviderLabel(provider:SiteSearchProvider|null){
- if(provider==='brave')return 'Brave Search API';
- if(provider==='google')return 'Google Custom Search';
+ if(provider==='google')return 'Google Custom Search (legacy)';
  return 'Not configured';
-}
-
-async function braveSearch(query:string):Promise<SiteSearchResult[]>{
- const key=process.env.BRAVE_SEARCH_API_KEY||'';
- if(!key)throw new Error('Brave Search API is not configured. Set BRAVE_SEARCH_API_KEY.');
- const endpoint=new URL('https://api.search.brave.com/res/v1/web/search');
- endpoint.searchParams.set('q',query);
- endpoint.searchParams.set('count','10');
- endpoint.searchParams.set('search_lang','en');
- endpoint.searchParams.set('safesearch','moderate');
- const response=await fetch(endpoint,{cache:'no-store',headers:{Accept:'application/json','X-Subscription-Token':key}});
- if(!response.ok)throw new Error(`Brave website discovery search returned ${response.status}.`);
- const data=await response.json();
- return (Array.isArray(data?.web?.results)?data.web.results:[]).map((item:any)=>({link:String(item?.url||''),title:String(item?.title||''),snippet:String(item?.description||'')})).filter((item:SiteSearchResult)=>Boolean(item.link));
 }
 
 async function googleSearch(query:string):Promise<SiteSearchResult[]>{
@@ -42,7 +26,7 @@ async function googleSearch(query:string):Promise<SiteSearchResult[]>{
 
 export async function searchOfficialSiteCandidates(query:string){
  const provider=configuredSiteSearchProvider();
- if(!provider)throw new Error('Official-site discovery is not configured. Set BRAVE_SEARCH_API_KEY or existing Google Custom Search credentials.');
- const results=provider==='brave'?await braveSearch(query):await googleSearch(query);
+ if(!provider)throw new Error('Optional web-search discovery is not configured. GeoWeedo will continue using official datasets and websites already stored on records.');
+ const results=await googleSearch(query);
  return{provider,results};
 }
