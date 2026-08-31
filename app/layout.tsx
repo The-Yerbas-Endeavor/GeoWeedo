@@ -16,7 +16,15 @@ import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 
 export const metadata = {
   title: 'GeoWeedo',
-  description: 'Guess the dispensary. Own the map. Earn YERB.',
+  description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+  icons: {
+    icon: [
+      { url: '/assets/geoweedo/favicon.ico' },
+      { url: '/assets/geoweedo/geoweedo-icon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/assets/geoweedo/apple-touch-icon.png',
+  },
+  manifest: '/assets/geoweedo/site.webmanifest',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
