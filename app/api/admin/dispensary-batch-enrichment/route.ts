@@ -1,13 +1,12 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {getAdminFromRequest} from '@/lib/adminAuth';
-import {createBatchJob,discoveryConfigured,discoveryProvider,getBatchJob,getBatchScopeOptions,listBatchJobs,listReviewQueue,processBatchChunk,reviewQueueItem} from '@/lib/dispensaryBatchEnrichment';
+import {createBatchJob,getBatchJob,getBatchScopeOptions,listBatchJobs,listReviewQueue,placesConfigured,processBatchChunk,reviewQueueItem} from '@/lib/dispensaryBatchEnrichment';
 import {resumeBlockedBatch} from '@/lib/dispensaryBatchRecovery';
 import {controlBatchJob,getBatchControlState} from '@/lib/dispensaryBatchControl';
-import {checkSiteSearchHealth} from '@/lib/siteSearchHealth';
 
 export const dynamic='force-dynamic';
 
-export async function GET(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const url=new URL(request.url);const reviewStatus=url.searchParams.get('reviewStatus')||'pending';return NextResponse.json({options:getBatchScopeOptions(),jobs:listBatchJobs(15),reviews:listReviewQueue(reviewStatus,100),discoveryConfigured:discoveryConfigured(),discoveryProvider:discoveryProvider()});}
+export async function GET(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const url=new URL(request.url);const reviewStatus=url.searchParams.get('reviewStatus')||'pending';return NextResponse.json({options:getBatchScopeOptions(),jobs:listBatchJobs(15),reviews:listReviewQueue(reviewStatus,100),googlePlacesConfigured:placesConfigured(),enrichmentSources:[{id:'google_places',label:'Google Places',configured:placesConfigured(),primary:true},{id:'official_website',label:'Official website',configured:true,primary:false}]});}
 
 export async function POST(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);try{
  if(body?.action==='create'){const job=createBatchJob(admin.id,body.scope||{},body.autoApply!==false);return NextResponse.json({job});}
@@ -26,7 +25,6 @@ export async function POST(request:NextRequest){const admin=getAdminFromRequest(
   const control=controlBatchJob(String(body.jobId),body.control);
   return NextResponse.json({control,job:getBatchJob(String(body.jobId))});
  }
- if(body?.action==='health')return NextResponse.json({health:await checkSiteSearchHealth()});
  if(body?.action==='retryBlocked'){if(!body.jobId)return NextResponse.json({error:'jobId is required.'},{status:400});return NextResponse.json({recovery:resumeBlockedBatch(String(body.jobId))});}
  return NextResponse.json({error:'Unknown batch action.'},{status:400});
  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Batch operation failed.'},{status:400});}}
