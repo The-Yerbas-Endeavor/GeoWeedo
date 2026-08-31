@@ -72,7 +72,7 @@ export default function AdminWithdrawalManager() {
       <section className="admin-panel approved-list">
         <h2>Withdrawal review queue</h2>
         <p className="admin-help">Player withdrawals reserve their YERB immediately. Review the request, approve it, then use <strong>Send YERB</strong> to create the on-chain transaction through the configured Yerbas Core wallet. Sending is only available after approval.</p>
-        {!rpcConfigured && <p className="admin-help" style={{color:'#f5c451'}}>Yerbas RPC is not configured, so approved withdrawals cannot be sent yet.</p>}
+        {!rpcConfigured && <p className="admin-help" style={{ color: '#f5c451' }}>Yerbas RPC is not configured, so approved withdrawals cannot be sent yet.</p>}
         {items.length === 0 ? <p>No withdrawals yet.</p> : items.map((item) => (
           <div className="candidate-row" key={item.id}>
             <div>
@@ -80,9 +80,9 @@ export default function AdminWithdrawalManager() {
               <span>To {item.destination_address}</span>
               <small>Requested {new Date(item.requested_at).toLocaleString()}{item.reviewed_at ? ` · reviewed ${new Date(item.reviewed_at).toLocaleString()}` : ''}{item.yerbas_address ? ` · login wallet ${item.yerbas_address}` : ''}</small>
               {item.sent_at && <small>Sent {new Date(item.sent_at).toLocaleString()}</small>}
-              {item.txid && <small style={{overflowWrap:'anywhere'}}>txid {item.txid}</small>}
+              {item.txid && <small style={{ overflowWrap: 'anywhere' }}>txid {item.txid}</small>}
               {Number(item.fee_atomic || 0) > 0 && <small>Network fee {(Number(item.fee_atomic) / ATOMIC).toFixed(8)} YERB</small>}
-              {item.failure_reason && <small style={{color:'#f5c451'}}>{item.failure_reason}</small>}
+              {item.failure_reason && <small style={{ color: '#f5c451' }}>{item.failure_reason}</small>}
             </div>
             <div className="candidate-actions">
               <span className={`status-pill ${item.status}`}>{item.status}</span>
