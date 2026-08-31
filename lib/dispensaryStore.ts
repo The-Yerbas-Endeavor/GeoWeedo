@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { getDatabase } from '@/lib/sqlite';
 
-export type ImageryProvider = 'kartaview' | 'geoweedo';
+export type ImageryProvider = 'google' | 'kartaview' | 'geoweedo';
 
 export type ApprovedDispensary = {
   id: string;
