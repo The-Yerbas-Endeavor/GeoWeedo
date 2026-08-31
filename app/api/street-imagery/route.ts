@@ -134,25 +134,24 @@ async function lookupGoogle(lat: number, lng: number) {
   const panoId = String(metadata.pano_id);
   const panoLat = asNumber(metadata.location.lat) ?? lat;
   const panoLng = asNumber(metadata.location.lng) ?? lng;
-  const headings = [0, 90, 180, 270];
-  const photos = headings.map((heading, index) => ({
-    id: `${panoId}-${heading}`,
+  const panorama = {
+    id: panoId,
     lat: panoLat,
     lng: panoLng,
-    heading,
-    fieldOfView: 90,
-    projection: 'PERSPECTIVE',
-    imageUrl: `/api/street-imagery/google-image?pano=${encodeURIComponent(panoId)}&heading=${heading}`,
+    heading: 0,
+    fieldOfView: 360,
+    projection: 'GOOGLE_PANORAMA',
+    imageUrl: `/api/street-imagery/google-image?pano=${encodeURIComponent(panoId)}&heading=0`,
     sequenceId: panoId,
-    sequenceIndex: index,
+    sequenceIndex: 0,
     shotDate: metadata.date ?? null,
     width: 640,
     height: 400,
     qualityLevel: 1,
-    qualityStatus: 'GOOGLE',
-    status: 'GOOGLE',
-  }));
-  return { provider: 'google' as const, photos, initialIndex: 0, selectedPhotoId: photos[0]?.id ?? null, attribution: 'Google Street View', quality: gradeImagery(photos[0], photos) };
+    qualityStatus: 'GOOGLE_360',
+    status: 'GOOGLE_360',
+  };
+  return { provider: 'google' as const, photos: [panorama], initialIndex: 0, selectedPhotoId: panoId, attribution: 'Google Street View', quality: gradeImagery(panorama, [panorama]) };
 }
 
 function selectedProvider(request: NextRequest): Provider {
