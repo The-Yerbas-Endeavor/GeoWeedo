@@ -8,7 +8,8 @@ import {enrichFromOfficialWebsite} from '@/lib/dispensaryEnrichment';
 import {configuredSiteSearchProvider,siteSearchProviderLabel} from '@/lib/siteSearchProvider';
 
 type Scope={country?:string;region?:string;recordType?:'all'|'dispensary'|'candidate';missing?:'any'|'website'|'phone'|'hours'|'amenities'};
-const DISCOVERY_BLOCKED_MESSAGE='Official-site discovery is not configured. Configure BRAVE_SEARCH_API_KEY or existing Google Custom Search credentials before processing records that do not already have a website.';
+const DISCOVERY_BLOCKED_MESSAGE='No trustworthy website is currently stored for this record. GeoWeedo will not guess: import an official website from the licensing source or add one in Admin before first-party enrichment.';
+const LEGACY_DISCOVERY_MESSAGES=['Official-site discovery is not configured.%','Official-site discovery is not configured. Configure BRAVE_SEARCH_API_KEY%'];
 
 export function discoveryConfigured(){return Boolean(configuredSiteSearchProvider());}
 export function discoveryProvider(){const provider=configuredSiteSearchProvider();return{provider,label:siteSearchProviderLabel(provider)};}
@@ -22,7 +23,7 @@ function ensureSchema(){
   CREATE INDEX IF NOT EXISTS dispensary_batch_items_job_idx ON dispensary_batch_items(job_id,status,created_at);
   CREATE INDEX IF NOT EXISTS dispensary_review_queue_status_idx ON dispensary_enrichment_review_queue(status,created_at);
  `);
- db.prepare(`UPDATE dispensary_batch_items SET status='blocked',stage='discovery',message=? WHERE status='failed' AND message LIKE 'Official-site discovery is not configured.%'`).run(DISCOVERY_BLOCKED_MESSAGE);
+ for(const pattern of LEGACY_DISCOVERY_MESSAGES)db.prepare(`UPDATE dispensary_batch_items SET status='blocked',stage='discovery',message=? WHERE status IN ('failed','blocked') AND message LIKE ?`).run(DISCOVERY_BLOCKED_MESSAGE,pattern);
 }
 function now(){return new Date().toISOString();}
 function profileState(locationId:string,base:any){const p=getCommunityProfile(locationId);return{website:String(p?.website||base?.website||'').trim(),phone:String(p?.phone||base?.phone||'').trim(),hours:p?.hours||{},amenities:p?.amenities||[]};}
