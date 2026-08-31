@@ -1,13 +1,19 @@
 const APPLE_ICON_TARGET = '/assets/geoweedo/geoweedo-icon-48.png';
 
-function redirectToAppleIcon(request: Request) {
-  return Response.redirect(new URL(APPLE_ICON_TARGET, request.url), 307);
+function redirectToAppleIcon() {
+  return new Response(null, {
+    status: 307,
+    headers: {
+      Location: APPLE_ICON_TARGET,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
-export function GET(request: Request) {
-  return redirectToAppleIcon(request);
+export function GET() {
+  return redirectToAppleIcon();
 }
 
-export function HEAD(request: Request) {
-  return redirectToAppleIcon(request);
+export function HEAD() {
+  return redirectToAppleIcon();
 }
