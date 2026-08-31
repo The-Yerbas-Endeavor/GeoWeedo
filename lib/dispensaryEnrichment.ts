@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getDatabase } from '@/lib/sqlite';
 import { getLocationBase, getCommunityProfile, upsertCommunityProfile } from '@/lib/dispensaryCommunity';
+import { fetchOfficialWebsiteHtml } from '@/lib/websiteFetch';
 
 export type EnrichmentResult={locationId:string;website?:string;phone?:string;hours:Record<string,string>;amenities:string[];social:Record<string,string>;logoUrl?:string;sourceUrl:string;confidence:'high'|'medium';notes:string[]};
 
@@ -15,8 +16,7 @@ function socialFromSameAs(value:any){const result:Record<string,string>={};for(c
 export async function enrichFromOfficialWebsite(locationId:string,actorId:string,apply=false):Promise<EnrichmentResult>{
  const location=getLocationBase(locationId);if(!location)throw new Error('Location not found.');
  const website=cleanUrl(location.website||getCommunityProfile(locationId)?.website);if(!website)throw new Error('This location does not have an official website yet. Add/confirm its website first.');
- const response=await fetch(website,{redirect:'follow',cache:'no-store',headers:{'User-Agent':'GeoWeedo/0.4 (+https://geoweedo.com; official business profile enrichment)','Accept':'text/html,application/xhtml+xml'}});
- if(!response.ok)throw new Error(`Official website returned ${response.status}.`);const finalUrl=response.url||website;const html=await response.text();if(html.length>4_000_000)throw new Error('Official website response is too large to safely inspect.');
+ const fetched=await fetchOfficialWebsiteHtml(website);const finalUrl=fetched.finalUrl;const html=fetched.html;
  const nodes:any[]=[];for(const match of Array.from(html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi))){try{walk(JSON.parse(match[1].trim()),nodes);}catch{}}
  const local=nodes.find(n=>{const type=Array.isArray(n?.['@type'])?n['@type'].join(' '):text(n?.['@type']);return /LocalBusiness|Store|Organization|Cannabis/i.test(type);})||nodes.find(n=>n?.telephone||n?.openingHoursSpecification||n?.logo);
  const foundWebsite=cleanUrl(local?.url)||finalUrl,phone=text(local?.telephone)||undefined,hours=parseHours(local?.openingHoursSpecification),social=socialFromSameAs(local?.sameAs);
