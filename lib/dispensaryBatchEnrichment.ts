@@ -5,11 +5,13 @@ import {getDatabase} from '@/lib/sqlite';
 import {getLocationBase,getCommunityProfile,upsertCommunityProfile} from '@/lib/dispensaryCommunity';
 import {discoverOfficialSite} from '@/lib/officialSiteDiscovery';
 import {enrichFromOfficialWebsite} from '@/lib/dispensaryEnrichment';
+import {configuredSiteSearchProvider,siteSearchProviderLabel} from '@/lib/siteSearchProvider';
 
 type Scope={country?:string;region?:string;recordType?:'all'|'dispensary'|'candidate';missing?:'any'|'website'|'phone'|'hours'|'amenities'};
-const DISCOVERY_BLOCKED_MESSAGE='Official-site discovery is not configured. Configure a search provider before processing records that do not already have a website.';
+const DISCOVERY_BLOCKED_MESSAGE='Official-site discovery is not configured. Configure BRAVE_SEARCH_API_KEY or existing Google Custom Search credentials before processing records that do not already have a website.';
 
-export function discoveryConfigured(){return Boolean(process.env.GOOGLE_CUSTOM_SEARCH_API_KEY&&process.env.GOOGLE_CUSTOM_SEARCH_CX);}
+export function discoveryConfigured(){return Boolean(configuredSiteSearchProvider());}
+export function discoveryProvider(){const provider=configuredSiteSearchProvider();return{provider,label:siteSearchProviderLabel(provider)};}
 
 function ensureSchema(){
  const db=getDatabase();
@@ -20,9 +22,6 @@ function ensureSchema(){
   CREATE INDEX IF NOT EXISTS dispensary_batch_items_job_idx ON dispensary_batch_items(job_id,status,created_at);
   CREATE INDEX IF NOT EXISTS dispensary_review_queue_status_idx ON dispensary_enrichment_review_queue(status,created_at);
  `);
- // Older jobs treated a missing discovery provider as a processing failure even though
- // the outcome was known before the request started. Reclassify those rows so job
- // history accurately distinguishes infrastructure/capability blocks from real errors.
  db.prepare(`UPDATE dispensary_batch_items SET status='blocked',stage='discovery',message=? WHERE status='failed' AND message LIKE 'Official-site discovery is not configured.%'`).run(DISCOVERY_BLOCKED_MESSAGE);
 }
 function now(){return new Date().toISOString();}
@@ -78,9 +77,8 @@ async function processItem(item:any,job:any,actorId:string){
   const preview=await enrichFromOfficialWebsite(locationId,actorId,false);if(preview.confidence!=='high'){queueReview(job.id,item,'enrichment',preview.confidence,preview);return;}
   if(autoApply)await enrichFromOfficialWebsite(locationId,actorId,true);else{queueReview(job.id,item,'enrichment','high',preview);return;}
   db.prepare(`UPDATE dispensary_batch_items SET status='applied',stage='complete',message='High-confidence site and enrichment applied.',result_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(preview),now(),item.id);
- }catch(e){const message=e instanceof Error?e.message:'Batch processing failed.';if(message.startsWith('Official-site discovery is not configured.'))db.prepare(`UPDATE dispensary_batch_items SET status='blocked',stage='discovery',message=?,updated_at=? WHERE id=?`).run(DISCOVERY_BLOCKED_MESSAGE,now(),item.id);else db.prepare(`UPDATE dispensary_batch_items SET status='failed',message=?,updated_at=? WHERE id=?`).run(message,now(),item.id);}
+ }catch(e){db.prepare(`UPDATE dispensary_batch_items SET status='failed',message=?,updated_at=? WHERE id=?`).run(e instanceof Error?e.message:'Batch processing failed.',now(),item.id);}
 }
-
 export async function processBatchChunk(jobId:string,actorId:string,chunkSize=5){ensureSchema();const db=getDatabase(),job=db.prepare(`SELECT * FROM dispensary_batch_jobs WHERE id=?`).get(jobId) as any;if(!job)throw new Error('Batch job not found.');if(job.status==='completed')return getBatchJob(jobId);db.prepare(`UPDATE dispensary_batch_jobs SET status='running',updated_at=? WHERE id=?`).run(now(),jobId);const items=db.prepare(`SELECT * FROM dispensary_batch_items WHERE job_id=? AND status='pending' ORDER BY created_at,id LIMIT ?`).all(jobId,Math.min(10,Math.max(1,chunkSize))) as any[];for(const item of items)await processItem(item,job,actorId);const left=(db.prepare(`SELECT COUNT(*) count FROM dispensary_batch_items WHERE job_id=? AND status IN ('pending','processing')`).get(jobId) as any)?.count||0;db.prepare(`UPDATE dispensary_batch_jobs SET status=?,updated_at=? WHERE id=?`).run(left?'running':'completed',now(),jobId);return getBatchJob(jobId);}
 export function listReviewQueue(status='pending',limit=100){ensureSchema();return (getDatabase().prepare(`SELECT * FROM dispensary_enrichment_review_queue WHERE status=? ORDER BY created_at ASC LIMIT ?`).all(status,Math.min(250,Math.max(1,limit))) as any[]).map((r:any)=>({...r,payload:JSON.parse(r.payload_json||'{}')}));}
 export async function reviewQueueItem(reviewId:string,action:'approve'|'reject',actorId:string){ensureSchema();const db=getDatabase(),row=db.prepare(`SELECT * FROM dispensary_enrichment_review_queue WHERE id=? AND status='pending'`).get(reviewId) as any;if(!row)throw new Error('Review item not found or already reviewed.');const payload=JSON.parse(row.payload_json||'{}'),stamp=now();if(action==='approve'){if(row.review_type==='discovery'){const selected=payload?.selected;if(!selected?.url)throw new Error('No website candidate is available to approve.');const current=getCommunityProfile(row.location_id);upsertCommunityProfile(row.location_id,{overview:current?.overview,phone:current?.phone,website:selected.url,hours:current?.hours||{},amenities:current?.amenities||[],social:current?.social||{}},{type:'admin',id:actorId});const preview=await enrichFromOfficialWebsite(row.location_id,actorId,false);if(preview.confidence==='high'){await enrichFromOfficialWebsite(row.location_id,actorId,true);db.prepare(`UPDATE dispensary_batch_items SET status='applied',stage='complete',message='Discovery approved; high-confidence enrichment applied.',updated_at=? WHERE id=?`).run(stamp,row.item_id);}else{queueReview(row.job_id,{id:row.item_id,location_id:row.location_id,location_name:row.location_name},'enrichment',preview.confidence,preview);}}else{await enrichFromOfficialWebsite(row.location_id,actorId,true);db.prepare(`UPDATE dispensary_batch_items SET status='applied',stage='complete',message='Enrichment approved by admin.',updated_at=? WHERE id=?`).run(stamp,row.item_id);}}else db.prepare(`UPDATE dispensary_batch_items SET status='skipped',message='Rejected in enrichment review.',updated_at=? WHERE id=?`).run(stamp,row.item_id);db.prepare(`UPDATE dispensary_enrichment_review_queue SET status=?,reviewed_by=?,reviewed_at=?,updated_at=? WHERE id=?`).run(action==='approve'?'approved':'rejected',actorId,stamp,stamp,reviewId);return{ok:true};}
