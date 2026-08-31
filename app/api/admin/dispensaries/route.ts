@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   const requestedProvider = String(body.imageryProvider || '').toLowerCase();
   const googlePanorama = requestedProvider === 'google' || String(body.imageryProjection || '').toUpperCase() === 'GOOGLE_PANORAMA';
-  const imageryProvider = googlePanorama ? 'google' : requestedProvider === 'geoweedo' ? 'geoweedo' : 'kartaview';
+  const imageryProvider: any = googlePanorama ? 'google' : requestedProvider === 'geoweedo' ? 'geoweedo' : 'kartaview';
   if (imageryProvider === 'google') {
     try {
       await validateGooglePanorama(String(body.imageryPhotoId));
