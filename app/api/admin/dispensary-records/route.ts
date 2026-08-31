@@ -29,7 +29,7 @@ export async function PATCH(request:NextRequest){
  if(!String(d.name||'').trim())return NextResponse.json({error:'Name is required.'},{status:400});
  const lat=d.latitude===''||d.latitude==null?null:num(d.latitude),lng=d.longitude===''||d.longitude==null?null:num(d.longitude);
  if(lat!==null&&(lat<-90||lat>90)||lng!==null&&(lng<-180||lng>180))return NextResponse.json({error:'Coordinates are outside valid bounds.'},{status:400});
- const licenseTypes=Array.isArray(d.licenseTypes)?Array.from(new Set(d.licenseTypes.map((v:unknown)=>String(v)).filter((v:string)=>DISPENSARY_LICENSE_TYPE_IDS.has(v)))):[];
+ const licenseTypes:string[]=Array.isArray(d.licenseTypes)?Array.from(new Set<string>(d.licenseTypes.map((v:unknown)=>String(v)).filter((v:string)=>DISPENSARY_LICENSE_TYPE_IDS.has(v)))):[];
  ensureLicenseSchema();
  try{
   db.exec('BEGIN IMMEDIATE');
