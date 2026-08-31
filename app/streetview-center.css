@@ -1,0 +1,32 @@
+/* Keep the floating KartaView viewer centered along the bottom of the map. */
+.map-streetview-panel{
+  left:50% !important;
+  right:auto !important;
+  bottom:24px;
+  transform:translateX(-50%) !important;
+  width:min(720px,calc(100% - 48px));
+}
+
+@media(max-width:1200px){
+  .map-streetview-panel{width:min(720px,calc(100% - 48px));}
+}
+
+@media(max-width:980px){
+  .map-streetview-panel{
+    left:50% !important;
+    right:auto !important;
+    bottom:14px;
+    transform:translateX(-50%) !important;
+    width:calc(100% - 28px);
+  }
+}
+
+@media(max-width:760px){
+  .map-streetview-panel{
+    left:50% !important;
+    right:auto !important;
+    bottom:12px;
+    transform:translateX(-50%) !important;
+    width:calc(100% - 24px);
+  }
+}
