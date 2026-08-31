@@ -36,7 +36,10 @@ function scoreCandidate(location:any,item:any):SiteCandidate|null{
 export async function discoverOfficialSite(locationId:string,actorId:string,apply=false){
  const location=getLocationBase(locationId);if(!location)throw new Error('Location not found.');
  const current=getCommunityProfile(locationId),existingUrl=String(current?.website||location.website||'').trim();
- if(existingUrl){const selected:SiteCandidate={url:existingUrl,title:'Existing GeoWeedo website',snippet:'',score:100,confidence:'high',reasons:['website already stored on GeoWeedo'],warnings:[]};return{locationId,query:null,provider:null,candidates:[] as SiteCandidate[],selected,applied:false,existing:true};}
+ if(existingUrl){
+  const selected:SiteCandidate={url:existingUrl,title:'Existing GeoWeedo website',snippet:'',score:100,confidence:'high',reasons:['website already stored on GeoWeedo'],warnings:[]};
+  return{locationId,query:null,provider:null,cached:false,candidates:[] as SiteCandidate[],selected,runnerUp:null,margin:100,canAutoApply:true,applied:false,existing:true};
+ }
  const query=[`\"${location.name}\"`,location.streetAddress,location.city,location.region,'dispensary cannabis'].filter(Boolean).join(' ');
  const search=await searchOfficialSiteCandidates(query);
  const candidates:SiteCandidate[]=search.results.map((x:any)=>scoreCandidate(location,x)).filter((x:SiteCandidate|null):x is SiteCandidate=>x!==null).sort((a,b)=>b.score-a.score),selected=candidates[0]||null,runnerUp=candidates[1]||null;
