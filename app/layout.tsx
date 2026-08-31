@@ -19,10 +19,11 @@ export const metadata = {
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
   icons: {
     icon: [
-      { url: '/assets/geoweedo/favicon.ico' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
       { url: '/assets/geoweedo/geoweedo-icon-32.png', sizes: '32x32', type: 'image/png' },
     ],
-    apple: '/assets/geoweedo/geoweedo-icon-48.png',
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/assets/geoweedo/site.webmanifest',
 };
