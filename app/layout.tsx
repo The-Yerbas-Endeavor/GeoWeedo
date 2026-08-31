@@ -17,14 +17,6 @@ import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 export const metadata = {
   title: 'GeoWeedo',
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
-  icons: {
-    icon: [
-      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.ico', type: 'image/x-icon' },
-    ],
-    shortcut: '/favicon.png',
-    apple: '/apple-touch-icon.png',
-  },
   manifest: '/assets/geoweedo/site.webmanifest',
 };
 
