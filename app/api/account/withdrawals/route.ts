@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
   db.exec('BEGIN IMMEDIATE');
   try {
     const posted = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'posted'").get(user.walletId) as any;
-    const held = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'held'").get(user.walletId) as any;
-    const available = Number(posted?.amount || 0) + Number(held?.amount || 0);
+    const heldDebits = db.prepare("SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id = ? AND status = 'held' AND amount_atomic < 0").get(user.walletId) as any;
+    const available = Math.max(0, Number(posted?.amount || 0) + Number(heldDebits?.amount || 0));
     if (amountAtomic > available) {
       db.exec('ROLLBACK');
       return NextResponse.json({ error: 'Insufficient available YERB balance.' }, { status: 400 });
