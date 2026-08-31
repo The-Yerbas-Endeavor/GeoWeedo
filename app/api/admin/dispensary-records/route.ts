@@ -16,6 +16,12 @@ function licenseTypesFor(id:string){ensureLicenseSchema();return (getDatabase().
 export async function GET(request:NextRequest){
  const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});
  ensureLicenseSchema();const db=getDatabase();
+ const requestedId=String(request.nextUrl.searchParams.get('id')||'').trim();
+ if(requestedId){
+  const row=db.prepare(`SELECT id,'dispensary' kind,name,street_address,city,region,postal_code,country,latitude,longitude,website,phone,license_number,NULL license_status,NULL license_type,data_source,source_url,source_license,recreational,medical,verified,active,NULL status,NULL imagery_status,imagery_provider,priority_weight,sponsored_until,updated_at FROM dispensaries WHERE id=?`).get(requestedId) as Record<string,unknown>|undefined;
+  if(!row)return NextResponse.json({error:'Dispensary not found.'},{status:404});
+  return NextResponse.json({record:{...row,license_types:licenseTypesFor(requestedId),profile:profileFor(requestedId)}});
+ }
  const approved=db.prepare(`SELECT id,'dispensary' kind,name,street_address,city,region,postal_code,country,latitude,longitude,website,phone,license_number,NULL license_status,NULL license_type,data_source,source_url,source_license,recreational,medical,verified,active,NULL status,NULL imagery_status,imagery_provider,priority_weight,sponsored_until,updated_at FROM dispensaries ORDER BY region,city,name`).all() as Record<string,unknown>[];
  const candidates=db.prepare(`SELECT id,'candidate' kind,name,street_address,city,region,postal_code,country,latitude,longitude,website,phone,license_number,license_status,license_type,data_source,source_url,source_license,0 recreational,0 medical,0 verified,1 active,status,imagery_status,NULL imagery_provider,NULL priority_weight,NULL sponsored_until,updated_at FROM dispensary_candidates WHERE status<>'rejected' ORDER BY region,city,name`).all() as Record<string,unknown>[];
  const records=[...approved,...candidates].map(row=>({...row,license_types:licenseTypesFor(String(row.id)),profile:profileFor(String(row.id))}));
