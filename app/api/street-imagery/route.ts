@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gradeImagery } from '@/lib/imageryQuality';
 import { getConfiguredImageryProvider, incrementImageryProviderUsage, type ImageryProvider as Provider } from '@/lib/imageryProviderSettings';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type RawPhoto = Record<string, any>;
 
 function asNumber(value: unknown) {
@@ -160,24 +163,47 @@ function selectedProvider(request: NextRequest): Provider {
   return getConfiguredImageryProvider();
 }
 
+function json(data: unknown, configuredProvider: Provider, actualProvider?: string, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'X-GeoWeedo-Configured-Provider': configuredProvider,
+      'X-GeoWeedo-Imagery-Provider': actualProvider || configuredProvider,
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
-  const lat = Number(request.nextUrl.searchParams.get('lat'));
-  const lng = Number(request.nextUrl.searchParams.get('lng'));
+  const latRaw = request.nextUrl.searchParams.get('lat');
+  const lngRaw = request.nextUrl.searchParams.get('lng');
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
   const approvedPhotoId = String(request.nextUrl.searchParams.get('photoId') || '').trim();
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return NextResponse.json({ error: 'Invalid latitude or longitude.' }, { status: 400 });
+  const provider = selectedProvider(request);
+
+  if (latRaw === null || lngRaw === null || !latRaw.trim() || !lngRaw.trim() || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return json({ error: 'Invalid latitude or longitude.' }, provider, provider, 400);
   }
 
-  const provider = selectedProvider(request);
   try {
-    if (provider === 'google') return NextResponse.json(await lookupGoogle(lat, lng));
-    if (provider === 'kartaview') return NextResponse.json(await lookupKartaview(lat, lng, approvedPhotoId));
+    if (provider === 'google') {
+      const result = await lookupGoogle(lat, lng);
+      return json(result, provider, result.provider);
+    }
+    if (provider === 'kartaview') {
+      const result = await lookupKartaview(lat, lng, approvedPhotoId);
+      return json(result, provider, result.provider);
+    }
     try {
       const google = await lookupGoogle(lat, lng);
-      if (google.photos.length) return NextResponse.json(google);
+      if (google.photos.length) return json(google, provider, google.provider);
     } catch {}
-    return NextResponse.json(await lookupKartaview(lat, lng, approvedPhotoId));
+    const fallback = await lookupKartaview(lat, lng, approvedPhotoId);
+    return json(fallback, provider, fallback.provider);
   } catch (error) {
-    return NextResponse.json({ provider, error: error instanceof Error ? error.message : 'Street imagery lookup failed.' }, { status: 502 });
+    return json({ provider, error: error instanceof Error ? error.message : 'Street imagery lookup failed.' }, provider, provider, 502);
   }
 }
