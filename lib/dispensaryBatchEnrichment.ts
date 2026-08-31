@@ -8,7 +8,7 @@ import {enrichFromOfficialWebsite} from '@/lib/dispensaryEnrichment';
 import {configuredSiteSearchProvider,siteSearchProviderLabel} from '@/lib/siteSearchProvider';
 
 type Scope={country?:string;region?:string;recordType?:'all'|'dispensary'|'candidate';missing?:'any'|'website'|'phone'|'hours'|'amenities'};
-const DISCOVERY_BLOCKED_MESSAGE='Official-site discovery is not configured. Configure BRAVE_SEARCH_API_KEY or existing Google Custom Search credentials before processing records that do not already have a website.';
+const DISCOVERY_BLOCKED_MESSAGE='Official-site discovery is not configured. Set SEARXNG_URL to a self-hosted SearXNG instance before processing records that do not already have a website.';
 
 export function discoveryConfigured(){return Boolean(configuredSiteSearchProvider());}
 export function discoveryProvider(){const provider=configuredSiteSearchProvider();return{provider,label:siteSearchProviderLabel(provider)};}
