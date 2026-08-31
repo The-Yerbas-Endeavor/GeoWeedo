@@ -22,7 +22,7 @@ export const metadata = {
       { url: '/assets/geoweedo/favicon.ico' },
       { url: '/assets/geoweedo/geoweedo-icon-32.png', sizes: '32x32', type: 'image/png' },
     ],
-    apple: '/assets/geoweedo/apple-touch-icon.png',
+    apple: '/assets/geoweedo/geoweedo-icon-48.png',
   },
   manifest: '/assets/geoweedo/site.webmanifest',
 };

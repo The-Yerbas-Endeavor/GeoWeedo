@@ -1,0 +1,19 @@
+{
+  "name": "GeoWeedo",
+  "short_name": "GeoWeedo",
+  "icons": [
+    {
+      "src": "/assets/geoweedo/geoweedo-icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/geoweedo/geoweedo-icon-48.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#7ED321",
+  "background_color": "#081218",
+  "display": "standalone"
+}
