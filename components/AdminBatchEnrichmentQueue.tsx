@@ -5,7 +5,7 @@ import {useEffect,useMemo,useState} from 'react';
 type JobReason={status:string;message:string;count:number};
 type Job={id:string;status:string;total:number;counts:Record<string,number>;reasons?:JobReason[];scope:any;auto_apply:number;created_at:string};
 type Review={id:string;location_id:string;location_name:string;review_type:'discovery'|'enrichment';confidence:string;score?:number|null;payload:any;created_at:string};
-type Data={options:{countries:string[];regions:string[]};jobs:Job[];reviews:Review[];discoveryConfigured?:boolean;discoveryProvider?:{provider:'brave'|'google'|null;label:string}};
+type Data={options:{countries:string[];regions:string[]};jobs:Job[];reviews:Review[];discoveryConfigured?:boolean;discoveryProvider?:{provider:'searxng'|'google'|null;label:string}};
 
 export default function AdminBatchEnrichmentQueue(){
  const[data,setData]=useState<Data>({options:{countries:[],regions:[]},jobs:[],reviews:[]}),[country,setCountry]=useState(''),[region,setRegion]=useState(''),[recordType,setRecordType]=useState('all'),[missing,setMissing]=useState('any'),[autoApply,setAutoApply]=useState(true),[busy,setBusy]=useState(false),[running,setRunning]=useState<string|null>(null),[message,setMessage]=useState('');
@@ -18,7 +18,7 @@ export default function AdminBatchEnrichmentQueue(){
  return <section className="admin-panel" style={{marginBottom:24}}>
   <div className="admin-panel-heading"><div><span className="eyebrow">AUTOMATED ENRICHMENT</span><h2>Batch discovery + enrichment queue</h2></div></div>
   <p className="admin-copy">Queue hundreds or thousands of incomplete records at once. High-confidence official-site matches and structured business data are applied automatically; anything uncertain stops in the review queue below.</p>
-  {data.discoveryConfigured?<p className="admin-status">Official-site discovery provider: <b>{data.discoveryProvider?.label||'Configured'}</b>. Records missing websites can be discovered automatically before first-party enrichment.</p>:<p className="admin-status">Official-site search is not configured. Add <b>BRAVE_SEARCH_API_KEY</b> on the server, or existing Google Custom Search credentials. Records that already have websites can still be enriched; records without websites are marked <b>Blocked</b>.</p>}
+  {data.discoveryConfigured?<p className="admin-status">Official-site discovery provider: <b>{data.discoveryProvider?.label||'Configured'}</b>. Records missing websites can be discovered automatically before first-party enrichment.</p>:<p className="admin-status">Official-site search is not configured. Set <b>SEARXNG_URL</b> to a self-hosted SearXNG instance. No paid search subscription is required. Records that already have websites can still be enriched; records without websites are marked <b>Blocked</b>.</p>}
   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:10}}>
    <label>Country<select value={country} onChange={e=>{setCountry(e.target.value);setRegion('');}}><option value="">All countries</option>{data.options.countries.map(v=><option key={v}>{v}</option>)}</select></label>
    <label>State / region<select value={region} onChange={e=>setRegion(e.target.value)}><option value="">All states / regions</option>{regions.map(v=><option key={v}>{v}</option>)}</select></label>
