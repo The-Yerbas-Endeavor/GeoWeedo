@@ -21,12 +21,12 @@ export type ImageryQualityResult = {
 
 const isSphere = (photo: ImageryQualityPhoto) => {
   const projection = String(photo.projection || '').toUpperCase();
-  return projection === 'SPHERE' || projection === 'EQUIRECTANGULAR' || Number(photo.fieldOfView || 0) >= 300;
+  return projection === 'SPHERE' || projection === 'EQUIRECTANGULAR' || projection === 'GOOGLE_PANORAMA' || Number(photo.fieldOfView || 0) >= 300;
 };
 
 const isActive = (photo: ImageryQualityPhoto) => {
   const status = String(photo.status || '').toLowerCase();
-  return !status || status === 'active' || status === 'public';
+  return !status || status === 'active' || status === 'public' || status === 'google' || status === 'google_360';
 };
 
 const isLandscape = (photo: ImageryQualityPhoto) => {
@@ -55,7 +55,7 @@ export function gradeImagery(selected: ImageryQualityPhoto | undefined, sequence
     return { playable: false, grade: 'F', mode: 'unusable', reason: `Only ${frameCount} usable frame(s); at least 8 are required for street movement.`, frameCount, landscapeFrames, landscapeRatio };
   }
   if (!selectedLandscape) {
-    return { playable: false, grade: 'F', mode: 'unusable', reason: 'Selected KartaView frame is portrait or lacks verifiable landscape dimensions.', frameCount, landscapeFrames, landscapeRatio };
+    return { playable: false, grade: 'F', mode: 'unusable', reason: 'Selected Street View frame is portrait or lacks verifiable landscape dimensions.', frameCount, landscapeFrames, landscapeRatio };
   }
   if (selectedWidth < 1280) {
     return { playable: false, grade: 'F', mode: 'unusable', reason: `Selected frame is only ${selectedWidth || 'unknown'}px wide; at least 1280px is required.`, frameCount, landscapeFrames, landscapeRatio };
