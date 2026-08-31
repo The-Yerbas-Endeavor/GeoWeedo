@@ -60,7 +60,7 @@ function locationKey(street:string,city:string){return `${normalized(street)}|${
 export async function fetchColoradoCandidates():Promise<ColoradoCandidate[]>{
   let response:Response;
   try{
-    response=await fetch(CSV_URL,{headers:{Accept:'text/csv,text/plain;q=0.9,*/*;q=0.8','User-Agent':'GeoWeedo/0.5 (https://geoweedo.yerbas.org)'},cache:'no-store',signal:AbortSignal.timeout(30000)});
+    response=await fetch(CSV_URL,{headers:{Accept:'text/csv,text/plain;q=0.9,*/*;q=0.8','User-Agent':'GeoWeedo/0.8 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(30000)});
   }catch(error){
     throw new Error(`Colorado MED store-list connection failed: ${error instanceof Error?error.message:String(error)}`);
   }
@@ -108,16 +108,11 @@ export async function fetchColoradoCandidates():Promise<ColoradoCandidate[]>{
     const parsed:Parsed={candidate,type,expiration:value(row,expirationIndex),updated:value(row,updatedIndex)};
     const key=locationKey(street,city);
     const existing=byLocation.get(key);
-    // One GeoWeedo candidate per physical storefront. Prefer a retail license when
-    // MED lists both retail and medical licenses at the same premises.
     if(!existing||(/Retail Marijuana Store/i.test(type)&&!/Retail Marijuana Store/i.test(existing.type)))byLocation.set(key,parsed);
     void zip;
   }
 
   const rows=Array.from(byLocation.values()).map(item=>item.candidate);
-  // The MED sheet can contain separate medical and retail licenses at one address,
-  // so the deduplicated physical-store count is lower than the raw license count.
-  // Keep a corruption guard without assuming Colorado must always exceed 300 stores.
   if(rows.length<200)throw new Error(`Colorado MED store parser found only ${rows.length} physical storefronts; refusing a likely partial import.`);
   return rows;
 }
