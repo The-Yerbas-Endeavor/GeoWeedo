@@ -1,13 +1,19 @@
 const FAVICON_TARGET = '/assets/geoweedo/favicon.ico';
 
-function redirectToFavicon(request: Request) {
-  return Response.redirect(new URL(FAVICON_TARGET, request.url), 307);
+function redirectToFavicon() {
+  return new Response(null, {
+    status: 307,
+    headers: {
+      Location: FAVICON_TARGET,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }
 
-export function GET(request: Request) {
-  return redirectToFavicon(request);
+export function GET() {
+  return redirectToFavicon();
 }
 
-export function HEAD(request: Request) {
-  return redirectToFavicon(request);
+export function HEAD() {
+  return redirectToFavicon();
 }
