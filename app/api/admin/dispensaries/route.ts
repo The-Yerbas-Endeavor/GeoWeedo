@@ -8,7 +8,7 @@ function num(value: unknown) { const n = Number(value); return Number.isFinite(n
 function clean(value: unknown) { const s = String(value ?? '').trim(); return s || undefined; }
 
 async function validateKartaView(photoId: string) {
-  const headers = { Accept: 'application/json', 'User-Agent': 'GeoWeedo/0.6 (https://geoweedo.yerbas.org)' };
+  const headers = { Accept: 'application/json', 'User-Agent': 'GeoWeedo/1.0 (https://geoweedo.com)' };
   const detailResponse = await fetch(`https://api.openstreetcam.org/2.0/photo/${encodeURIComponent(photoId)}`, { headers, cache: 'no-store' });
   if (!detailResponse.ok) throw new Error(`KartaView photo validation returned ${detailResponse.status}`);
   const detailJson = await detailResponse.json();
@@ -26,6 +26,20 @@ async function validateKartaView(photoId: string) {
     sequence = rows.map((row: any) => ({ id: String(row.id || ''), projection: String(row.projection || ''), fieldOfView: num(row.fieldOfView), width: num(row.width), height: num(row.height), status: String(row.status || ''), sequenceId: String(row.sequenceId || row.sequence?.id || '') }));
   }
   return gradeImagery(selected, sequence);
+}
+
+async function validateGooglePanorama(panoId: string) {
+  const apiKey = String(process.env.GOOGLE_MAPS_API_KEY || '').trim();
+  if (!apiKey) throw new Error('Google Street View validation is not configured.');
+  const url = new URL('https://maps.googleapis.com/maps/api/streetview/metadata');
+  url.searchParams.set('pano', panoId);
+  url.searchParams.set('key', apiKey);
+  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error(`Google Street View validation returned ${response.status}`);
+  const metadata = await response.json();
+  if (metadata?.status !== 'OK' || !metadata?.pano_id) throw new Error(`Google Street View panorama could not be verified (${String(metadata?.status || 'UNKNOWN_ERROR')}).`);
+  if (String(metadata.pano_id) !== panoId) throw new Error('Google Street View returned a different panorama than the selected one.');
+  return true;
 }
 
 export async function GET(request: NextRequest) {
@@ -46,13 +60,21 @@ export async function POST(request: NextRequest) {
   if (!String(body.imageryPhotoId || '').trim() || !String(body.imageryUrl || '').trim()) return invalid('A validated starting image is required.');
   if (!Number.isFinite(imageryLatitude) || !Number.isFinite(imageryLongitude)) return invalid('Valid imagery coordinates are required.');
 
-  const imageryProvider = body.imageryProvider === 'geoweedo' ? 'geoweedo' : 'kartaview';
-  if (imageryProvider === 'kartaview') {
+  const requestedProvider = String(body.imageryProvider || '').toLowerCase();
+  const googlePanorama = requestedProvider === 'google' || String(body.imageryProjection || '').toUpperCase() === 'GOOGLE_PANORAMA';
+  const imageryProvider = googlePanorama ? 'google' : requestedProvider === 'geoweedo' ? 'geoweedo' : 'kartaview';
+  if (imageryProvider === 'google') {
+    try {
+      await validateGooglePanorama(String(body.imageryPhotoId));
+    } catch (error) {
+      return invalid(error instanceof Error ? error.message : 'Google Street View panorama could not be verified.');
+    }
+  } else if (imageryProvider === 'kartaview') {
     try {
       const quality = await validateKartaView(String(body.imageryPhotoId));
-      if (!quality.playable) return invalid(`KartaView imagery rejected for gameplay: ${quality.reason}`);
+      if (!quality.playable) return invalid(`Street View imagery rejected for gameplay: ${quality.reason}`);
     } catch (error) {
-      return invalid(error instanceof Error ? error.message : 'KartaView imagery could not be quality-verified.');
+      return invalid(error instanceof Error ? error.message : 'Street View imagery could not be quality-verified.');
     }
   } else {
     const projection = String(body.imageryProjection || '').toUpperCase();
