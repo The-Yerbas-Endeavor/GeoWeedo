@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/sqlite';
 import { getUserFromRequest } from '@/lib/userAuth';
 import { yerbasRpc } from '@/lib/yerbasRpc';
+import { getAutoWithdrawLimitYerb } from '@/lib/withdrawalPolicy';
 
 export const runtime = 'nodejs';
 const ATOMIC = 100_000_000;
-const AUTO_WITHDRAW_LIMIT_YERB = 100;
 
 type ValidateAddressResult = { isvalid?: boolean };
 type WalletTx = { fee?: number };
@@ -34,7 +34,8 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString();
   const withdrawalId = `wd-${crypto.randomUUID()}`;
   const holdId = `ledger-${crypto.randomUUID()}`;
-  const autoSubmit = amountYerb < AUTO_WITHDRAW_LIMIT_YERB;
+  const autoWithdrawLimitYerb = getAutoWithdrawLimitYerb(db);
+  const autoSubmit = autoWithdrawLimitYerb > 0 && amountYerb < autoWithdrawLimitYerb;
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
         user.id,
         autoSubmit ? 'withdrawal.auto_approved' : 'withdrawal.requested',
         withdrawalId,
-        JSON.stringify({ amountYerb, destination, autoSubmit }),
+        JSON.stringify({ amountYerb, destination, autoSubmit, autoWithdrawLimitYerb }),
         now,
       );
 
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
       amountYerb,
       destinationAddress: destination,
       autoSubmitted: false,
+      autoWithdrawLimitYerb,
     }, { status: 201 });
   }
 
@@ -90,6 +92,7 @@ export async function POST(request: NextRequest) {
       amountYerb,
       destinationAddress: destination,
       autoSubmitted: false,
+      autoWithdrawLimitYerb,
       warning: 'Withdrawal was auto-approved but Yerbas RPC is not configured; it is waiting to be sent.',
     }, { status: 201 });
   }
@@ -130,6 +133,7 @@ export async function POST(request: NextRequest) {
         amountYerb,
         destinationAddress: destination,
         autoSubmitted: false,
+        autoWithdrawLimitYerb,
         warning: message,
       }, { status: 201 });
     }
@@ -163,7 +167,7 @@ export async function POST(request: NextRequest) {
       db.prepare(`INSERT INTO audit_log
         (id, actor_type, actor_id, action, entity_type, entity_id, metadata_json, created_at)
         VALUES (?, 'user', ?, 'withdrawal.auto_sent', 'withdrawal', ?, ?, ?)`)
-        .run(`audit-${crypto.randomUUID()}`, user.id, withdrawalId, JSON.stringify({ txid, amountYerb, destination, feeAtomic, processingAt }), sentAt);
+        .run(`audit-${crypto.randomUUID()}`, user.id, withdrawalId, JSON.stringify({ txid, amountYerb, destination, feeAtomic, processingAt, autoWithdrawLimitYerb }), sentAt);
 
       db.exec('COMMIT');
     } catch (error) {
@@ -179,6 +183,7 @@ export async function POST(request: NextRequest) {
       txid,
       feeYerb: feeAtomic / ATOMIC,
       autoSubmitted: true,
+      autoWithdrawLimitYerb,
     }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not auto-submit withdrawal.';
@@ -190,6 +195,7 @@ export async function POST(request: NextRequest) {
       amountYerb,
       destinationAddress: destination,
       autoSubmitted: false,
+      autoWithdrawLimitYerb,
       warning: message,
     }, { status: 201 });
   }
