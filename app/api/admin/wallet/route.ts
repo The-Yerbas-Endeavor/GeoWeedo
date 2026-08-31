@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
   const totals = db.prepare(`
     SELECT
       COALESCE((SELECT SUM(amount_atomic) FROM wallet_ledger WHERE status = 'posted'), 0) ledgerBalance,
+      COALESCE((SELECT SUM(amount_atomic) FROM wallet_ledger WHERE status = 'held' AND amount_atomic < 0), 0) heldDebits,
       COALESCE((SELECT SUM(amount_atomic) FROM deposits WHERE status IN ('credited', 'confirmed')), 0) deposits,
       COALESCE((SELECT SUM(amount_atomic) FROM treasury_deposits WHERE status IN ('pending', 'confirmed')), 0) treasuryDeposits,
       COALESCE((SELECT SUM(amount_atomic + fee_atomic) FROM withdrawals WHERE status IN ('sent', 'completed')), 0) withdrawals,
@@ -233,6 +234,9 @@ export async function GET(request: NextRequest) {
   const depositScan = getDepositScanStatus(db);
   const pendingPlayerDeposits = Number(counts.pendingPlayerDeposits || 0);
   const pendingTreasuryDeposits = Number(counts.pendingTreasuryDeposits || 0);
+  const rawLedgerAtomic = Number(totals.ledgerBalance || 0);
+  const heldDebitAtomic = Number(totals.heldDebits || 0);
+  const availableAtomic = Math.max(0, rawLedgerAtomic + heldDebitAtomic);
 
   return NextResponse.json(
     {
@@ -246,7 +250,9 @@ export async function GET(request: NextRequest) {
         pendingTreasuryDeposits,
         pendingWithdrawals: Number(counts.pendingWithdrawals || 0),
         pendingRewards: Number(counts.pendingRewards || 0),
-        ledgerBalanceYerb: y(totals.ledgerBalance),
+        ledgerBalanceYerb: y(availableAtomic),
+        rawLedgerBalanceYerb: y(rawLedgerAtomic),
+        heldYerb: y(Math.abs(heldDebitAtomic)),
         confirmedDepositsYerb: y(totals.deposits),
         treasuryDepositsYerb: y(totals.treasuryDeposits),
         sentWithdrawalsYerb: y(totals.withdrawals),
