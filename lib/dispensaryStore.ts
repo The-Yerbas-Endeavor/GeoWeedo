@@ -55,6 +55,18 @@ export type DispensaryDetailUpdate = {
   medical: boolean;
 };
 
+export type DispensaryImageryUpdate = {
+  imageryProvider: ImageryProvider;
+  imageryPhotoId: string;
+  imagerySequenceId?: string;
+  imageryLatitude: number;
+  imageryLongitude: number;
+  imageryHeading?: number;
+  imageryFieldOfView?: number;
+  imageryProjection?: string;
+  imageryUrl: string;
+};
+
 const legacyStorePath = path.join(process.cwd(), 'data', 'runtime', 'dispensaries.json');
 let migratedLegacyStore = false;
 
@@ -192,6 +204,27 @@ export async function updateDispensaryDetails(id: string, input: DispensaryDetai
     input.latitude, input.longitude, input.website ?? null, input.dataSource ?? null,
     input.sourceUrl ?? null, input.sourceLicense ?? null, input.recreational ? 1 : 0,
     input.medical ? 1 : 0, now, id,
+  );
+  if (Number(result.changes) < 1) return null;
+  const row = db.prepare('SELECT * FROM dispensaries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  return row ? rowToDispensary(row) : null;
+}
+
+export async function updateDispensaryImagery(id: string, input: DispensaryImageryUpdate) {
+  await migrateLegacyJsonOnce();
+  const db = getDatabase();
+  const result = db.prepare(`
+    UPDATE dispensaries SET
+      imagery_provider = ?, imagery_photo_id = ?, imagery_sequence_id = ?,
+      imagery_latitude = ?, imagery_longitude = ?, imagery_heading = ?,
+      imagery_field_of_view = ?, imagery_projection = ?, imagery_url = ?,
+      verified = 1, updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.imageryProvider, input.imageryPhotoId, input.imagerySequenceId ?? null,
+    input.imageryLatitude, input.imageryLongitude, input.imageryHeading ?? null,
+    input.imageryFieldOfView ?? null, input.imageryProjection ?? null, input.imageryUrl,
+    new Date().toISOString(), id,
   );
   if (Number(result.changes) < 1) return null;
   const row = db.prepare('SELECT * FROM dispensaries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
