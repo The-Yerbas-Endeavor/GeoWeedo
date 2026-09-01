@@ -10,6 +10,7 @@ import './profile-details.css';
 import './streetview-center.css';
 import './map-overlay-order.css';
 import './mobile.css';
+import './mobile-game-map.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
