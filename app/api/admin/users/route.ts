@@ -72,10 +72,21 @@ export async function GET(request:NextRequest){
   const games=db.prepare(`SELECT id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at FROM games WHERE user_id=? ORDER BY started_at DESC LIMIT 100`).all(id);
   const notes=db.prepare(`SELECT n.id,n.note,n.created_at,a.username AS adminUsername,a.display_name AS adminDisplayName FROM admin_user_notes n LEFT JOIN admin_users a ON a.id=n.admin_user_id WHERE n.user_id=? ORDER BY n.created_at DESC LIMIT 100`).all(id);
   const loginHistory=db.prepare(`SELECT id,ip_address AS ipAddress,city,region,country,latitude,longitude,geo_source AS geoSource,user_agent AS userAgent,created_at AS createdAt FROM user_login_locations WHERE user_id=? ORDER BY created_at DESC LIMIT 25`).all(id) as any[];
+  const sharedIpUsers=db.prepare(`WITH selected_ips AS (
+      SELECT DISTINCT ip_address FROM user_login_locations WHERE user_id=? AND ip_address IS NOT NULL AND TRIM(ip_address)<>''
+    )
+    SELECT u.id AS userId,u.username,u.display_name AS displayName,u.email,u.account_status AS accountStatus,
+      l.ip_address AS ipAddress,COUNT(*) AS loginCount,MIN(l.created_at) AS firstSeenAt,MAX(l.created_at) AS lastSeenAt
+    FROM user_login_locations l
+    JOIN selected_ips s ON s.ip_address=l.ip_address
+    JOIN users u ON u.id=l.user_id
+    WHERE l.user_id<>?
+    GROUP BY u.id,u.username,u.display_name,u.email,u.account_status,l.ip_address
+    ORDER BY lastSeenAt DESC,u.display_name COLLATE NOCASE,u.username COLLATE NOCASE`).all(id,id);
   const latestLogin=loginHistory[0]||null;
   const activeSessions=Number((db.prepare(`SELECT COUNT(*) AS value FROM user_sessions WHERE user_id=? AND revoked_at IS NULL AND expires_at > ?`).get(id,new Date().toISOString()) as any)?.value||0);
   const balanceAtomic=walletId?Number((db.prepare(`SELECT COALESCE(SUM(amount_atomic),0) AS value FROM wallet_ledger WHERE wallet_id=? AND status='posted'`).get(walletId) as any)?.value||0):0;
-  return NextResponse.json({user:{id:user.id,username:user.username,displayName:user.display_name,email:user.email,yerbasAddress:user.yerbas_address,walletVerifiedAt:user.wallet_verified_at,rewardEligible:Boolean(user.reward_eligible),accountStatus:user.account_status,lastLoginAt:user.last_login_at,createdAt:user.created_at,walletId,walletStatus:user.wallet_status,balanceYerb:yerb(balanceAtomic),activeSessions,lastIpAddress:latestLogin?.ipAddress||null,lastGeoCity:latestLogin?.city||null,lastGeoRegion:latestLogin?.region||null,lastGeoCountry:latestLogin?.country||null,lastGeoLatitude:latestLogin?.latitude??null,lastGeoLongitude:latestLogin?.longitude??null,lastGeoSource:latestLogin?.geoSource||null},ledger:ledger.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),deposits:deposits.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),withdrawals:withdrawals.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic),feeYerb:yerb(r.fee_atomic)})),rewards:rewards.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),games:games.map((r:any)=>({...r,rewardYerb:yerb(r.reward_atomic)})),notes,loginHistory},{headers:{'Cache-Control':'no-store'}});
+  return NextResponse.json({user:{id:user.id,username:user.username,displayName:user.display_name,email:user.email,yerbasAddress:user.yerbas_address,walletVerifiedAt:user.wallet_verified_at,rewardEligible:Boolean(user.reward_eligible),accountStatus:user.account_status,lastLoginAt:user.last_login_at,createdAt:user.created_at,walletId,walletStatus:user.wallet_status,balanceYerb:yerb(balanceAtomic),activeSessions,lastIpAddress:latestLogin?.ipAddress||null,lastGeoCity:latestLogin?.city||null,lastGeoRegion:latestLogin?.region||null,lastGeoCountry:latestLogin?.country||null,lastGeoLatitude:latestLogin?.latitude??null,lastGeoLongitude:latestLogin?.longitude??null,lastGeoSource:latestLogin?.geoSource||null},ledger:ledger.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),deposits:deposits.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),withdrawals:withdrawals.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic),feeYerb:yerb(r.fee_atomic)})),rewards:rewards.map((r:any)=>({...r,amountYerb:yerb(r.amount_atomic)})),games:games.map((r:any)=>({...r,rewardYerb:yerb(r.reward_atomic)})),notes,loginHistory,sharedIpUsers},{headers:{'Cache-Control':'no-store'}});
 }
 
 export async function PATCH(request:NextRequest){
