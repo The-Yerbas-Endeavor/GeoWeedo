@@ -3,8 +3,19 @@ import { getAdminFromRequest } from '@/lib/adminAuth';
 import { auditCandidatePipeline, assessCandidatePipeline, listCandidates, updateCandidate, type DispensaryCandidate } from '@/lib/candidateStore';
 import { saveApprovedDispensary } from '@/lib/dispensaryStore';
 import { inspectKartaViewCoverage } from '@/lib/kartaViewCoverage';
+import { getDatabase } from '@/lib/sqlite';
 
-export async function GET(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});return NextResponse.json({candidates:await listCandidates()},{headers:{'Cache-Control':'no-store'}});}
+function automatedEnrichmentApprovedIds(){
+ try{
+  const db=getDatabase();
+  const table=db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='dispensary_batch_items'`).get() as {name:string}|undefined;
+  if(!table)return new Set<string>();
+  const rows=db.prepare(`SELECT DISTINCT location_id FROM dispensary_batch_items WHERE record_type='candidate' AND status='applied'`).all() as Array<{location_id:string}>;
+  return new Set(rows.map(row=>String(row.location_id)));
+ }catch{return new Set<string>();}
+}
+
+export async function GET(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const candidates=await listCandidates(),enriched=automatedEnrichmentApprovedIds();return NextResponse.json({candidates:candidates.map(item=>({...item,automatedEnrichmentApproved:enriched.has(String(item.id))}))},{headers:{'Cache-Control':'no-store'}});}
 
 async function promoteCandidate(item:DispensaryCandidate){const pipeline=assessCandidatePipeline(item);if(!pipeline.eligible)return{ok:false,reason:`pipeline_${String(pipeline.reason||'ineligible').replace(/\W+/g,'_')}`};if(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))return{ok:false,reason:'missing_coordinates'};if(!item.city?.trim()||!item.region?.trim())return{ok:false,reason:'missing_location_fields'};if(item.imageryStatus!=='coverage')return{ok:false,reason:'imagery_not_playable'};try{const inspection=await inspectKartaViewCoverage(item.latitude as number,item.longitude as number),photo=inspection.selected;if(!inspection.quality.playable||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:'kartaview',imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId||undefined,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});await updateCandidate(item.id,{status:'approved',imageryMessage:`Promoted to gameplay. Grade ${inspection.quality.grade}: ${inspection.quality.reason} Starting frame ${photo.id}.`});return{ok:true,dispensaryId:saved.id};}catch{return{ok:false,reason:'imagery_revalidation_error'};}}
 
