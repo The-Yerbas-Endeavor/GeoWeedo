@@ -18,12 +18,24 @@ function needsImageryCheck(item: { imageryStatus?: string }) {
 function enrichmentApprovedIds() {
   const db = getDatabase();
   try {
-    const rows = db.prepare(`
-      SELECT location_id
-      FROM google_places_enrichment
-      WHERE confidence='high'
-    `).all() as { location_id: string }[];
-    return new Set(rows.map((row) => String(row.location_id)));
+    const ids = new Set<string>();
+    try {
+      const rows = db.prepare(`
+        SELECT DISTINCT location_id
+        FROM dispensary_batch_items
+        WHERE record_type='candidate' AND status='applied'
+      `).all() as { location_id: string }[];
+      for (const row of rows) ids.add(String(row.location_id));
+    } catch {}
+    try {
+      const rows = db.prepare(`
+        SELECT location_id
+        FROM google_places_enrichment
+        WHERE confidence='high'
+      `).all() as { location_id: string }[];
+      for (const row of rows) ids.add(String(row.location_id));
+    } catch {}
+    return ids;
   } catch {
     return new Set<string>();
   }
@@ -44,14 +56,26 @@ export async function POST(request: NextRequest) {
     (!approvedByEnrichment || approvedByEnrichment.has(item.id))
   );
   const waiting = coordinateReady.filter(needsImageryCheck);
-  // An explicit id request comes directly from an admin action in State location
-  // manager. It intentionally re-checks Street View and, when imagery exists,
-  // serves as the admin confirmation that the location is acceptable for gameplay.
+
+  // Explicit IDs come from an admin clicking Enable gameplay in State location manager.
+  // Do not re-filter those IDs through a second enrichment table: the manager has
+  // already established that the record is enriched. This request is the admin's
+  // explicit Street View readiness check/confirmation.
   const explicitAdminConfirmation = requestedIds.length > 0;
   const pool = explicitAdminConfirmation
-    ? coordinateReady.filter((item) => requestedIds.includes(item.id))
+    ? all.filter((item) => item.status === 'candidate' && hasCoordinates(item) && requestedIds.includes(item.id))
     : waiting;
   const selected = pool.slice(0, limit);
+
+  if (explicitAdminConfirmation && !selected.length) {
+    return NextResponse.json({
+      error: 'The selected candidate could not be checked for Street View. Confirm that it is still a candidate and has valid coordinates.',
+      source,
+      checked: 0,
+      results: [],
+    }, { status: 409, headers: { 'Cache-Control': 'no-store, max-age=0' } });
+  }
+
   const results = [];
 
   for (const item of selected) {
