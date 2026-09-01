@@ -22,8 +22,12 @@ export async function POST(request:NextRequest){const admin=getAdminFromRequest(
  if(body?.action==='control'){
   if(!body.jobId)return NextResponse.json({error:'jobId is required.'},{status:400});
   if(!['pause','resume','cancel'].includes(body.control))return NextResponse.json({error:'control must be pause, resume, or cancel.'},{status:400});
-  const control=controlBatchJob(String(body.jobId),body.control);
-  return NextResponse.json({control,job:getBatchJob(String(body.jobId))});
+  const jobId=String(body.jobId);
+  // A resume is also a safe recovery point. Requeue only Google Places/configuration
+  // failures and legacy blocked items before allowing the next bounded run to start.
+  const recovery=body.control==='resume'&&placesConfigured()?resumeBlockedBatch(jobId):null;
+  const control=controlBatchJob(jobId,body.control);
+  return NextResponse.json({control,recovery,job:getBatchJob(jobId)});
  }
  if(body?.action==='retryBlocked'){if(!body.jobId)return NextResponse.json({error:'jobId is required.'},{status:400});return NextResponse.json({recovery:resumeBlockedBatch(String(body.jobId))});}
  return NextResponse.json({error:'Unknown batch action.'},{status:400});
