@@ -10,11 +10,12 @@ export async function GET(request:NextRequest){const admin=getAdminFromRequest(r
 
 export async function POST(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);try{
  if(body?.action==='create'){const job=createBatchJob(admin.id,body.scope||{},body.autoApply!==false);return NextResponse.json({job});}
- if(body?.action==='singleCandidate'){
+ if(body?.action==='singleCandidate'||body?.action==='singleDispensary'){
   if(!body.locationId)return NextResponse.json({error:'locationId is required.'},{status:400});
   if(!placesConfigured())return NextResponse.json({error:'Google Places enrichment is not configured.'},{status:400});
-  const job=createBatchJob(admin.id,{recordType:'candidate',locationId:String(body.locationId)},body.autoApply!==false);
-  if(!job?.total)return NextResponse.json({error:'Candidate was not found or is no longer eligible.'},{status:404});
+  const recordType=body.action==='singleDispensary'?'dispensary':'candidate';
+  const job=createBatchJob(admin.id,{recordType,locationId:String(body.locationId)},body.autoApply!==false);
+  if(!job?.total)return NextResponse.json({error:`${recordType==='dispensary'?'Dispensary':'Candidate'} was not found or is no longer eligible.`},{status:404});
   const processed=await processBatchChunk(job.id,admin.id,1);
   return NextResponse.json({job:processed});
  }
