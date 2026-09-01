@@ -3,7 +3,7 @@ import { getAdminFromRequest } from '@/lib/adminAuth';
 import { auditCandidatePipeline, assessCandidatePipeline, listCandidates, updateCandidate, type DispensaryCandidate } from '@/lib/candidateStore';
 import { saveApprovedDispensary } from '@/lib/dispensaryStore';
 import { getDatabase } from '@/lib/sqlite';
-import { lookupConfiguredStreetView } from '@/lib/streetViewLookupClient';
+import { lookupGameplayStreetView } from '@/lib/streetViewLookupClient';
 
 function automatedEnrichmentApprovedIds(){
  try{
@@ -29,9 +29,9 @@ async function promoteCandidate(item:DispensaryCandidate){
  if(!item.city?.trim()||!item.region?.trim())return{ok:false,reason:'missing_location_fields'};
  if(item.imageryStatus!=='coverage')return{ok:false,reason:'imagery_not_playable'};
  try{
-  const inspection=await lookupConfiguredStreetView(item.latitude as number,item.longitude as number);
-  const photos=Array.isArray(inspection.photos)?inspection.photos:[];
   const requestedPhotoId=selectedStartingPhotoId(item.imageryMessage);
+  const inspection=await lookupGameplayStreetView(item.latitude as number,item.longitude as number,requestedPhotoId||undefined);
+  const photos=Array.isArray(inspection.photos)?inspection.photos:[];
   const defaultPhoto=photos[Math.max(0,Number(inspection.initialIndex||0))]||photos[0];
   const photo=requestedPhotoId?photos.find(candidate=>String(candidate.id)===requestedPhotoId)||defaultPhoto:defaultPhoto;
   const adminConfirmed=/^ADMIN_(?:CONFIRMED|SELECTED)_STREET_VIEW/.test(String(item.imageryMessage||''));
