@@ -6,7 +6,7 @@ import {getLocationBase,getCommunityProfile} from '@/lib/dispensaryCommunity';
 import {enrichFromOfficialWebsite} from '@/lib/dispensaryEnrichment';
 import {applyGooglePlacesEnrichment,googlePlacesConfigured,previewGooglePlacesEnrichment} from '@/lib/googlePlacesEnrichment';
 
-type Scope={country?:string;region?:string;recordType?:'all'|'dispensary'|'candidate'|'gameplay';missing?:'any'|'website'|'phone'|'hours'|'amenities'};
+type Scope={country?:string;region?:string;recordType?:'all'|'dispensary'|'candidate'|'gameplay';missing?:'any'|'website'|'phone'|'hours'|'amenities';locationId?:string};
 const PLACES_BLOCKED_MESSAGE='Google Places enrichment is not configured. Set GOOGLE_PLACES_API_KEY before running automated enrichment.';
 
 export function placesConfigured(){return googlePlacesConfigured();}
@@ -32,7 +32,7 @@ export function createBatchJob(actorId:string,scope:Scope,autoApply=true){
  const db=getDatabase(),id=`batch-${crypto.randomUUID()}`,stamp=now(),canUsePlaces=googlePlacesConfigured();
  const approved=db.prepare(`SELECT id,name,'dispensary' record_type,country,region,website,phone,verified FROM dispensaries WHERE active=1`).all() as any[];
  const candidates=db.prepare(`SELECT id,name,'candidate' record_type,country,region,website,phone,0 verified FROM dispensary_candidates WHERE status<>'rejected'`).all() as any[];
- const records=[...approved,...candidates].filter(r=>(!scope.country||String(r.country||'')===scope.country)&&(!scope.region||String(r.region||'')===scope.region)&&(!scope.recordType||scope.recordType==='all'||(scope.recordType==='gameplay'?r.record_type==='dispensary'&&Number(r.verified)===1:r.record_type===scope.recordType))&&profileMissing(String(r.id),scope.missing||'any',r));
+ const records=[...approved,...candidates].filter(r=>(!scope.locationId||String(r.id)===String(scope.locationId))&&(!scope.country||String(r.country||'')===scope.country)&&(!scope.region||String(r.region||'')===scope.region)&&(!scope.recordType||scope.recordType==='all'||(scope.recordType==='gameplay'?r.record_type==='dispensary'&&Number(r.verified)===1:r.record_type===scope.recordType))&&(scope.locationId?true:profileMissing(String(r.id),scope.missing||'any',r)));
  db.exec('BEGIN IMMEDIATE');
  try{
   db.prepare(`INSERT INTO dispensary_batch_jobs(id,created_by,scope_json,auto_apply,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`).run(id,actorId,JSON.stringify(scope),autoApply?1:0,records.length?'queued':'completed',stamp,stamp);
