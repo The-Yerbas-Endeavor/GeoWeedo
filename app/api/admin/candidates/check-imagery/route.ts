@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { listCandidates, updateCandidate } from '@/lib/candidateStore';
 import { inspectKartaViewCoverage } from '@/lib/kartaViewCoverage';
+import { getDatabase } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,14 +15,34 @@ function needsImageryCheck(item: { imageryStatus?: string }) {
   return !item.imageryStatus || item.imageryStatus === 'unchecked' || item.imageryStatus === 'error' || item.imageryStatus === 'missing_coordinates';
 }
 
+function enrichmentApprovedIds() {
+  const db = getDatabase();
+  try {
+    const rows = db.prepare(`
+      SELECT location_id
+      FROM google_places_enrichment
+      WHERE confidence='high'
+    `).all() as { location_id: string }[];
+    return new Set(rows.map((row) => String(row.location_id)));
+  } catch {
+    return new Set<string>();
+  }
+}
+
 export async function POST(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
+  const source = body?.source === 'enrichment_approved' ? 'enrichment_approved' : 'coordinate_ready';
   const limit = Math.max(1, Math.min(Number(body?.limit) || 10, 50));
   const all = await listCandidates();
 
-  const coordinateReady = all.filter((item) => item.status === 'candidate' && hasCoordinates(item));
+  const approvedByEnrichment = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
+  const coordinateReady = all.filter((item) =>
+    item.status === 'candidate' &&
+    hasCoordinates(item) &&
+    (!approvedByEnrichment || approvedByEnrichment.has(item.id))
+  );
   const waiting = coordinateReady.filter(needsImageryCheck);
   const pool = requestedIds.length
     ? waiting.filter((item) => requestedIds.includes(item.id))
@@ -51,11 +72,18 @@ export async function POST(request: NextRequest) {
   }
 
   const refreshed = await listCandidates();
-  const readyRemaining = refreshed.filter((item) => item.status === 'candidate' && hasCoordinates(item) && needsImageryCheck(item)).length;
-  const mappedCandidates = refreshed.filter((item) => item.status === 'candidate' && hasCoordinates(item)).length;
+  const approvedAfter = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
+  const inScope = refreshed.filter((item) =>
+    item.status === 'candidate' &&
+    hasCoordinates(item) &&
+    (!approvedAfter || approvedAfter.has(item.id))
+  );
+  const readyRemaining = inScope.filter(needsImageryCheck).length;
+  const mappedCandidates = inScope.length;
   const missingCoordinates = refreshed.filter((item) => item.status === 'candidate' && !hasCoordinates(item)).length;
 
   return NextResponse.json({
+    source,
     checked: results.length,
     results,
     stats: {
