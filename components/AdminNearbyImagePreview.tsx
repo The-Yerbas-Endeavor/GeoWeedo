@@ -12,9 +12,9 @@ export default function AdminNearbyImagePreview({latitude,longitude}:{latitude:n
   setPhoto(null);setStatus('Loading nearby imagery…');
   const timer=setTimeout(async()=>{
    try{
-    // Do not force a provider here. The Street View API resolves the current
-    // Admin provider setting (Google, KartaView, or Google → KartaView auto).
-    const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(latitude)}&lng=${encodeURIComponent(longitude)}`,{cache:'no-store',signal:controller.signal});
+    // Coordinate verification is always Google-first. KartaView is only used
+    // when Google has no usable Street View at these coordinates.
+    const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(latitude)}&lng=${encodeURIComponent(longitude)}&provider=auto`,{cache:'no-store',signal:controller.signal});
     const data:PreviewData=await response.json();
     if(!response.ok)throw new Error(data.error||'Imagery lookup failed.');
     const photos:Array<Photo>=Array.isArray(data.photos)?data.photos:[];
@@ -22,7 +22,7 @@ export default function AdminNearbyImagePreview({latitude,longitude}:{latitude:n
     const next=photos[index]||photos[0]||null;
     setPhoto(next);
     const provider=data.provider==='google'?'Google':data.provider==='kartaview'?'KartaView':'Street View';
-    setStatus(next?`${provider} nearby street image`:'No nearby street imagery found.');
+    setStatus(next?`${provider} nearby street image`:'No nearby Street View found.');
    }catch(error){
     if((error as any)?.name==='AbortError')return;
     setStatus(error instanceof Error?error.message:'Imagery lookup failed.');
