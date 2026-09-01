@@ -11,6 +11,10 @@ function hasCoordinates(item: { latitude?: number; longitude?: number }) {
   return Number.isFinite(item.latitude) && Number.isFinite(item.longitude);
 }
 
+function isOpenCandidateStatus(status?: string) {
+  return status === 'candidate' || status === 'reviewing';
+}
+
 function needsImageryCheck(item: { imageryStatus?: string }) {
   return !item.imageryStatus || item.imageryStatus === 'unchecked' || item.imageryStatus === 'error' || item.imageryStatus === 'missing_coordinates';
 }
@@ -51,25 +55,33 @@ export async function POST(request: NextRequest) {
 
   const approvedByEnrichment = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
   const coordinateReady = all.filter((item) =>
-    item.status === 'candidate' &&
+    isOpenCandidateStatus(item.status) &&
     hasCoordinates(item) &&
     (!approvedByEnrichment || approvedByEnrichment.has(item.id))
   );
   const waiting = coordinateReady.filter(needsImageryCheck);
 
   // Explicit IDs come from an admin clicking Enable gameplay in State location manager.
-  // Do not re-filter those IDs through a second enrichment table: the manager has
-  // already established that the record is enriched. This request is the admin's
-  // explicit Street View readiness check/confirmation.
+  // Both candidate and reviewing records are still open candidates. Reviewing commonly
+  // means Google Places enrichment requires/required admin review; it must not block
+  // the separate Street View readiness confirmation step.
   const explicitAdminConfirmation = requestedIds.length > 0;
   const pool = explicitAdminConfirmation
-    ? all.filter((item) => item.status === 'candidate' && hasCoordinates(item) && requestedIds.includes(item.id))
+    ? all.filter((item) => isOpenCandidateStatus(item.status) && hasCoordinates(item) && requestedIds.includes(item.id))
     : waiting;
   const selected = pool.slice(0, limit);
 
   if (explicitAdminConfirmation && !selected.length) {
+    const requested = all.find((item) => requestedIds.includes(item.id));
+    const detail = !requested
+      ? 'The selected record no longer exists.'
+      : !isOpenCandidateStatus(requested.status)
+        ? `The selected record is ${requested.status}, not an open candidate.`
+        : !hasCoordinates(requested)
+          ? 'The selected candidate does not have valid coordinates.'
+          : 'The selected candidate could not be checked for Street View.';
     return NextResponse.json({
-      error: 'The selected candidate could not be checked for Street View. Confirm that it is still a candidate and has valid coordinates.',
+      error: detail,
       source,
       checked: 0,
       results: [],
@@ -108,13 +120,13 @@ export async function POST(request: NextRequest) {
   const refreshed = await listCandidates();
   const approvedAfter = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
   const inScope = refreshed.filter((item) =>
-    item.status === 'candidate' &&
+    isOpenCandidateStatus(item.status) &&
     hasCoordinates(item) &&
     (!approvedAfter || approvedAfter.has(item.id))
   );
   const readyRemaining = inScope.filter(needsImageryCheck).length;
   const mappedCandidates = inScope.length;
-  const missingCoordinates = refreshed.filter((item) => item.status === 'candidate' && !hasCoordinates(item)).length;
+  const missingCoordinates = refreshed.filter((item) => isOpenCandidateStatus(item.status) && !hasCoordinates(item)).length;
 
   return NextResponse.json({
     source,
