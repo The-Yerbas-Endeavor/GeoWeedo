@@ -1,0 +1,72 @@
+'use client';
+
+import {useEffect,useRef} from 'react';
+
+type Candidate={id:string;name:string;latitude?:number;longitude?:number;status?:string};
+type Photo={id:string;imageUrl:string;shotDate?:string|null;projection?:string;fieldOfView?:number};
+
+function readInput(panel:HTMLElement,placeholder:string){return (panel.querySelector(`input[placeholder="${placeholder}"]`) as HTMLInputElement|null)?.value?.trim()||'';}
+function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch));}
+
+export default function StateCandidateStreetViewVerifier(){
+ const runningRef=useRef(false);
+ useEffect(()=>{
+  const install=()=>{
+   const editor=document.getElementById('state-candidate-edit');
+   if(!editor||editor.querySelector('[data-state-candidate-street-view]'))return;
+   const mapPanel=editor.querySelector('.state-edit-map-panel') as HTMLElement|null;
+   if(!mapPanel)return;
+   const host=document.createElement('div');
+   host.dataset.stateCandidateStreetView='1';
+   host.style.borderTop='1px solid #314137';
+   host.style.padding='12px';
+   host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong style="display:block">Street View readiness</strong><small style="color:#a9bbb0">Load Street View, choose the starting image, then confirm it for gameplay.</small></div><button type="button" data-action="load" class="primary">Load Street View</button></div><div data-view style="display:none;margin-top:12px"></div><div data-message style="margin-top:8px;color:#a9bbb0;font-size:12px"></div>`;
+   mapPanel.appendChild(host);
+   let photos:Photo[]=[];let index=0;let candidateId='';let provider='';
+   const message=host.querySelector('[data-message]') as HTMLElement;
+   const view=host.querySelector('[data-view]') as HTMLElement;
+   const loadButton=host.querySelector('[data-action="load"]') as HTMLButtonElement;
+   const render=()=>{
+    const photo=photos[index];
+    if(!photo){view.style.display='none';return;}
+    view.style.display='block';
+    view.innerHTML=`<div style="border:1px solid #314137;border-radius:10px;overflow:hidden;background:#090d0b"><img src="${escapeHtml(photo.imageUrl)}" alt="Street View preview" style="display:block;width:100%;max-height:320px;object-fit:contain;background:#050706"/><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;flex-wrap:wrap"><span style="font-size:11px;color:#a9bbb0">${escapeHtml(provider)} · ${index+1} / ${photos.length}${photo.shotDate?` · ${escapeHtml(photo.shotDate)}`:''}</span><span style="display:flex;gap:7px"><button type="button" data-action="prev" ${index<=0?'disabled':''}>Previous</button><button type="button" data-action="next" ${index>=photos.length-1?'disabled':''}>Next</button><button type="button" data-action="confirm" class="primary">Confirm Street View ready</button></span></div></div>`;
+   };
+   host.addEventListener('click',async event=>{
+    const button=(event.target as HTMLElement).closest('button[data-action]') as HTMLButtonElement|null;if(!button)return;
+    const action=button.dataset.action;
+    if(action==='prev'){index=Math.max(0,index-1);render();return;}
+    if(action==='next'){index=Math.min(photos.length-1,index+1);render();return;}
+    if(runningRef.current)return;
+    if(action==='load'){
+     const name=readInput(editor,'Dispensary name'),lat=Number(readInput(editor,'Latitude')),lng=Number(readInput(editor,'Longitude'));
+     if(!name||!Number.isFinite(lat)||!Number.isFinite(lng)){message.textContent='Save valid name and coordinates first.';return;}
+     runningRef.current=true;loadButton.disabled=true;message.textContent='Loading Street View…';
+     try{
+      const candidatesResponse=await fetch('/api/admin/candidates',{cache:'no-store'});const candidatesData=await candidatesResponse.json();if(!candidatesResponse.ok)throw new Error(candidatesData.error||'Could not load candidate.');
+      const candidates=(candidatesData.candidates||[]) as Candidate[];
+      const candidate=candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude))&&Math.abs(Number(item.latitude)-lat)<0.00002&&Math.abs(Number(item.longitude)-lng)<0.00002)||candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&item.status!=='approved'&&item.status!=='rejected');
+      if(!candidate)throw new Error('Save the candidate first so Street View can be attached to it.');candidateId=candidate.id;
+      const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&_=${Date.now()}`,{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Street View lookup failed.');
+      photos=Array.isArray(data.photos)?data.photos:[];provider=String(data.provider||'Street View');index=Math.min(Math.max(Number(data.initialIndex||0),0),Math.max(photos.length-1,0));
+      if(!photos.length)throw new Error(data.message||'No Street View imagery found at these coordinates.');
+      render();message.textContent=`${photos.length} Street View image${photos.length===1?'':'s'} found. Select the best starting view and confirm it.`;
+     }catch(error){photos=[];render();message.textContent=error instanceof Error?error.message:'Street View lookup failed.';}finally{runningRef.current=false;loadButton.disabled=false;}
+     return;
+    }
+    if(action==='confirm'){
+     const photo=photos[index];if(!candidateId||!photo)return;
+     runningRef.current=true;button.disabled=true;message.textContent='Confirming Street View readiness…';
+     try{
+      const response=await fetch('/api/admin/candidates/check-imagery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[candidateId],limit:1,source:'enrichment_approved',selectedPhotoId:photo.id})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Street View confirmation failed.');
+      const result=Array.isArray(data.results)?data.results[0]:null;if(result?.imageryStatus!=='coverage')throw new Error(result?.imageryMessage||'Street View could not be confirmed for gameplay.');
+      message.textContent='Street View confirmed for gameplay. You can now click Enable gameplay.';
+      window.dispatchEvent(new Event('geoweedo-pipeline-updated'));
+     }catch(error){message.textContent=error instanceof Error?error.message:'Street View confirmation failed.';}finally{runningRef.current=false;button.disabled=false;}
+    }
+   });
+  };
+  install();const observer=new MutationObserver(install);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();
+ },[]);
+ return null;
+}
