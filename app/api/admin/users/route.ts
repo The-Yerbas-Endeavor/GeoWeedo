@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { getDatabase } from '@/lib/sqlite';
+import { hashUserPassword } from '@/lib/userAuth';
 
 export const runtime='nodejs';
 const ATOMIC=100_000_000;
@@ -93,6 +94,18 @@ export async function PATCH(request:NextRequest){
     const enabled=Boolean(body?.enabled);db.prepare(`UPDATE users SET reward_eligible=?,updated_at=? WHERE id=?`).run(enabled?1:0,now,userId);audit(db,admin.id,'user.reward_eligibility_changed',userId,{enabled});
   }else if(action==='revoke_sessions'){
     const result=db.prepare(`UPDATE user_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`).run(now,userId);audit(db,admin.id,'user.sessions_revoked',userId,{changes:Number(result.changes||0)});
+  }else if(action==='reset_password'){
+    const password=String(body?.password||'');if(password.length<8)return NextResponse.json({error:'Password must be at least 8 characters.'},{status:400});
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      db.prepare(`UPDATE users SET password_hash=?,updated_at=? WHERE id=?`).run(hashUserPassword(password),now,userId);
+      const result=db.prepare(`UPDATE user_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`).run(now,userId);
+      audit(db,admin.id,'user.password_reset',userId,{sessionsRevoked:Number(result.changes||0)});
+      db.exec('COMMIT');
+    }catch(error){
+      try{db.exec('ROLLBACK');}catch{}
+      return NextResponse.json({error:error instanceof Error?error.message:'Password reset failed.'},{status:400});
+    }
   }else if(action==='add_note'){
     const note=String(body?.note||'').trim();if(!note)return NextResponse.json({error:'Note cannot be empty.'},{status:400});
     db.prepare(`INSERT INTO admin_user_notes (id,user_id,admin_user_id,note,created_at) VALUES (?,?,?,?,?)`).run(`note-${crypto.randomUUID()}`,userId,admin.id,note,now);audit(db,admin.id,'user.note_added',userId,{preview:note.slice(0,120)});
