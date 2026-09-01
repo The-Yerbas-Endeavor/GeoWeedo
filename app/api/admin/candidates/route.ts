@@ -46,6 +46,12 @@ async function promoteCandidate(item:DispensaryCandidate){
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
 }
 
+function cleanupCandidateEnrichment(db:ReturnType<typeof getDatabase>,id:string){
+ for(const table of ['dispensary_batch_items','google_places_enrichment']){
+  try{db.prepare(`DELETE FROM ${table} WHERE location_id=?`).run(id);}catch{}
+ }
+}
+
 export async function DELETE(request:NextRequest){
  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
  const body=await request.json().catch(()=>null);
@@ -54,23 +60,29 @@ export async function DELETE(request:NextRequest){
   const countRow=db.prepare("SELECT COUNT(*) AS count FROM dispensary_candidates WHERE status='rejected'").get() as {count:number}|undefined;
   const requested=Number(countRow?.count||0);
   if(!requested)return NextResponse.json({deleted:true,count:0});
+  const ids=(db.prepare("SELECT id FROM dispensary_candidates WHERE status='rejected'").all() as Array<{id:string}>).map(row=>String(row.id));
   const result=db.prepare("DELETE FROM dispensary_candidates WHERE status='rejected'").run();
+  for(const id of ids)cleanupCandidateEnrichment(db,id);
   return NextResponse.json({deleted:true,count:Number(result.changes),requested});
  }
  const ids=Array.isArray(body?.ids)?Array.from(new Set<string>(body.ids.map((value:unknown)=>String(value).trim()).filter(Boolean))).slice(0,5000):[];
  if(ids.length){
   const placeholders=ids.map(()=>'?').join(',');
-  const matched=(db.prepare(`SELECT COUNT(*) AS count FROM dispensary_candidates WHERE status='rejected' AND id IN (${placeholders})`).get(...ids) as {count:number}|undefined)?.count||0;
+  const matchedRows=db.prepare(`SELECT id FROM dispensary_candidates WHERE status='rejected' AND id IN (${placeholders})`).all(...ids) as Array<{id:string}>;
   const result=db.prepare(`DELETE FROM dispensary_candidates WHERE status='rejected' AND id IN (${placeholders})`).run(...ids);
-  return NextResponse.json({deleted:true,count:Number(result.changes),requested:ids.length,matched:Number(matched)});
+  for(const row of matchedRows)cleanupCandidateEnrichment(db,String(row.id));
+  return NextResponse.json({deleted:true,count:Number(result.changes),requested:ids.length,matched:matchedRows.length});
  }
  const id=String(body?.id||'').trim();
  if(!id)return NextResponse.json({error:'Candidate id is required.'},{status:400});
  const current=db.prepare('SELECT id,name,status FROM dispensary_candidates WHERE id=? LIMIT 1').get(id) as {id:string;name:string;status:string}|undefined;
  if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});
- if(current.status!=='rejected')return NextResponse.json({error:'Only rejected candidates can be deleted.'},{status:409});
- const result=db.prepare("DELETE FROM dispensary_candidates WHERE id=? AND status='rejected'").run(id);
- if(!Number(result.changes))return NextResponse.json({error:'Rejected candidate could not be deleted.'},{status:409});
+ const deleteOpenCandidate=body?.deleteCandidate===true;
+ const allowed=deleteOpenCandidate?['candidate','reviewing'].includes(current.status):current.status==='rejected';
+ if(!allowed)return NextResponse.json({error:deleteOpenCandidate?'Only unapproved candidate or reviewing records can be deleted.':'Only rejected candidates can be deleted.'},{status:409});
+ const result=db.prepare('DELETE FROM dispensary_candidates WHERE id=?').run(id);
+ if(!Number(result.changes))return NextResponse.json({error:'Candidate could not be deleted.'},{status:409});
+ cleanupCandidateEnrichment(db,id);
  return NextResponse.json({deleted:true,id,name:current.name,count:1});
 }
 
