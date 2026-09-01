@@ -48,15 +48,29 @@ async function promoteCandidate(item:DispensaryCandidate){
 export async function DELETE(request:NextRequest){
  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
  const body=await request.json().catch(()=>null);
+ const db=getDatabase();
+ if(body?.allRejected===true){
+  const countRow=db.prepare("SELECT COUNT(*) AS count FROM dispensary_candidates WHERE status='rejected'").get() as {count:number}|undefined;
+  const requested=Number(countRow?.count||0);
+  if(!requested)return NextResponse.json({deleted:true,count:0});
+  const result=db.prepare("DELETE FROM dispensary_candidates WHERE status='rejected'").run();
+  return NextResponse.json({deleted:true,count:Number(result.changes),requested});
+ }
+ const ids=Array.isArray(body?.ids)?Array.from(new Set<string>(body.ids.map((value:unknown)=>String(value).trim()).filter(Boolean))).slice(0,5000):[];
+ if(ids.length){
+  const placeholders=ids.map(()=>'?').join(',');
+  const matched=(db.prepare(`SELECT COUNT(*) AS count FROM dispensary_candidates WHERE status='rejected' AND id IN (${placeholders})`).get(...ids) as {count:number}|undefined)?.count||0;
+  const result=db.prepare(`DELETE FROM dispensary_candidates WHERE status='rejected' AND id IN (${placeholders})`).run(...ids);
+  return NextResponse.json({deleted:true,count:Number(result.changes),requested:ids.length,matched:Number(matched)});
+ }
  const id=String(body?.id||'').trim();
  if(!id)return NextResponse.json({error:'Candidate id is required.'},{status:400});
- const db=getDatabase();
  const current=db.prepare('SELECT id,name,status FROM dispensary_candidates WHERE id=? LIMIT 1').get(id) as {id:string;name:string;status:string}|undefined;
  if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});
  if(current.status!=='rejected')return NextResponse.json({error:'Only rejected candidates can be deleted.'},{status:409});
  const result=db.prepare("DELETE FROM dispensary_candidates WHERE id=? AND status='rejected'").run(id);
  if(!Number(result.changes))return NextResponse.json({error:'Rejected candidate could not be deleted.'},{status:409});
- return NextResponse.json({deleted:true,id,name:current.name});
+ return NextResponse.json({deleted:true,id,name:current.name,count:1});
 }
 
 export async function PATCH(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);
