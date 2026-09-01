@@ -44,8 +44,11 @@ export async function POST(request: NextRequest) {
     (!approvedByEnrichment || approvedByEnrichment.has(item.id))
   );
   const waiting = coordinateReady.filter(needsImageryCheck);
+  // An explicit id request is an intentional re-check. This lets an admin retry a
+  // previously no-coverage candidate after Google Places corrected its coordinates
+  // or after Street View coverage/provider settings changed.
   const pool = requestedIds.length
-    ? waiting.filter((item) => requestedIds.includes(item.id))
+    ? coordinateReady.filter((item) => requestedIds.includes(item.id))
     : waiting;
   const selected = pool.slice(0, limit);
   const results = [];
