@@ -17,6 +17,11 @@ function automatedEnrichmentApprovedIds(){
 
 export async function GET(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const candidates=await listCandidates(),enriched=automatedEnrichmentApprovedIds();return NextResponse.json({candidates:candidates.map(item=>({...item,automatedEnrichmentApproved:enriched.has(String(item.id))}))},{headers:{'Cache-Control':'no-store'}});}
 
+function selectedStartingPhotoId(message?:string){
+ const match=String(message||'').match(/Starting view\s+([^\s.]+)\./i);
+ return match?.[1]||'';
+}
+
 async function promoteCandidate(item:DispensaryCandidate){
  const pipeline=assessCandidatePipeline(item);
  if(!pipeline.eligible)return{ok:false,reason:`pipeline_${String(pipeline.reason||'ineligible').replace(/\W+/g,'_')}`};
@@ -25,9 +30,13 @@ async function promoteCandidate(item:DispensaryCandidate){
  if(item.imageryStatus!=='coverage')return{ok:false,reason:'imagery_not_playable'};
  try{
   const inspection=await lookupConfiguredStreetView(item.latitude as number,item.longitude as number);
-  const photo=inspection.photos?.[Math.max(0,Number(inspection.initialIndex||0))]||inspection.photos?.[0];
-  const adminConfirmed=String(item.imageryMessage||'').startsWith('ADMIN_CONFIRMED_STREET_VIEW');
+  const photos=Array.isArray(inspection.photos)?inspection.photos:[];
+  const requestedPhotoId=selectedStartingPhotoId(item.imageryMessage);
+  const defaultPhoto=photos[Math.max(0,Number(inspection.initialIndex||0))]||photos[0];
+  const photo=requestedPhotoId?photos.find(candidate=>String(candidate.id)===requestedPhotoId)||defaultPhoto:defaultPhoto;
+  const adminConfirmed=/^ADMIN_(?:CONFIRMED|SELECTED)_STREET_VIEW/.test(String(item.imageryMessage||''));
   if((!inspection.quality?.playable&&!adminConfirmed)||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
+  if(requestedPhotoId&&String(photo.id)!==requestedPhotoId)return{ok:false,reason:'selected_imagery_no_longer_available'};
   const saved=await saveApprovedDispensary({
    name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,
    imageryProvider:inspection.provider,
