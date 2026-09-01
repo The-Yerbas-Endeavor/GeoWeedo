@@ -6,7 +6,7 @@ type Candidate={id:string;name:string;latitude?:number;longitude?:number;status?
 type Photo={id:string;imageUrl:string;shotDate?:string|null;projection?:string;fieldOfView?:number};
 
 function readInput(panel:HTMLElement,placeholder:string){return (panel.querySelector(`input[placeholder="${placeholder}"]`) as HTMLInputElement|null)?.value?.trim()||'';}
-function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch));}
+function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]||ch));}
 function setInputValue(input:HTMLInputElement,value:string){const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;if(setter)setter.call(input,value);else input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}
 function likelyWesternHemisphere(country:string,region:string){const text=`${country} ${region}`.toLowerCase();return /\b(usa|united states|canada|british columbia|california|colorado|connecticut|delaware|illinois|maine|maryland|massachusetts|minnesota|missouri|montana|nevada|new york|oregon|rhode island|washington)\b/.test(text);}
 
@@ -20,9 +20,8 @@ export default function StateCandidateStreetViewVerifier(){
    if(!mapPanel)return;
    const host=document.createElement('div');
    host.dataset.stateCandidateStreetView='1';
-   host.style.borderTop='1px solid #314137';
-   host.style.padding='12px';
-   host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong style="display:block">Street View readiness</strong><small style="color:#a9bbb0">Google Street View is checked first. KartaView is used only when Google has no usable Street View.</small></div><button type="button" data-action="load" class="primary">Load Street View</button></div><div data-view style="display:none;margin-top:12px"></div><div data-message style="margin-top:8px;color:#a9bbb0;font-size:12px"></div>`;
+   host.style.cssText='border-top:1px solid #314137;padding:14px 12px 12px;box-sizing:border-box;min-width:0;overflow:hidden';
+   host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="min-width:0;flex:1 1 260px"><strong style="display:block;font-size:15px;line-height:1.25;margin-bottom:3px">Street View readiness</strong><small style="display:block;color:#a9bbb0;line-height:1.35">Google Street View is checked first. KartaView is used only when Google has no usable Street View.</small></div><button type="button" data-action="load" class="primary" style="flex:0 0 auto;white-space:nowrap">Load Street View</button></div><div data-view style="display:none;margin-top:12px;min-width:0"></div><div data-message style="margin-top:8px;color:#a9bbb0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"></div>`;
    mapPanel.appendChild(host);
    let photos:Photo[]=[];let index=0;let candidateId='';let provider='';
    const message=host.querySelector('[data-message]') as HTMLElement;
@@ -32,7 +31,7 @@ export default function StateCandidateStreetViewVerifier(){
     const photo=photos[index];
     if(!photo){view.style.display='none';return;}
     view.style.display='block';
-    view.innerHTML=`<div style="border:1px solid #314137;border-radius:10px;overflow:hidden;background:#090d0b"><img src="${escapeHtml(photo.imageUrl)}" alt="Street View preview" style="display:block;width:100%;max-height:320px;object-fit:contain;background:#050706"/><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;flex-wrap:wrap"><span style="font-size:11px;color:#a9bbb0">${escapeHtml(provider)} · ${index+1} / ${photos.length}${photo.shotDate?` · ${escapeHtml(photo.shotDate)}`:''}</span><span style="display:flex;gap:7px"><button type="button" data-action="prev" ${index<=0?'disabled':''}>Previous</button><button type="button" data-action="next" ${index>=photos.length-1?'disabled':''}>Next</button><button type="button" data-action="confirm" class="primary">Confirm Street View ready</button></span></div></div>`;
+    view.innerHTML=`<div style="border:1px solid #314137;border-radius:10px;overflow:hidden;background:#090d0b;min-width:0"><div style="display:flex;justify-content:center;align-items:center;background:#050706;min-height:220px;max-height:340px;overflow:hidden"><img src="${escapeHtml(photo.imageUrl)}" alt="Street View preview" style="display:block;width:100%;height:auto;max-height:340px;object-fit:contain;background:#050706"/></div><div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px"><span style="font-size:11px;color:#a9bbb0;line-height:1.35;overflow-wrap:anywhere">${escapeHtml(provider)} · ${index+1} / ${photos.length}${photo.shotDate?` · ${escapeHtml(photo.shotDate)}`:''}</span><span style="display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-action="prev" ${index<=0?'disabled':''}>Previous</button><button type="button" data-action="next" ${index>=photos.length-1?'disabled':''}>Next</button><button type="button" data-action="confirm" class="primary" style="white-space:nowrap">Confirm Street View ready</button></span></div></div>`;
    };
    const showLongitudeWarning=(lng:number)=>{message.innerHTML=`Longitude <strong>${escapeHtml(lng)}</strong> looks wrong for this US/Canada location. It is probably <strong>${escapeHtml(-Math.abs(lng))}</strong>. <button type="button" data-action="fix-longitude" style="margin-left:8px">Fix longitude sign</button>`;};
    host.addEventListener('click',async event=>{
