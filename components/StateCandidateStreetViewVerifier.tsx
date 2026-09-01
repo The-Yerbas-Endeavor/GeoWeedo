@@ -9,6 +9,11 @@ function readInput(panel:HTMLElement,placeholder:string){return (panel.querySele
 function escapeHtml(value:unknown){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch));}
 function setInputValue(input:HTMLInputElement,value:string){const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;if(setter)setter.call(input,value);else input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}
 function likelyWesternHemisphere(country:string,region:string){const text=`${country} ${region}`.toLowerCase();return /\b(usa|united states|canada|british columbia|california|colorado|connecticut|delaware|illinois|maine|maryland|massachusetts|minnesota|missouri|montana|nevada|new york|oregon|rhode island|washington)\b/.test(text);}
+function validCoordinates(latText:string,lngText:string){
+ if(!latText||!lngText)return false;
+ const lat=Number(latText),lng=Number(lngText);
+ return Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180&&!(lat===0&&lng===0);
+}
 
 export default function StateCandidateStreetViewVerifier(){
  const runningRef=useRef(false);
@@ -55,8 +60,9 @@ export default function StateCandidateStreetViewVerifier(){
     }
     if(runningRef.current)return;
     if(action==='load'){
-     const name=readInput(editor,'Dispensary name'),country=readInput(editor,'Country'),region=readInput(editor,'State / region'),lat=Number(readInput(editor,'Latitude')),lng=Number(readInput(editor,'Longitude'));
-     if(!name||!Number.isFinite(lat)||!Number.isFinite(lng)){message.textContent='Save valid name and coordinates first.';return;}
+     const name=readInput(editor,'Dispensary name'),country=readInput(editor,'Country'),region=readInput(editor,'State / region'),latText=readInput(editor,'Latitude'),lngText=readInput(editor,'Longitude');
+     if(!name||!validCoordinates(latText,lngText)){photos=[];render();message.textContent='Save valid coordinates first. Street View will not be queried for blank or 0,0 coordinates.';return;}
+     const lat=Number(latText),lng=Number(lngText);
      if(likelyWesternHemisphere(country,region)&&lng>0){showLongitudeWarning(lng);return;}
      runningRef.current=true;loadButton.disabled=true;message.textContent='Loading Street View…';
      try{
@@ -65,7 +71,7 @@ export default function StateCandidateStreetViewVerifier(){
       const candidate=candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude))&&Math.abs(Number(item.latitude)-lat)<0.00002&&Math.abs(Number(item.longitude)-lng)<0.00002)||candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&item.status!=='approved'&&item.status!=='rejected');
       if(!candidate)throw new Error('Save the candidate first so Street View can be attached to it.');candidateId=candidate.id;
       const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&provider=auto&_=${Date.now()}`,{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Street View lookup failed.');
-      photos=Array.isArray(data.photos)?data.photos:[];provider=data.provider==='google'?'Google Street View':data.provider==='kartaview'?'KartaView':'Street View';index=Math.min(Math.max(Number(data.initialIndex||0),0),Math.max(photos.length-1,0));
+      photos=Array.isArray(data.photos)?data.photos:[];provider=data.provider==='google'?'Google Street View':data.provider==='kartaview'?'Fallback Street View':'Street View';index=Math.min(Math.max(Number(data.initialIndex||0),0),Math.max(photos.length-1,0));
       if(!photos.length)throw new Error('No Street View imagery found at these coordinates. Google was checked first, then fallback coverage. Verify the pin and coordinates, then try again.');
       render();message.textContent=provider==='Google Street View'&&photos.length===1?'Google Street View found. Confirm this panorama for gameplay.':`${provider} found ${photos.length} usable Street View image${photos.length===1?'':'s'}. Select the best starting view and confirm it.`;
      }catch(error){photos=[];render();message.textContent=error instanceof Error?error.message:'Street View lookup failed.';}finally{runningRef.current=false;loadButton.disabled=false;}
