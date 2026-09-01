@@ -89,6 +89,22 @@ export async function POST(request: NextRequest) {
 
   for (const item of selected) {
     const checkedAt = new Date().toISOString();
+
+    // The State location manager performs a final readiness call immediately
+    // before promotion. If an admin already selected/confirmed Street View,
+    // that call must be idempotent: do not replace the confirmed panorama with
+    // a fresh nearby lookup that may resolve a different image.
+    const alreadyAdminConfirmed =
+      explicitAdminConfirmation &&
+      !requestedPhotoId &&
+      item.imageryStatus === 'coverage' &&
+      /^ADMIN_(?:SELECTED|CONFIRMED)_STREET_VIEW/.test(String(item.imageryMessage || ''));
+
+    if (alreadyAdminConfirmed) {
+      results.push(item);
+      continue;
+    }
+
     try {
       const result = await lookupGameplayStreetView(item.latitude as number, item.longitude as number, requestedPhotoId || undefined);
       const photos = Array.isArray(result.photos) ? result.photos : [];
