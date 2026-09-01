@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 
 type Candidate = { id: string; imageryStatus?: string; imageryMessage?: string };
+type CandidateSource = 'coordinate_ready' | 'enrichment_approved';
 
 export default function CandidatePipelineRunner() {
   const [busy, setBusy] = useState(false);
   const [playable, setPlayable] = useState(0);
+  const [source, setSource] = useState<CandidateSource>('coordinate_ready');
   const [message, setMessage] = useState('Ready to process coordinate-ready candidates into playable rounds.');
 
   async function refreshPlayable() {
@@ -31,13 +33,14 @@ export default function CandidatePipelineRunner() {
       let totalPromoted = 0;
       let totalSkipped = 0;
       const rejectionReasons: Record<string, number> = {};
+      const sourceLabel = source === 'enrichment_approved' ? 'Automated Enrichment approved' : 'coordinate-ready';
 
       for (let batch = 1; batch <= 5; batch++) {
-        setMessage(`Batch ${batch}/5: checking the next 10 coordinate-ready candidates…`);
+        setMessage(`Batch ${batch}/5: checking the next 10 ${sourceLabel} candidates…`);
         const checkResponse = await fetch('/api/admin/candidates/check-imagery', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ limit: 10 }),
+          body: JSON.stringify({ limit: 10, source }),
         });
         if (checkResponse.status === 401) { window.location.href = '/admin/login'; return; }
         const checked = await checkResponse.json();
@@ -81,7 +84,7 @@ export default function CandidatePipelineRunner() {
         .join(' · ');
 
       setMessage(
-        `Checked ${totalChecked}: ${totalPassed} passed quality, ${totalPromoted} promoted, ${playableNow} playable now${totalSkipped ? `, ${totalSkipped} failed promotion revalidation` : ''}.${topReasons ? ` Rejections: ${topReasons}` : ''}`
+        `Checked ${totalChecked} ${sourceLabel}: ${totalPassed} passed quality, ${totalPromoted} promoted, ${playableNow} playable now${totalSkipped ? `, ${totalSkipped} failed promotion revalidation` : ''}.${topReasons ? ` Rejections: ${topReasons}` : ''}`
       );
       window.dispatchEvent(new Event('geoweedo-pipeline-updated'));
     } catch (error) {
@@ -93,13 +96,21 @@ export default function CandidatePipelineRunner() {
 
   return (
     <section className="admin-panel approved-list">
-      <div className="queue-toolbar">
-        <div>
+      <div className="queue-toolbar" style={{alignItems:'end',gap:16,flexWrap:'wrap'}}>
+        <div style={{flex:'1 1 440px'}}>
           <h2>Gameplay pipeline</h2>
-          <p className="admin-help">Playable rounds currently: {playable}. Scans up to 50 coordinate-ready candidates per run, blocks bad portrait/short coverage, and promotes every passing location.</p>
+          <p className="admin-help">Playable rounds currently: {playable}. Choose which candidate group enters the gameplay pipeline, then scan up to 50 per run and promote every passing location.</p>
         </div>
+        <label style={{display:'grid',gap:5,minWidth:260}}>
+          Candidate source
+          <select value={source} disabled={busy} onChange={(event)=>setSource(event.target.value as CandidateSource)}>
+            <option value="coordinate_ready">All coordinate-ready candidates</option>
+            <option value="enrichment_approved">Automated Enrichment approved</option>
+          </select>
+        </label>
         <button className="primary" disabled={busy} onClick={run}>{busy ? 'Processing…' : 'Process candidates'}</button>
       </div>
+      <p className="admin-help">{source === 'enrichment_approved' ? 'Only candidates with a high-confidence Google Places enrichment record—whether auto-applied or manually approved—will be processed.' : 'Processes all coordinate-ready candidates that still need gameplay imagery checks.'}</p>
       <p className="admin-help">{message}</p>
     </section>
   );
