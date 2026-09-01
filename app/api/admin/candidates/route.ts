@@ -45,6 +45,20 @@ async function promoteCandidate(item:DispensaryCandidate){
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
 }
 
+export async function DELETE(request:NextRequest){
+ if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
+ const body=await request.json().catch(()=>null);
+ const id=String(body?.id||'').trim();
+ if(!id)return NextResponse.json({error:'Candidate id is required.'},{status:400});
+ const db=getDatabase();
+ const current=db.prepare('SELECT id,name,status FROM dispensary_candidates WHERE id=? LIMIT 1').get(id) as {id:string;name:string;status:string}|undefined;
+ if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});
+ if(current.status!=='rejected')return NextResponse.json({error:'Only rejected candidates can be deleted.'},{status:409});
+ const result=db.prepare("DELETE FROM dispensary_candidates WHERE id=? AND status='rejected'").run(id);
+ if(!Number(result.changes))return NextResponse.json({error:'Rejected candidate could not be deleted.'},{status:409});
+ return NextResponse.json({deleted:true,id,name:current.name});
+}
+
 export async function PATCH(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);
  if(body?.action==='pipeline-audit'||body?.action==='pipeline-cleanup'){return NextResponse.json(await auditCandidatePipeline({apply:body.action==='pipeline-cleanup'}));}
  if(Array.isArray(body?.ids)){const ids=Array.from(new Set<string>(body.ids.map((v:unknown)=>String(v)).filter(Boolean))).slice(0,5000),action=String(body.action||'');if(!ids.length)return NextResponse.json({error:'At least one candidate id is required.'},{status:400});if(!['approve','reject'].includes(action))return NextResponse.json({error:'Bulk action must be approve or reject.'},{status:400});const all=await listCandidates(),selected=all.filter(i=>ids.includes(i.id));let updated=0,skipped=0,promoted=0;const skippedReasons:Record<string,number>={};for(const item of selected){if(action==='approve'){const result=await promoteCandidate(item);if(result.ok){updated++;promoted++;continue;}skipped++;const reason=result.reason||'not_eligible';skippedReasons[reason]=(skippedReasons[reason]||0)+1;continue;}if(await updateCandidate(item.id,{status:'rejected'}))updated++;}return NextResponse.json({action,requested:ids.length,matched:selected.length,updated,promoted,skipped,skippedReasons});}
