@@ -4,12 +4,16 @@ import { useEffect, useState } from 'react';
 
 type Candidate = { id: string; imageryStatus?: string; imageryMessage?: string };
 type CandidateSource = 'coordinate_ready' | 'enrichment_approved';
+type CleanupStatus = { legacyKartaview: number; totalApproved: number };
 
 export default function CandidatePipelineRunner() {
   const [busy, setBusy] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const [playable, setPlayable] = useState(0);
   const [source, setSource] = useState<CandidateSource>('coordinate_ready');
   const [message, setMessage] = useState('Ready to process coordinate-ready candidates into playable rounds.');
+  const [cleanupStatus, setCleanupStatus] = useState<CleanupStatus | null>(null);
+  const [cleanupMessage, setCleanupMessage] = useState('');
 
   async function refreshPlayable() {
     try {
@@ -23,7 +27,39 @@ export default function CandidatePipelineRunner() {
     }
   }
 
-  useEffect(() => { refreshPlayable(); }, []);
+  async function refreshCleanupStatus() {
+    try {
+      const response = await fetch('/api/admin/dispensaries/street-view-cleanup', { cache: 'no-store' });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const data = await response.json();
+      if (response.ok) setCleanupStatus({ legacyKartaview: Number(data.legacyKartaview || 0), totalApproved: Number(data.totalApproved || 0) });
+    } catch {}
+  }
+
+  useEffect(() => { refreshPlayable(); refreshCleanupStatus(); }, []);
+
+  async function runCleanup() {
+    setCleanupBusy(true);
+    setCleanupMessage('Checking legacy gameplay Street View records against Google…');
+    try {
+      const response = await fetch('/api/admin/dispensaries/street-view-cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 10 }),
+      });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Street View cleanup failed.');
+      setCleanupMessage(`Checked ${Number(data.checked || 0)}: ${Number(data.upgraded || 0)} upgraded to Google, ${Number(data.kept || 0)} kept on fallback, ${Number(data.failed || 0)} failed. ${Number(data.remaining || 0)} legacy gameplay record${Number(data.remaining || 0) === 1 ? '' : 's'} remain.`);
+      await refreshCleanupStatus();
+      await refreshPlayable();
+      window.dispatchEvent(new Event('geoweedo-pipeline-updated'));
+    } catch (error) {
+      setCleanupMessage(error instanceof Error ? error.message : 'Street View cleanup failed.');
+    } finally {
+      setCleanupBusy(false);
+    }
+  }
 
   async function run() {
     setBusy(true);
@@ -95,23 +131,37 @@ export default function CandidatePipelineRunner() {
   }
 
   return (
-    <section className="admin-panel approved-list">
-      <div className="queue-toolbar" style={{alignItems:'end',gap:16,flexWrap:'wrap'}}>
-        <div style={{flex:'1 1 440px'}}>
-          <h2>Gameplay pipeline</h2>
-          <p className="admin-help">Playable rounds currently: {playable}. Choose which candidate group enters the gameplay pipeline, then scan up to 50 per run and promote every passing location.</p>
+    <>
+      <section className="admin-panel approved-list">
+        <div className="queue-toolbar" style={{alignItems:'end',gap:16,flexWrap:'wrap'}}>
+          <div style={{flex:'1 1 440px'}}>
+            <h2>Gameplay pipeline</h2>
+            <p className="admin-help">Playable rounds currently: {playable}. Choose which candidate group enters the gameplay pipeline, then scan up to 50 per run and promote every passing location.</p>
+          </div>
+          <label style={{display:'grid',gap:5,minWidth:260}}>
+            Candidate source
+            <select value={source} disabled={busy} onChange={(event)=>setSource(event.target.value as CandidateSource)}>
+              <option value="coordinate_ready">All coordinate-ready candidates</option>
+              <option value="enrichment_approved">Automated Enrichment approved</option>
+            </select>
+          </label>
+          <button className="primary" disabled={busy} onClick={run}>{busy ? 'Processing…' : 'Process candidates'}</button>
         </div>
-        <label style={{display:'grid',gap:5,minWidth:260}}>
-          Candidate source
-          <select value={source} disabled={busy} onChange={(event)=>setSource(event.target.value as CandidateSource)}>
-            <option value="coordinate_ready">All coordinate-ready candidates</option>
-            <option value="enrichment_approved">Automated Enrichment approved</option>
-          </select>
-        </label>
-        <button className="primary" disabled={busy} onClick={run}>{busy ? 'Processing…' : 'Process candidates'}</button>
-      </div>
-      <p className="admin-help">{source === 'enrichment_approved' ? 'Only candidates with a high-confidence Google Places enrichment record—whether auto-applied or manually approved—will be processed.' : 'Processes all coordinate-ready candidates that still need gameplay imagery checks.'}</p>
-      <p className="admin-help">{message}</p>
-    </section>
+        <p className="admin-help">{source === 'enrichment_approved' ? 'Only candidates with a high-confidence Google Places enrichment record—whether auto-applied or manually approved—will be processed.' : 'Processes all coordinate-ready candidates that still need gameplay imagery checks.'}</p>
+        <p className="admin-help">{message}</p>
+      </section>
+
+      <section className="admin-panel approved-list">
+        <div className="queue-toolbar" style={{alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          <div style={{flex:'1 1 440px'}}>
+            <h2>Street View cleanup</h2>
+            <p className="admin-help">Rechecks older gameplay records that still use fallback Street View. Google is checked first; existing fallback imagery is kept only when Google has no usable Street View.</p>
+            <p className="admin-help">{cleanupStatus ? `${cleanupStatus.legacyKartaview} legacy fallback gameplay record${cleanupStatus.legacyKartaview === 1 ? '' : 's'} · ${cleanupStatus.totalApproved} approved total` : 'Checking current gameplay Street View records…'}</p>
+          </div>
+          <button className="primary" disabled={cleanupBusy || !cleanupStatus?.legacyKartaview} onClick={runCleanup}>{cleanupBusy ? 'Cleaning…' : 'Clean up 10'}</button>
+        </div>
+        {cleanupMessage && <p className="admin-help">{cleanupMessage}</p>}
+      </section>
+    </>
   );
 }
