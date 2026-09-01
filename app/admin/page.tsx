@@ -10,7 +10,8 @@ type ModuleCard = { title:string; description:string; href?:string; status:'live
 
 const liveModules:ModuleCard[]=[
   {title:'Analytics',description:'First-party visitor, session, page-view, duration, referral, coarse-location, and client reliability analytics stored by GeoWeedo.',href:'/admin/analytics',status:'live',action:'Open analytics',permission:'dashboard.view'},
-  {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and move qualified locations toward gameplay.',href:'/admin/data',status:'live',action:'Open data import',permission:'data.manage'},
+  {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and prepare locations for downstream processing.',href:'/admin/data',status:'live',action:'Open data import',permission:'data.manage'},
+  {title:'Gameplay pipeline',description:'Process coordinate-ready or Automated Enrichment-approved candidates through Street View validation and promote passing locations into gameplay.',href:'/admin/gameplay-pipeline',status:'live',action:'Open gameplay pipeline',permission:'data.manage'},
   {title:'Dispensary information',description:'Review enabled dispensaries, edit business details, validate imagery, and activate or deactivate gameplay locations.',href:'/admin/dispensaries',status:'live',action:'Manage dispensaries',permission:'locations.view'},
   {title:'Community moderation',description:'Approve user reviews and photos, review public ownership claims, and control verified shop-edit access.',href:'/admin/community',status:'live',action:'Moderate community',permission:'locations.manage'},
   {title:'User information',description:'Open a consolidated player record with account status, verified YERB address, balance, deposits, withdrawals, rewards, and recorded game history.',href:'/admin/users',status:'live',action:'Manage users',permission:'users.view'},
