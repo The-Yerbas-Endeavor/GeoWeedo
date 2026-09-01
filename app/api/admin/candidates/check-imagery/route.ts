@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { listCandidates, updateCandidate } from '@/lib/candidateStore';
 import { getDatabase } from '@/lib/sqlite';
-import { lookupConfiguredStreetView } from '@/lib/streetViewLookupClient';
+import { lookupGameplayStreetView } from '@/lib/streetViewLookupClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
   for (const item of selected) {
     const checkedAt = new Date().toISOString();
     try {
-      const result = await lookupConfiguredStreetView(item.latitude as number, item.longitude as number);
+      const result = await lookupGameplayStreetView(item.latitude as number, item.longitude as number, requestedPhotoId || undefined);
       const photos = Array.isArray(result.photos) ? result.photos : [];
       const defaultPhoto = photos[Math.max(0, Number(result.initialIndex || 0))] || photos[0];
       const selectedPhoto = requestedPhotoId ? photos.find((photo) => String(photo.id) === requestedPhotoId) : defaultPhoto;
