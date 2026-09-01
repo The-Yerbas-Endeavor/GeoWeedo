@@ -22,7 +22,7 @@ export default function StateCandidateStreetViewVerifier(){
    host.dataset.stateCandidateStreetView='1';
    host.style.borderTop='1px solid #314137';
    host.style.padding='12px';
-   host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong style="display:block">Street View readiness</strong><small style="color:#a9bbb0">Load Street View, choose the starting image, then confirm it for gameplay.</small></div><button type="button" data-action="load" class="primary">Load Street View</button></div><div data-view style="display:none;margin-top:12px"></div><div data-message style="margin-top:8px;color:#a9bbb0;font-size:12px"></div>`;
+   host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><strong style="display:block">Street View readiness</strong><small style="color:#a9bbb0">Google Street View is checked first. KartaView is used only when Google has no usable Street View.</small></div><button type="button" data-action="load" class="primary">Load Street View</button></div><div data-view style="display:none;margin-top:12px"></div><div data-message style="margin-top:8px;color:#a9bbb0;font-size:12px"></div>`;
    mapPanel.appendChild(host);
    let photos:Photo[]=[];let index=0;let candidateId='';let provider='';
    const message=host.querySelector('[data-message]') as HTMLElement;
@@ -59,10 +59,10 @@ export default function StateCandidateStreetViewVerifier(){
       const candidates=(candidatesData.candidates||[]) as Candidate[];
       const candidate=candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&Number.isFinite(Number(item.latitude))&&Number.isFinite(Number(item.longitude))&&Math.abs(Number(item.latitude)-lat)<0.00002&&Math.abs(Number(item.longitude)-lng)<0.00002)||candidates.find(item=>item.name.trim().toLowerCase()===name.trim().toLowerCase()&&item.status!=='approved'&&item.status!=='rejected');
       if(!candidate)throw new Error('Save the candidate first so Street View can be attached to it.');candidateId=candidate.id;
-      const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&_=${Date.now()}`,{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Street View lookup failed.');
-      photos=Array.isArray(data.photos)?data.photos:[];provider=String(data.provider||'Street View');index=Math.min(Math.max(Number(data.initialIndex||0),0),Math.max(photos.length-1,0));
-      if(!photos.length)throw new Error('No Street View imagery found at these coordinates. Verify the pin and coordinates, then try again.');
-      render();message.textContent=`${photos.length} Street View image${photos.length===1?'':'s'} found. Select the best starting view and confirm it.`;
+      const response=await fetch(`/api/street-imagery?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&provider=auto&_=${Date.now()}`,{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'Street View lookup failed.');
+      photos=Array.isArray(data.photos)?data.photos:[];provider=data.provider==='google'?'Google Street View':data.provider==='kartaview'?'KartaView':'Street View';index=Math.min(Math.max(Number(data.initialIndex||0),0),Math.max(photos.length-1,0));
+      if(!photos.length)throw new Error('No Street View imagery found at these coordinates. Google was checked first, then fallback coverage. Verify the pin and coordinates, then try again.');
+      render();message.textContent=`${provider} found ${photos.length} usable Street View image${photos.length===1?'':'s'}. Select the best starting view and confirm it.`;
      }catch(error){photos=[];render();message.textContent=error instanceof Error?error.message:'Street View lookup failed.';}finally{runningRef.current=false;loadButton.disabled=false;}
      return;
     }
