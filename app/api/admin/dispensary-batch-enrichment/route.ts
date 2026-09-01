@@ -10,6 +10,14 @@ export async function GET(request:NextRequest){const admin=getAdminFromRequest(r
 
 export async function POST(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);try{
  if(body?.action==='create'){const job=createBatchJob(admin.id,body.scope||{},body.autoApply!==false);return NextResponse.json({job});}
+ if(body?.action==='singleCandidate'){
+  if(!body.locationId)return NextResponse.json({error:'locationId is required.'},{status:400});
+  if(!placesConfigured())return NextResponse.json({error:'Google Places enrichment is not configured.'},{status:400});
+  const job=createBatchJob(admin.id,{recordType:'candidate',locationId:String(body.locationId)},body.autoApply!==false);
+  if(!job?.total)return NextResponse.json({error:'Candidate was not found or is no longer eligible.'},{status:404});
+  const processed=await processBatchChunk(job.id,admin.id,1);
+  return NextResponse.json({job:processed});
+ }
  if(body?.action==='process'){
   if(!body.jobId)return NextResponse.json({error:'jobId is required.'},{status:400});
   const jobId=String(body.jobId),state=getBatchControlState(jobId);
@@ -23,8 +31,6 @@ export async function POST(request:NextRequest){const admin=getAdminFromRequest(
   if(!body.jobId)return NextResponse.json({error:'jobId is required.'},{status:400});
   if(!['pause','resume','cancel'].includes(body.control))return NextResponse.json({error:'control must be pause, resume, or cancel.'},{status:400});
   const jobId=String(body.jobId);
-  // A resume is also a safe recovery point. Requeue only Google Places/configuration
-  // failures and legacy blocked items before allowing the next bounded run to start.
   const recovery=body.control==='resume'&&placesConfigured()?resumeBlockedBatch(jobId):null;
   const control=controlBatchJob(jobId,body.control);
   return NextResponse.json({control,recovery,job:getBatchJob(jobId)});
