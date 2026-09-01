@@ -26,7 +26,8 @@ async function promoteCandidate(item:DispensaryCandidate){
  try{
   const inspection=await lookupConfiguredStreetView(item.latitude as number,item.longitude as number);
   const photo=inspection.photos?.[Math.max(0,Number(inspection.initialIndex||0))]||inspection.photos?.[0];
-  if(!inspection.quality?.playable||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
+  const adminConfirmed=String(item.imageryMessage||'').startsWith('ADMIN_CONFIRMED_STREET_VIEW');
+  if((!inspection.quality?.playable&&!adminConfirmed)||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
   const saved=await saveApprovedDispensary({
    name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,
    imageryProvider:inspection.provider,
@@ -40,7 +41,7 @@ async function promoteCandidate(item:DispensaryCandidate){
    imageryUrl:photo.imageUrl,
    active:true
   });
-  await updateCandidate(item.id,{status:'approved',imageryMessage:`Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`});
+  await updateCandidate(item.id,{status:'approved',imageryMessage:adminConfirmed?`Promoted to gameplay with admin-confirmed Street View · ${inspection.provider}. Starting view ${photo.id}.`:`Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`});
   return{ok:true,dispensaryId:saved.id};
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
 }
