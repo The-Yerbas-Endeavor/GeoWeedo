@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { listCandidates, updateCandidate } from '@/lib/candidateStore';
-import { inspectKartaViewCoverage } from '@/lib/kartaViewCoverage';
 import { getDatabase } from '@/lib/sqlite';
+import { lookupConfiguredStreetView } from '@/lib/streetViewLookupClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,20 +53,21 @@ export async function POST(request: NextRequest) {
   for (const item of selected) {
     const checkedAt = new Date().toISOString();
     try {
-      const result = await inspectKartaViewCoverage(item.latitude as number, item.longitude as number);
-      const selectedPhoto = result.selected;
+      const result = await lookupConfiguredStreetView(item.latitude as number, item.longitude as number);
+      const selectedPhoto = result.photos?.[Math.max(0, Number(result.initialIndex || 0))] || result.photos?.[0];
+      const playable = Boolean(result.quality?.playable && selectedPhoto?.id && selectedPhoto?.imageUrl);
       results.push(await updateCandidate(item.id, {
-        imageryStatus: result.quality.playable ? 'coverage' : 'no_coverage',
-        imageryCount: result.count,
+        imageryStatus: playable ? 'coverage' : 'no_coverage',
+        imageryCount: Array.isArray(result.photos) ? result.photos.length : 0,
         imageryCheckedAt: checkedAt,
-        imageryMessage: result.quality.playable
-          ? `Grade ${result.quality.grade}: ${result.quality.reason}${selectedPhoto?.id ? ` Starting frame ${selectedPhoto.id}.` : ''}`
-          : `Not gameplay quality: ${result.quality.reason}`,
+        imageryMessage: playable
+          ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+          : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
       }));
     } catch (error) {
       results.push(await updateCandidate(item.id, {
         imageryStatus: 'error', imageryCount: 0, imageryCheckedAt: checkedAt,
-        imageryMessage: error instanceof Error ? error.message : 'Imagery quality lookup failed.',
+        imageryMessage: error instanceof Error ? error.message : 'Street View quality lookup failed.',
       }));
     }
   }
