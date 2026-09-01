@@ -58,9 +58,15 @@ export async function applyGooglePlacesEnrichment(locationId:string,actorId:stri
  const table=base.kind==='dispensary'?'dispensaries':'dispensary_candidates';
  const updates:string[]=[],values:any[]=[];
  if(result.name){updates.push('name=?');values.push(result.name)}
- if(Number.isFinite(Number(result.latitude))&&Number.isFinite(Number(result.longitude))){updates.push('latitude=?','longitude=?');values.push(Number(result.latitude),Number(result.longitude))}
+ const hasPlaceCoords=Number.isFinite(Number(result.latitude))&&Number.isFinite(Number(result.longitude));
+ const coordsChanged=hasPlaceCoords&&(!Number.isFinite(Number(base.latitude))||!Number.isFinite(Number(base.longitude))||Math.abs(Number(base.latitude)-Number(result.latitude))>0.000001||Math.abs(Number(base.longitude)-Number(result.longitude))>0.000001);
+ if(hasPlaceCoords){updates.push('latitude=?','longitude=?');values.push(Number(result.latitude),Number(result.longitude))}
  if(result.phone){updates.push('phone=?');values.push(result.phone)}
  if(result.website){updates.push('website=?');values.push(result.website)}
+ // Street View checks belong to coordinates, not to the business record forever.
+ // If Places corrects a candidate's location, force the gameplay pipeline to
+ // validate Street View again at the corrected point.
+ if(base.kind==='candidate'&&coordsChanged){updates.push("imagery_status='unchecked'","imagery_count=NULL","imagery_checked_at=NULL",'imagery_message=?');values.push('Coordinates updated by Google Places; Street View recheck required.')}
  if(updates.length){updates.push('updated_at=?');values.push(stamp,locationId);db.prepare(`UPDATE ${table} SET ${updates.join(',')} WHERE id=?`).run(...values);}
  const current=getCommunityProfile(locationId);upsertCommunityProfile(locationId,{overview:current?.overview,phone:result.phone||current?.phone,website:result.website||current?.website,hours:Object.keys(result.hours||{}).length?result.hours:(current?.hours||{}),amenities:current?.amenities||[],social:current?.social||{}},{type:'admin',id:actorId});
  db.prepare(`INSERT INTO google_places_enrichment(location_id,place_id,confidence,score,matched_name,formatted_address,latitude,longitude,phone,website,hours_json,business_status,rating,rating_count,raw_json,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(location_id) DO UPDATE SET place_id=excluded.place_id,confidence=excluded.confidence,score=excluded.score,matched_name=excluded.matched_name,formatted_address=excluded.formatted_address,latitude=excluded.latitude,longitude=excluded.longitude,phone=excluded.phone,website=excluded.website,hours_json=excluded.hours_json,business_status=excluded.business_status,rating=excluded.rating,rating_count=excluded.rating_count,raw_json=excluded.raw_json,updated_at=excluded.updated_at`).run(locationId,result.placeId,result.confidence,result.score,result.name||null,result.formattedAddress||null,result.latitude??null,result.longitude??null,result.phone||null,result.website||null,JSON.stringify(result.hours||{}),result.businessStatus||null,result.rating??null,result.ratingCount??null,JSON.stringify(result),stamp);
