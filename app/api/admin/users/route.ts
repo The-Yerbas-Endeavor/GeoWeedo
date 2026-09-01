@@ -99,3 +99,35 @@ export async function PATCH(request:NextRequest){
   }else return NextResponse.json({error:'Unknown action.'},{status:400});
   return NextResponse.json({ok:true});
 }
+
+export async function DELETE(request:NextRequest){
+  const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});
+  const body=await request.json().catch(()=>null);const userId=String(body?.userId||'');
+  if(!userId)return NextResponse.json({error:'userId is required.'},{status:400});
+  const db=getDatabase();ensureAdminUserNotes(db);ensureUserLoginLocations(db);
+  const user=db.prepare(`SELECT u.id,u.username,u.display_name AS displayName,u.email,w.id AS walletId FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.id=?`).get(userId) as any;
+  if(!user)return NextResponse.json({error:'User not found.'},{status:404});
+
+  if(user.walletId){
+    const balanceAtomic=Number((db.prepare(`SELECT COALESCE(SUM(amount_atomic),0) AS value FROM wallet_ledger WHERE wallet_id=? AND status='posted'`).get(user.walletId) as any)?.value||0);
+    const ledgerCount=Number((db.prepare(`SELECT COUNT(*) AS value FROM wallet_ledger WHERE wallet_id=?`).get(user.walletId) as any)?.value||0);
+    const depositCount=Number((db.prepare(`SELECT COUNT(*) AS value FROM deposits WHERE wallet_id=?`).get(user.walletId) as any)?.value||0);
+    const withdrawalCount=Number((db.prepare(`SELECT COUNT(*) AS value FROM withdrawals WHERE wallet_id=?`).get(user.walletId) as any)?.value||0);
+    const rewardClaimCount=Number((db.prepare(`SELECT COUNT(*) AS value FROM reward_claims WHERE wallet_id=?`).get(user.walletId) as any)?.value||0);
+    if(balanceAtomic!==0||ledgerCount||depositCount||withdrawalCount||rewardClaimCount){
+      return NextResponse.json({error:'This account has YERB financial history and cannot be permanently deleted. Suspend the account instead.'},{status:409});
+    }
+  }
+
+  const metadata={username:user.username||null,displayName:user.displayName||null,email:user.email||null};
+  try{
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare(`DELETE FROM users WHERE id=?`).run(userId);
+    audit(db,admin.id,'user.deleted',userId,metadata);
+    db.exec('COMMIT');
+  }catch(error){
+    try{db.exec('ROLLBACK');}catch{}
+    return NextResponse.json({error:error instanceof Error?error.message:'User deletion failed.'},{status:400});
+  }
+  return NextResponse.json({ok:true});
+}
