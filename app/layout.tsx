@@ -9,6 +9,7 @@ import './community.css';
 import './profile-details.css';
 import './streetview-center.css';
 import './map-overlay-order.css';
+import './mobile.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
@@ -22,6 +23,12 @@ export const metadata = {
   title: 'GeoWeedo',
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
   manifest: '/assets/geoweedo/site.webmanifest',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover' as const,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
