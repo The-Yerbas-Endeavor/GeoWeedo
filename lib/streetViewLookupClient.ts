@@ -33,7 +33,7 @@ function localBaseUrl() {
   return `http://127.0.0.1:${Number.isFinite(port) ? port : 3000}`;
 }
 
-export async function lookupConfiguredStreetView(latitude: number, longitude: number, photoId?: string) {
+async function lookupStreetView(latitude: number, longitude: number, photoId?: string, provider?: 'auto') {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
     throw new Error('Invalid latitude or longitude.');
   }
@@ -42,6 +42,7 @@ export async function lookupConfiguredStreetView(latitude: number, longitude: nu
   url.searchParams.set('lat', String(latitude));
   url.searchParams.set('lng', String(longitude));
   if (photoId) url.searchParams.set('photoId', photoId);
+  if (provider) url.searchParams.set('provider', provider);
 
   const response = await fetch(url, {
     cache: 'no-store',
@@ -53,4 +54,16 @@ export async function lookupConfiguredStreetView(latitude: number, longitude: nu
   if (!data || (data.provider !== 'google' && data.provider !== 'kartaview')) throw new Error('Street View returned an invalid provider response.');
 
   return data as StreetViewLookupResult;
+}
+
+export async function lookupConfiguredStreetView(latitude: number, longitude: number, photoId?: string) {
+  return lookupStreetView(latitude, longitude, photoId);
+}
+
+// Gameplay/editor validation must always prefer Google and only fall back when
+// Google has no usable Street View. This intentionally does not inherit a
+// KartaView-only admin preference because that could incorrectly reject a
+// location that has valid Google Street View.
+export async function lookupGameplayStreetView(latitude: number, longitude: number, photoId?: string) {
+  return lookupStreetView(latitude, longitude, photoId, 'auto');
 }
