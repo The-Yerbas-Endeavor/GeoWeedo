@@ -44,10 +44,11 @@ export async function POST(request: NextRequest) {
     (!approvedByEnrichment || approvedByEnrichment.has(item.id))
   );
   const waiting = coordinateReady.filter(needsImageryCheck);
-  // An explicit id request is an intentional re-check. This lets an admin retry a
-  // previously no-coverage candidate after Google Places corrected its coordinates
-  // or after Street View coverage/provider settings changed.
-  const pool = requestedIds.length
+  // An explicit id request comes directly from an admin action in State location
+  // manager. It intentionally re-checks Street View and, when imagery exists,
+  // serves as the admin confirmation that the location is acceptable for gameplay.
+  const explicitAdminConfirmation = requestedIds.length > 0;
+  const pool = explicitAdminConfirmation
     ? coordinateReady.filter((item) => requestedIds.includes(item.id))
     : waiting;
   const selected = pool.slice(0, limit);
@@ -58,14 +59,19 @@ export async function POST(request: NextRequest) {
     try {
       const result = await lookupConfiguredStreetView(item.latitude as number, item.longitude as number);
       const selectedPhoto = result.photos?.[Math.max(0, Number(result.initialIndex || 0))] || result.photos?.[0];
-      const playable = Boolean(result.quality?.playable && selectedPhoto?.id && selectedPhoto?.imageUrl);
+      const hasUsablePhoto = Boolean(selectedPhoto?.id && selectedPhoto?.imageUrl);
+      const automaticPlayable = Boolean(result.quality?.playable && hasUsablePhoto);
+      const adminConfirmed = Boolean(explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
+      const playable = automaticPlayable || adminConfirmed;
       results.push(await updateCandidate(item.id, {
         imageryStatus: playable ? 'coverage' : 'no_coverage',
         imageryCount: Array.isArray(result.photos) ? result.photos.length : 0,
         imageryCheckedAt: checkedAt,
-        imageryMessage: playable
+        imageryMessage: automaticPlayable
           ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
-          : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
+          : adminConfirmed
+            ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+            : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
       }));
     } catch (error) {
       results.push(await updateCandidate(item.id, {
