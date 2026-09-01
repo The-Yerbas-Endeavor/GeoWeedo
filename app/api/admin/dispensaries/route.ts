@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries, saveApprovedDispensary, setDispensaryActive, updateDispensaryDetails } from '@/lib/dispensaryStore';
 import { gradeImagery } from '@/lib/imageryQuality';
+import { getDatabase } from '@/lib/sqlite';
 
 function invalid(message: string) { return NextResponse.json({ error: message }, { status: 400 }); }
 function num(value: unknown) { const n = Number(value); return Number.isFinite(n) ? n : 0; }
@@ -42,9 +43,29 @@ async function validateGooglePanorama(panoId: string) {
   return true;
 }
 
+function enrichmentStatusByDispensaryId() {
+  try {
+    const db = getDatabase();
+    const table = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='google_places_enrichment'`).get();
+    if (!table) return new Map<string, { approved: boolean; enriched: boolean }>();
+    const rows = db.prepare(`SELECT location_id,confidence FROM google_places_enrichment`).all() as Array<{ location_id: string; confidence: string }>;
+    return new Map(rows.map(row => [String(row.location_id), { approved: String(row.confidence) === 'high', enriched: String(row.confidence) === 'high' }]));
+  } catch {
+    return new Map<string, { approved: boolean; enriched: boolean }>();
+  }
+}
+
 export async function GET(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  return NextResponse.json({ dispensaries: await readApprovedDispensaries() });
+  const dispensaries = await readApprovedDispensaries();
+  const enrichment = enrichmentStatusByDispensaryId();
+  return NextResponse.json({
+    dispensaries: dispensaries.map(item => ({
+      ...item,
+      enrichmentApproved: Boolean(enrichment.get(String(item.id))?.approved),
+      automatedEnrichmentApproved: Boolean(enrichment.get(String(item.id))?.enriched),
+    })),
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request: NextRequest) {
