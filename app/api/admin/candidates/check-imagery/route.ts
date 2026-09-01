@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
+  const requestedPhotoId = String(body?.selectedPhotoId || '').trim();
   const source = body?.source === 'enrichment_approved' ? 'enrichment_approved' : 'coordinate_ready';
   const limit = Math.max(1, Math.min(Number(body?.limit) || 10, 50));
   const all = await listCandidates();
@@ -61,10 +62,6 @@ export async function POST(request: NextRequest) {
   );
   const waiting = coordinateReady.filter(needsImageryCheck);
 
-  // Explicit IDs come from an admin clicking Enable gameplay in State location manager.
-  // Both candidate and reviewing records are still open candidates. Reviewing commonly
-  // means Google Places enrichment requires/required admin review; it must not block
-  // the separate Street View readiness confirmation step.
   const explicitAdminConfirmation = requestedIds.length > 0;
   const pool = explicitAdminConfirmation
     ? all.filter((item) => isOpenCandidateStatus(item.status) && hasCoordinates(item) && requestedIds.includes(item.id))
@@ -94,20 +91,28 @@ export async function POST(request: NextRequest) {
     const checkedAt = new Date().toISOString();
     try {
       const result = await lookupConfiguredStreetView(item.latitude as number, item.longitude as number);
-      const selectedPhoto = result.photos?.[Math.max(0, Number(result.initialIndex || 0))] || result.photos?.[0];
+      const photos = Array.isArray(result.photos) ? result.photos : [];
+      const defaultPhoto = photos[Math.max(0, Number(result.initialIndex || 0))] || photos[0];
+      const selectedPhoto = requestedPhotoId ? photos.find((photo) => String(photo.id) === requestedPhotoId) : defaultPhoto;
+      if (requestedPhotoId && !selectedPhoto) {
+        throw new Error('The selected Street View image is no longer available at this location. Reload Street View and choose another image.');
+      }
       const hasUsablePhoto = Boolean(selectedPhoto?.id && selectedPhoto?.imageUrl);
       const automaticPlayable = Boolean(result.quality?.playable && hasUsablePhoto);
+      const adminSelected = Boolean(explicitAdminConfirmation && requestedPhotoId && hasUsablePhoto);
       const adminConfirmed = Boolean(explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
-      const playable = automaticPlayable || adminConfirmed;
+      const playable = automaticPlayable || adminConfirmed || adminSelected;
       results.push(await updateCandidate(item.id, {
         imageryStatus: playable ? 'coverage' : 'no_coverage',
-        imageryCount: Array.isArray(result.photos) ? result.photos.length : 0,
+        imageryCount: photos.length,
         imageryCheckedAt: checkedAt,
-        imageryMessage: automaticPlayable
-          ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
-          : adminConfirmed
-            ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
-            : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
+        imageryMessage: adminSelected
+          ? `ADMIN_SELECTED_STREET_VIEW · ${result.provider} · Admin selected and confirmed Street View image ${selectedPhoto?.id} for gameplay. Starting view ${selectedPhoto?.id}.`
+          : automaticPlayable
+            ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+            : adminConfirmed
+              ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+              : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
       }));
     } catch (error) {
       results.push(await updateCandidate(item.id, {
