@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { trackAnalyticsEvent } from '@/components/AnalyticsTracker';
 
 type HomeMode = 'choose' | 'search' | 'play';
 
@@ -24,6 +25,12 @@ export default function MobileHomeMode() {
     return () => window.clearTimeout(timer);
   }, [mode]);
 
+  const choose=(next:HomeMode)=>{
+    if(next==='search')trackAnalyticsEvent('home_search_selected',{surface:'mobile_choice'});
+    if(next==='play')trackAnalyticsEvent('home_play_selected',{surface:'mobile_choice'});
+    setMode(next);
+  };
+
   return (
     <div className="mobile-home-mode-ui" aria-live="polite">
       {mode === 'choose' ? (
@@ -32,16 +39,16 @@ export default function MobileHomeMode() {
           <h1>GeoWeedo</h1>
           <p>What would you like to do?</p>
           <div className="mobile-home-choice-actions">
-            <button type="button" className="mobile-home-search" onClick={() => setMode('search')}>
+            <button type="button" className="mobile-home-search" onClick={() => choose('search')}>
               Search GeoWeedo
             </button>
-            <button type="button" className="mobile-home-play" onClick={() => setMode('play')}>
+            <button type="button" className="mobile-home-play" onClick={() => choose('play')}>
               Play GeoWeedo
             </button>
           </div>
         </section>
       ) : (
-        <button type="button" className="mobile-home-mode-back" onClick={() => setMode('choose')}>
+        <button type="button" className="mobile-home-mode-back" onClick={() => choose('choose')}>
           ‹ Search or Play
         </button>
       )}
