@@ -14,9 +14,14 @@ function parseMeta(card: HTMLElement) {
   };
 }
 
+function numericText(value: string, suffix: RegExp) {
+  const cleaned = value.replace(suffix, '').trim();
+  return cleaned || '—';
+}
+
 export default function HomePlayCardEnhancer() {
   useEffect(() => {
-    let timer: number | undefined;
+    let cancelled = false;
 
     const enhance = () => {
       const card = document.querySelector<HTMLElement>('.map-first-home .home-play-card');
@@ -25,9 +30,9 @@ export default function HomePlayCardEnhancer() {
       const playButton = card.querySelector<HTMLButtonElement>('.home-play-button');
       if (!playButton) return;
 
+      // Build immediately from whatever HomeClient already has. Coverage values that
+      // arrive asynchronously are populated in-place below instead of delaying the card.
       const meta = parseMeta(card);
-      if (!meta.states || !meta.countries) return;
-
       card.dataset.promoEnhanced = 'true';
       card.classList.add('home-play-card-promo');
 
@@ -59,13 +64,13 @@ export default function HomePlayCardEnhancer() {
       const stats = document.createElement('div');
       stats.className = 'home-promo-stats';
       const items = [
-        ['🎮', meta.playable.replace(/ playable/i, '') || '—', 'PLAYABLE', 'LOCATIONS', ''],
-        ['📍', meta.mapped.replace(/ mapped/i, '') || '—', 'DISPENSARIES', 'MAPPED', ''],
-        ['◆', meta.states.replace(/ u\.s\. states/i, '') || '—', 'U.S. STATES', 'COVERED', ''],
-        ['◎', meta.countries.replace(/ countr(?:y|ies)/i, '') || '—', 'COUNTRIES', 'MAPPED', ''],
-        ['✦', 'YERB', 'EARN', 'REWARDS', ' reward'],
+        ['🎮', numericText(meta.playable, / playable/i), 'PLAYABLE', 'LOCATIONS', '', 'playable'],
+        ['📍', numericText(meta.mapped, / mapped/i), 'DISPENSARIES', 'MAPPED', '', 'mapped'],
+        ['◆', numericText(meta.states, / u\.s\. states/i), 'U.S. STATES', 'COVERED', '', 'states'],
+        ['◎', numericText(meta.countries, / countr(?:y|ies)/i), 'COUNTRIES', 'MAPPED', '', 'countries'],
+        ['✦', 'YERB', 'EARN', 'REWARDS', ' reward', 'rewards'],
       ];
-      stats.innerHTML = items.map(([icon, value, line1, line2, extra]) => `<div class="home-promo-stat${extra}"><span class="home-promo-stat-icon">${icon}</span><strong>${value}</strong><small>${line1}<br/>${line2}</small></div>`).join('');
+      stats.innerHTML = items.map(([icon, value, line1, line2, extra, key]) => `<div class="home-promo-stat${extra}" data-promo-stat="${key}"><span class="home-promo-stat-icon">${icon}</span><strong>${value}</strong><small>${line1}<br/>${line2}</small></div>`).join('');
 
       const steps = document.createElement('div');
       steps.className = 'home-promo-steps';
@@ -82,17 +87,31 @@ export default function HomePlayCardEnhancer() {
         if (child !== close && child !== playButton) child.remove();
       });
       card.appendChild(shell);
+
+      // Coverage is deliberately non-blocking. The card is already visible while this runs.
+      fetch('/api/map-candidates', { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((data) => {
+          if (cancelled || !data?.stats) return;
+          const update = (key: string, value: unknown) => {
+            const node = card.querySelector<HTMLElement>(`[data-promo-stat="${key}"] strong`);
+            const number = Number(value);
+            if (node && Number.isFinite(number)) node.textContent = number.toLocaleString();
+          };
+          update('mapped', data.stats.mapped);
+          update('states', data.stats.states);
+          update('countries', data.stats.countries || 1);
+        })
+        .catch(() => {});
     };
 
-    const observer = new MutationObserver(() => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(enhance, 20);
-    });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    // Enhance on the first client effect. Do not wait for asynchronous HomeClient fetches.
     enhance();
+    const observer = new MutationObserver(() => enhance());
+    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
-      window.clearTimeout(timer);
+      cancelled = true;
       observer.disconnect();
     };
   }, []);
