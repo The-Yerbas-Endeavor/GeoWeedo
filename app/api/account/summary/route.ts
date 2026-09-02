@@ -11,8 +11,6 @@ export async function GET(request: NextRequest) {
   if (!user || !user.walletId) return NextResponse.json({ error: 'Login required.' }, { status: 401 });
   const db = getDatabase();
 
-  // Keep player accounting synchronized with confirmed on-chain deposits before
-  // calculating the balance. A scan failure must not make the account page fail.
   try {
     await scanYerbasDeposits(db);
   } catch {
@@ -32,16 +30,10 @@ export async function GET(request: NextRequest) {
   const heldDebitAtomic = Number(heldDebits?.amount || 0);
   const pendingRewardAtomic = Math.max(0, Number(pendingRewards?.amount || 0));
 
-  // Spendable funds are posted credits/debits minus active withdrawal holds.
-  // Never expose a negative spendable balance; historical ledger inconsistencies
-  // remain visible to Admin but cannot become additional player spending power.
   const availableAtomic = Math.max(0, postedAtomic + heldDebitAtomic);
-  const heldAtomic = Math.max(0, -heldDebitAtomic);
-
-  // Total player value consists of spendable funds, funds currently reserved for
-  // withdrawals, and positive pending gameplay rewards. This avoids presenting a
-  // negative account balance while still accounting for every player-owned YERB.
-  const totalAtomic = availableAtomic + heldAtomic + pendingRewardAtomic;
+  const heldWithdrawalAtomic = Math.max(0, -heldDebitAtomic);
+  const heldAtomic = heldWithdrawalAtomic + pendingRewardAtomic;
+  const totalAtomic = availableAtomic + heldAtomic;
 
   return NextResponse.json({
     user,
@@ -51,6 +43,7 @@ export async function GET(request: NextRequest) {
       balanceAtomic: totalAtomic,
       postedAtomic,
       pendingRewardAtomic,
+      heldWithdrawalAtomic,
       heldAtomic,
       availableAtomic,
       balanceYerb: totalAtomic / ATOMIC,
