@@ -2,10 +2,17 @@
 
 import { useEffect } from 'react';
 
+type ListedDispensary={id:string;name:string;latitude:number;longitude:number;city?:string;region?:string;country?:string};
+
+const normalize=(value:string|undefined)=>String(value||'').trim().toLowerCase();
+const identity=(item:ListedDispensary)=>`${item.id}|${Number(item.latitude).toFixed(6)}|${Number(item.longitude).toFixed(6)}`;
+const labelKey=(name:string|undefined,city:string|undefined,region:string|undefined)=>`${normalize(name)}|${normalize(city)}|${normalize(region)}`;
+
 export default function EnabledDispensaryBrowseFilter(){
  useEffect(()=>{
   let cancelled=false;
   let mode:'all'|'enabled'='all';
+  let listed:ListedDispensary[]=[];
   let timer:number|undefined;
 
   const publishScope=()=>{
@@ -14,11 +21,11 @@ export default function EnabledDispensaryBrowseFilter(){
   };
 
   const syncControl=(button:HTMLButtonElement)=>{
-   const listed=mode==='enabled';
-   button.classList.toggle('active',listed);
-   button.setAttribute('aria-pressed',listed?'true':'false');
-   button.textContent=listed?'All':'Listed';
-   button.title=listed?'Show all mapped locations':'Show listed gameplay dispensaries only';
+   const active=mode==='enabled';
+   button.classList.toggle('active',active);
+   button.setAttribute('aria-pressed',active?'true':'false');
+   button.textContent=active?'All':'Listed';
+   button.title=active?'Show all mapped locations':'Show listed gameplay dispensaries only';
   };
 
   const syncListToggle=()=>{
@@ -53,20 +60,6 @@ export default function EnabledDispensaryBrowseFilter(){
   };
 
   const removePanelTabs=()=>document.querySelectorAll('.map-browser-scope-tabs').forEach(node=>node.remove());
-  const rowIsListed=(row:HTMLElement)=>{
-   const status=(row.querySelector<HTMLElement>('.map-browser-row-status')?.textContent||'').trim().toUpperCase();
-   return status==='PLAY'||status==='★';
-  };
-
-  const ensureListedRowsRendered=()=>{
-   if(mode!=='enabled')return false;
-   const collapsed=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-browser-state-head[aria-expanded="false"]'));
-   if(!collapsed.length)return false;
-   collapsed.forEach(button=>button.click());
-   window.clearTimeout(timer);
-   timer=window.setTimeout(apply,40);
-   return true;
-  };
 
   const apply=()=>{
    if(cancelled||!document.querySelector('.map-first-home'))return;
@@ -75,14 +68,20 @@ export default function EnabledDispensaryBrowseFilter(){
    const control=ensureToolbarButton();
    if(control)syncControl(control);
 
-   if(ensureListedRowsRendered())return;
-
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
+   const listedIds=new Set(listed.map(identity));
+   const listedLabels=new Set(listed.map(item=>labelKey(item.name,item.city,item.region)));
+   const regionCounts=new Map<string,number>();
+   const countries=new Set<string>();
+   for(const item of listed){
+    const region=String(item.region||'').trim();
+    if(region)regionCounts.set(region,(regionCounts.get(region)||0)+1);
+    countries.add(String(item.country||'USA').trim()||'USA');
+   }
 
    document.querySelectorAll<HTMLElement>('.maplibregl-marker[data-location-identity]').forEach(marker=>{
     if(!marker.dataset.enabledFilterOriginalDisplay)marker.dataset.enabledFilterOriginalDisplay=marker.style.display||'__empty__';
-    const listed=marker.dataset.pinPriority==='gameplay'||marker.dataset.pinPriority==='sponsored';
-    if(mode==='enabled')marker.style.setProperty('display',listed?'':'none','important');
+    if(mode==='enabled')marker.style.setProperty('display',listedIds.has(marker.dataset.locationIdentity||'')?'':'none','important');
     else{
      const original=marker.dataset.enabledFilterOriginalDisplay;
      if(original==='__empty__')marker.style.removeProperty('display');
@@ -90,45 +89,53 @@ export default function EnabledDispensaryBrowseFilter(){
     }
    });
 
-   let visibleRows=0;
-   const visibleStates=new Set<string>();
    document.querySelectorAll<HTMLElement>('.map-browser-state').forEach(section=>{
     const state=section.querySelector<HTMLElement>('.map-browser-state-head strong')?.textContent?.trim()||'';
-    let stateVisible=0;
+    const stateCount=regionCounts.get(state)||0;
+    section.dataset.listedCount=String(stateCount);
+    section.style.display=mode==='enabled'&&stateCount===0?'none':'';
+
     section.querySelectorAll<HTMLElement>('.map-browser-row').forEach(row=>{
-     const show=mode==='all'||rowIsListed(row);
+     if(mode==='all'){row.style.display='';row.dataset.listedVisible='true';return;}
+     const name=row.querySelector<HTMLElement>('.map-browser-row-copy strong')?.textContent?.trim()||'';
+     const city=row.querySelector<HTMLElement>('.map-browser-row-copy small')?.textContent?.trim()||'';
+     const show=listedLabels.has(labelKey(name,city,state));
      row.style.display=show?'':'none';
      row.dataset.listedVisible=show?'true':'false';
-     if(show){stateVisible++;visibleRows++;visibleStates.add(state);}
     });
-    section.style.display=mode==='enabled'&&stateVisible===0?'none':'';
-    section.dataset.listedCount=String(stateVisible);
+
     const count=section.querySelector<HTMLElement>('.map-browser-state-head small');
     if(count){
      if(!count.dataset.enabledFilterOriginal)count.dataset.enabledFilterOriginal=count.textContent||'';
-     count.textContent=mode==='enabled'?`${stateVisible.toLocaleString()} listed dispensar${stateVisible===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
+     const next=mode==='enabled'?`${stateCount.toLocaleString()} listed dispensar${stateCount===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
+     if(count.textContent!==next)count.textContent=next;
     }
    });
 
    const summary=panel?.querySelector<HTMLElement>('.map-browser-panel-head strong');
    if(summary){
     if(!summary.dataset.enabledFilterOriginal)summary.dataset.enabledFilterOriginal=summary.textContent||'';
-    if(mode==='enabled')summary.textContent=`${visibleRows.toLocaleString()} listed locations · ${visibleStates.size.toLocaleString()} states`;
-    else summary.textContent=summary.dataset.enabledFilterOriginal;
+    const next=mode==='enabled'?`${listed.length.toLocaleString()} listed locations · ${countries.size.toLocaleString()} countr${countries.size===1?'y':'ies'}`:summary.dataset.enabledFilterOriginal;
+    if(summary.textContent!==next)summary.textContent=next;
    }
 
    const existingEmpty=panel?.querySelector<HTMLElement>('.enabled-filter-empty');
-   if(mode==='enabled'&&panel&&visibleRows===0){
+   if(mode==='enabled'&&panel&&listed.length===0){
     if(!existingEmpty){
      const list=panel.querySelector<HTMLElement>('.map-browser-list');
      if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed gameplay dispensaries match the active filters.';list.appendChild(node);}
     }
    }else existingEmpty?.remove();
 
-   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope:mode==='enabled'?'listed':'all',visibleRows,visibleStates:visibleStates.size}}));
+   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope:mode==='enabled'?'listed':'all',visibleRows:mode==='enabled'?listed.length:undefined,visibleStates:mode==='enabled'?regionCounts.size:undefined,countries:mode==='enabled'?countries.size:undefined}}));
   };
 
   document.documentElement.dataset.geoweedoBrowseScope='all';
+  fetch('/api/dispensaries',{cache:'no-store'})
+   .then(response=>response.ok?response.json():Promise.reject())
+   .then(data=>{if(cancelled)return;listed=Array.isArray(data?.dispensaries)?data.dispensaries:[];apply();})
+   .catch(()=>{listed=[];apply();});
+
   const observer=new MutationObserver(()=>{
    window.clearTimeout(timer);
    timer=window.setTimeout(apply,30);
