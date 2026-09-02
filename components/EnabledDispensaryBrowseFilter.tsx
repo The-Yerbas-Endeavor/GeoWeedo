@@ -80,13 +80,19 @@ export default function EnabledDispensaryBrowseFilter(){
    const control=ensureScopeSelect();
    if(control&&control.value!==scope)control.value=scope;
 
+   const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
+   const regionSelect=tools?.querySelector<HTMLSelectElement>('select[aria-label="Filter by state"]');
+   const selectedRegion=String(regionSelect?.value||'all').trim();
+   const regionFiltered=selectedRegion&&selectedRegion!=='all';
+   const listedInScope=regionFiltered?listed.filter(item=>String(item.region||'').trim()===selectedRegion):listed;
+
    const listedOnly=scope==='listed';
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
    const listedIds=new Set(listed.map(identity));
    const listedLabels=new Set(listed.map(item=>labelKey(item.name,item.city,item.region)));
    const regionCounts=new Map<string,number>();
    const countries=new Set<string>();
-   for(const item of listed){
+   for(const item of listedInScope){
     const region=String(item.region||'').trim();
     if(region)regionCounts.set(region,(regionCounts.get(region)||0)+1);
     countries.add(String(item.country||'USA').trim()||'USA');
@@ -104,7 +110,7 @@ export default function EnabledDispensaryBrowseFilter(){
 
    document.querySelectorAll<HTMLElement>('.map-browser-state').forEach(section=>{
     const state=section.querySelector<HTMLElement>('.map-browser-state-head strong')?.textContent?.trim()||'';
-    const stateCount=regionCounts.get(state)||0;
+    const stateCount=listed.filter(item=>String(item.region||'').trim()===state).length;
     section.dataset.listedCount=String(stateCount);
     section.style.display=listedOnly&&stateCount===0?'none':'';
 
@@ -119,28 +125,30 @@ export default function EnabledDispensaryBrowseFilter(){
 
     const count=section.querySelector<HTMLElement>('.map-browser-state-head small');
     if(count){
-     if(!count.dataset.enabledFilterOriginal)count.dataset.enabledFilterOriginal=count.textContent||'';
-     const next=listedOnly?`${stateCount.toLocaleString()} listed dispensar${stateCount===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
-     if(count.textContent!==next)count.textContent=next;
+     if(listedOnly){
+      const next=`${stateCount.toLocaleString()} listed dispensar${stateCount===1?'y':'ies'}`;
+      if(count.textContent!==next)count.textContent=next;
+     }
     }
    });
 
    const summary=panel?.querySelector<HTMLElement>('.map-browser-panel-head strong');
-   if(summary){
-    if(!summary.dataset.enabledFilterOriginal)summary.dataset.enabledFilterOriginal=summary.textContent||'';
-    const next=listedOnly?`${listed.length.toLocaleString()} listed locations · ${countries.size.toLocaleString()} countr${countries.size===1?'y':'ies'}`:summary.dataset.enabledFilterOriginal;
+   if(summary&&listedOnly){
+    const next=regionFiltered
+     ?`${listedInScope.length.toLocaleString()} listed location${listedInScope.length===1?'':'s'} · ${selectedRegion}`
+     :`${listedInScope.length.toLocaleString()} listed locations · ${countries.size.toLocaleString()} countr${countries.size===1?'y':'ies'}`;
     if(summary.textContent!==next)summary.textContent=next;
    }
 
    const existingEmpty=panel?.querySelector<HTMLElement>('.enabled-filter-empty');
-   if(listedOnly&&panel&&listed.length===0){
+   if(listedOnly&&panel&&listedInScope.length===0){
     if(!existingEmpty){
      const list=panel.querySelector<HTMLElement>('.map-browser-list');
      if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed gameplay dispensaries match the active filters.';list.appendChild(node);}
     }
    }else existingEmpty?.remove();
 
-   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope,visibleRows:listedOnly?listed.length:undefined,visibleStates:listedOnly?regionCounts.size:undefined,countries:listedOnly?countries.size:undefined}}));
+   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope,visibleRows:listedOnly?listedInScope.length:undefined,visibleStates:listedOnly?regionCounts.size:undefined,countries:listedOnly?countries.size:undefined}}));
   };
 
   document.documentElement.dataset.geoweedoBrowseScope='all';
