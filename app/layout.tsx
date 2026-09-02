@@ -17,6 +17,7 @@ import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal'
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
+import ProductAnalyticsEvents from '@/components/ProductAnalyticsEvents';
 import DispensaryCardEnhancer from '@/components/DispensaryCardEnhancer';
 import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 import GeolocationReliability from '@/components/GeolocationReliability';
@@ -40,7 +41,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<EnabledDispensaryBrowseFilter/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<EnabledDispensaryBrowseFilter/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
