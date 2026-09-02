@@ -1,18 +1,41 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styles from '../admin.module.css';
+import { RankedBarChart, TrafficTrendChart } from '@/components/AdminAnalyticsCharts';
 
-type Summary={days:number;totals:{visitors:number;sessions:number;pageViews:number;activeNow:number;avgDurationMs:number;errors:number};topPages:Array<{path:string;views:number}>;daily:Array<{day:string;page_views:number;visitors:number}>;referrers:Array<{referrer:string;sessions:number}>;locations:Array<{country:string;region:string;city:string;sessions:number}>};
+type Summary={days:number;currentAdminIp?:string;filters:{excludeAdmin:boolean;excludedIpCount:number};totals:{visitors:number;sessions:number;pageViews:number;activeNow:number;avgDurationMs:number;errors:number};topPages:Array<{path:string;views:number}>;daily:Array<{day:string;page_views:number;visitors:number;sessions:number}>;referrers:Array<{referrer:string;sessions:number}>;locations:Array<{country:string;region:string;city:string;sessions:number}>;devices:Array<{device:string;sessions:number}>;browsers:Array<{browser:string;sessions:number}>;languages:Array<{language:string;sessions:number}>;timezones:Array<{timezone:string;sessions:number}>;eventTypes:Array<{event_type:string;events:number}>};
 function duration(ms:number){const seconds=Math.round(ms/1000);if(seconds<60)return `${seconds}s`;const minutes=Math.floor(seconds/60),rest=seconds%60;return `${minutes}m ${rest}s`;}
+const FILTER_KEY='geoweedo_admin_analytics_excluded_ips';
 
 export default function AnalyticsPage(){
- const[data,setData]=useState<Summary|null>(null),[days,setDays]=useState(30),[error,setError]=useState('');
- useEffect(()=>{setError('');fetch(`/api/admin/analytics?days=${days}`,{cache:'no-store'}).then(async r=>{const d=await r.json();if(r.status===401){location.href='/admin/login';return null;}if(!r.ok)throw new Error(d.error||'Analytics failed to load.');return d;}).then(d=>{if(d)setData(d);}).catch(e=>setError(e instanceof Error?e.message:'Analytics failed to load.'));},[days]);
+ const[data,setData]=useState<Summary|null>(null),[days,setDays]=useState(30),[error,setError]=useState(''),[excludeAdmin,setExcludeAdmin]=useState(true),[excludedIps,setExcludedIps]=useState<string[]>([]),[ipInput,setIpInput]=useState('');
+ useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(FILTER_KEY)||'[]');if(Array.isArray(saved))setExcludedIps(saved.map(String).filter(Boolean));}catch{}},[]);
+ useEffect(()=>{try{localStorage.setItem(FILTER_KEY,JSON.stringify(excludedIps));}catch{}},[excludedIps]);
+ useEffect(()=>{setError('');const params=new URLSearchParams({days:String(days),excludeAdmin:excludeAdmin?'1':'0'});if(excludedIps.length)params.set('excludeIps',excludedIps.join(','));fetch(`/api/admin/analytics?${params}`,{cache:'no-store'}).then(async r=>{const d=await r.json();if(r.status===401){location.href='/admin/login';return null;}if(!r.ok)throw new Error(d.error||'Analytics failed to load.');return d;}).then(d=>{if(d)setData(d);}).catch(e=>setError(e instanceof Error?e.message:'Analytics failed to load.'));},[days,excludeAdmin,excludedIps]);
+ const addIp=(value:string)=>{const ip=value.trim();if(!ip)return;setExcludedIps(current=>current.includes(ip)?current:[...current,ip]);setIpInput('');};
+ const topPages=useMemo(()=>data?.topPages.map(row=>({name:row.path||'/',value:Number(row.views||0)}))||[],[data]);
+ const referrers=useMemo(()=>data?.referrers.map(row=>({name:row.referrer||'Direct',value:Number(row.sessions||0)}))||[],[data]);
+ const devices=useMemo(()=>data?.devices.map(row=>({name:row.device,value:Number(row.sessions||0)}))||[],[data]);
+ const browsers=useMemo(()=>data?.browsers.map(row=>({name:row.browser,value:Number(row.sessions||0)}))||[],[data]);
  return <main className={styles.shell}>
-  <header className={styles.header}><div><a href="/admin" className={styles.adminHomeLink}><span className={styles.eyebrow}>GEOWEEDO ADMIN</span></a><h1>Analytics</h1><p>First-party traffic, engagement, session duration, referral, location, and reliability analytics stored by GeoWeedo.</p></div><div className={styles.headerActions}><a href="/admin" className={styles.ghost}>Control center</a></div></header>
+  <header className={styles.header}><div><a href="/admin" className={styles.adminHomeLink}><span className={styles.eyebrow}>GEOWEEDO ADMIN</span></a><h1>Analytics</h1><p>First-party traffic, engagement, acquisition, audience, geography, and reliability analytics stored by GeoWeedo.</p></div><div className={styles.headerActions}><a href="/admin" className={styles.ghost}>Control center</a></div></header>
+
   <section className={styles.section}>
-   <div className={styles.sectionHead}><div><span className={styles.eyebrow}>FIRST-PARTY ANALYTICS</span><h2>Traffic overview</h2></div><select value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>Today</option><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select></div>
+   <div className={styles.sectionHead}><div><span className={styles.eyebrow}>FILTERS</span><h2>Clean traffic view</h2><p>Remove admin pages and your own network from every metric and graph.</p></div><select value={days} onChange={e=>setDays(Number(e.target.value))}><option value={1}>Today</option><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select></div>
+   <article className={styles.card} style={{minHeight:0}}>
+    <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+     <label style={{display:'flex',gap:8,alignItems:'center',fontWeight:700}}><input type="checkbox" checked={excludeAdmin} onChange={e=>setExcludeAdmin(e.target.checked)}/> Exclude /admin traffic</label>
+     {data?.currentAdminIp&&<button className={styles.secondaryLink} type="button" onClick={()=>addIp(data.currentAdminIp!)} disabled={excludedIps.includes(data.currentAdminIp)}>Exclude my current IP</button>}
+     <div style={{display:'flex',gap:8,flex:'1 1 360px'}}><input value={ipInput} onChange={e=>setIpInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addIp(ipInput);}}} placeholder="IP address to exclude" style={{flex:1,minWidth:180,padding:10,borderRadius:8,border:'1px solid rgba(255,255,255,.12)',background:'#0f1411',color:'#fff'}}/><button className={styles.secondaryLink} type="button" onClick={()=>addIp(ipInput)}>Add IP</button></div>
+    </div>
+    {excludedIps.length>0&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}}>{excludedIps.map(ip=><button key={ip} type="button" onClick={()=>setExcludedIps(current=>current.filter(v=>v!==ip))} title="Remove exclusion" style={{border:'1px solid rgba(103,214,110,.28)',background:'rgba(103,214,110,.08)',color:'inherit',padding:'7px 10px',borderRadius:999,cursor:'pointer'}}>{ip} ×</button>)}</div>}
+    <p style={{opacity:.65,fontSize:12,marginBottom:0}}>Excluded IPs are remembered only in this browser's Admin analytics view. Raw IP addresses are not written into the analytics database.</p>
+   </article>
+  </section>
+
+  <section className={styles.section}>
+   <div className={styles.sectionHead}><div><span className={styles.eyebrow}>FIRST-PARTY ANALYTICS</span><h2>Traffic overview</h2></div></div>
    {error&&<p>{error}</p>}
    {!data?<p>Loading analytics…</p>:<>
     <div className={styles.grid}>
@@ -22,11 +45,20 @@ export default function AnalyticsPage(){
      <article className={styles.card}><div className={styles.cardTop}><h3>Average page time</h3></div><p style={{fontSize:'2rem',margin:0}}>{duration(data.totals.avgDurationMs)}</p><p>Measured from page view to leave/navigation.</p></article>
      <article className={styles.card}><div className={styles.cardTop}><h3>Client errors</h3></div><p style={{fontSize:'2rem',margin:0}}>{data.totals.errors.toLocaleString()}</p><p>Unhandled browser errors and rejected promises.</p></article>
     </div>
+    <div style={{marginTop:18}}><TrafficTrendChart daily={data.daily}/></div>
    </>}
   </section>
-  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>ENGAGEMENT</span><h2>Top pages</h2></div></div><div className={styles.grid}>{data.topPages.map(row=><article className={styles.card} key={row.path}><h3>{row.path||'/'}</h3><p>{Number(row.views).toLocaleString()} views</p></article>)}</div></section>}
-  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>ACQUISITION</span><h2>Referrers</h2></div></div><div className={styles.grid}>{data.referrers.map((row,i)=><article className={styles.card} key={`${row.referrer}-${i}`}><h3>{row.referrer}</h3><p>{Number(row.sessions).toLocaleString()} sessions</p></article>)}</div></section>}
-  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>COARSE LOCATION</span><h2>Visitor geography</h2></div></div><div className={styles.grid}>{data.locations.map((row,i)=><article className={styles.card} key={`${row.country}-${row.region}-${row.city}-${i}`}><h3>{[row.city,row.region,row.country].filter(Boolean).join(', ')}</h3><p>{Number(row.sessions).toLocaleString()} sessions</p></article>)}</div></section>}
+
+  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>ENGAGEMENT</span><h2>What people use</h2></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))',gap:16}}><RankedBarChart title="Top pages" subtitle="Most-viewed pages in the selected period" rows={topPages}/><RankedBarChart title="Referrers" subtitle="Where sessions originated" rows={referrers}/></div></section>}
+
+  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>AUDIENCE</span><h2>Devices and browsers</h2></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))',gap:16}}><RankedBarChart title="Device class" subtitle="Derived from first-party screen width" rows={devices}/><RankedBarChart title="Browsers" subtitle="Derived from the browser user-agent" rows={browsers}/></div></section>}
+
+  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>COARSE LOCATION</span><h2>Visitor geography</h2></div></div><div className={styles.grid}>{data.locations.map((row,i)=><article className={styles.card} key={`${row.country}-${row.region}-${row.city}-${i}`}><h3>{[row.city,row.region,row.country].filter(Boolean).join(', ')||'Unknown'}</h3><p>{Number(row.sessions).toLocaleString()} sessions</p></article>)}</div></section>}
+
+  {data&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>BEHAVIOR + RELIABILITY</span><h2>Tracked events</h2><p>Custom interaction events and browser failures. As we instrument Search, Play, account signup, rewards, and dispensary clicks, they will appear here automatically.</p></div></div><div className={styles.grid}>{data.eventTypes.length?data.eventTypes.map((row,i)=><article className={styles.card} key={`${row.event_type}-${i}`}><h3>{row.event_type.replaceAll('_',' ')}</h3><p>{Number(row.events).toLocaleString()} events</p></article>):<article className={styles.card}><h3>No custom events yet</h3><p>Traffic collection is working; product interaction instrumentation can now build on it.</p></article>}</div></section>}
+
+  <section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>NEXT USEFUL SIGNALS</span><h2>What GeoWeedo should measure</h2></div></div><article className={styles.card} style={{minHeight:0}}><p style={{marginTop:0}}>The next highest-value events are: <strong>Search GeoWeedo selected</strong>, <strong>Play GeoWeedo selected</strong>, game started/completed/abandoned, guess submitted, dispensary pin/detail opened, Street View success/failure, account signup/login, reward earned/claimed, and sponsorship/owner CTA clicks. Those give us a real funnel instead of vanity page-view counts.</p><p style={{marginBottom:0}}>I would also keep error rate by page/provider, mobile vs desktop game completion, search-to-detail conversion, returning visitor rate, and Street View failure rate. Those directly tell us where GeoWeedo is losing users or where the data pipeline needs work.</p></article></section>
+
   <section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>PRIVACY</span><h2>Collection policy</h2></div></div><article className={styles.card}><p>Raw analytics events are retained for 90 days by default. GeoWeedo does not store raw IP addresses; a rotating one-way network hash is used instead. Browser Do Not Track and the local <code>geoweedo_analytics_optout</code> flag disable collection.</p></article></section>
  </main>;
 }
