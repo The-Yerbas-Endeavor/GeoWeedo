@@ -48,7 +48,7 @@ export default function HomePlayCardEnhancer() {
 
       const brand = document.createElement('div');
       brand.className = 'home-promo-brand';
-      brand.innerHTML = '<img src="/favicon.ico" alt="GeoWeedo mascot" class="home-promo-mascot"/><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
+      brand.innerHTML = '<img src="/assets/geoweedo/geoweedo-icon-48.png" alt="" width="48" height="48" class="home-promo-mascot"/><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
 
       const divider = document.createElement('div');
       divider.className = 'home-promo-divider';
