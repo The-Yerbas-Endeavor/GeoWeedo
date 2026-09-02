@@ -97,5 +97,20 @@ export function getImageryProviderUsage(days = 7) {
   const googleToday = rows.filter(row => row.usage_date === today && row.provider === 'google').reduce((sum, row) => sum + Number(row.request_count || 0), 0);
   const googleImagesToday = rows.filter(row => row.usage_date === today && row.provider === 'google' && row.request_type === 'image').reduce((sum, row) => sum + Number(row.request_count || 0), 0);
   const googleMetadataToday = rows.filter(row => row.usage_date === today && row.provider === 'google' && row.request_type === 'metadata').reduce((sum, row) => sum + Number(row.request_count || 0), 0);
-  return { rows, today, googleToday, googleImagesToday, googleMetadataToday };
+  const googlePanoramasToday = rows.filter(row => row.usage_date === today && row.provider === 'google' && row.request_type === 'panorama').reduce((sum, row) => sum + Number(row.request_count || 0), 0);
+  return { rows, today, googleToday, googleImagesToday, googleMetadataToday, googlePanoramasToday };
+}
+
+export function getGooglePanoramaUsageForCurrentMonth() {
+  const db = ensureUsageTable();
+  const rows = db.prepare(`
+    SELECT usage_date, request_count
+    FROM imagery_provider_usage
+    WHERE provider = 'google'
+      AND request_type = 'panorama'
+      AND usage_date >= date('now', 'start of month')
+    ORDER BY usage_date ASC
+  `).all() as Array<{usage_date:string;request_count:number}>;
+  const total = rows.reduce((sum, row) => sum + Number(row.request_count || 0), 0);
+  return { rows, total };
 }
