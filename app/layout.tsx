@@ -13,6 +13,7 @@ import './mobile.css';
 import './mobile-game-map.css';
 import './mobile-home-mode.css';
 import './enabled-browse-filter.css';
+import './home-play-promo.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
@@ -26,6 +27,7 @@ import MobileGuessMapController from '@/components/MobileGuessMapController';
 import MobileHomeMode from '@/components/MobileHomeMode';
 import EnabledDispensaryBrowseFilter from '@/components/EnabledDispensaryBrowseFilter';
 import DispensaryBrowseTierOrder from '@/components/DispensaryBrowseTierOrder';
+import HomePlayCardEnhancer from '@/components/HomePlayCardEnhancer';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -42,7 +44,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
