@@ -21,25 +21,28 @@ export default function EnabledDispensaryBrowseFilter(){
    document.documentElement.dataset.geoweedoBrowseScope=mode==='enabled'?'listed':'all';
    window.dispatchEvent(new CustomEvent('geoweedo:browse-scope-change',{detail:{scope:mode==='enabled'?'listed':'all'}}));
   };
+  const syncControl=(button:HTMLButtonElement)=>{
+   const listed=mode==='enabled';
+   button.classList.toggle('active',listed);
+   button.setAttribute('aria-pressed',listed?'true':'false');
+   button.textContent=listed?'All':'Listed';
+   button.title=listed?'Show all mapped locations':'Show listed dispensaries only';
+  };
 
   const ensureToolbarButton=()=>{
    const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
    if(!tools)return null;
    let button=tools.querySelector<HTMLButtonElement>('.map-enabled-filter-button');
-   if(button)return button;
+   if(button){syncControl(button);return button;}
    button=document.createElement('button');
    button.type='button';
    button.className='map-enabled-filter-button';
-   button.textContent='Listed';
-   button.setAttribute('aria-pressed','false');
-   button.title='Show listed dispensaries only';
+   syncControl(button);
    const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
    if(listButton)tools.insertBefore(button,listButton);else tools.appendChild(button);
    button.addEventListener('click',()=>{
     mode=mode==='enabled'?'all':'enabled';
-    button?.classList.toggle('active',mode==='enabled');
-    button?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
-    button!.title=mode==='enabled'?'Show all mapped locations':'Show listed dispensaries only';
+    syncControl(button!);
     publishScope();
     apply();
    });
@@ -52,8 +55,7 @@ export default function EnabledDispensaryBrowseFilter(){
    if(cancelled||!document.querySelector('.map-first-home'))return;
    removePanelTabs();
    const control=ensureToolbarButton();
-   control?.classList.toggle('active',mode==='enabled');
-   control?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
+   if(control)syncControl(control);
 
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
    const ids=enabledIdentities();
