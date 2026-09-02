@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 type ListedDispensary={id:string;name:string;latitude:number;longitude:number;city?:string;region?:string;country?:string};
+type BrowseScope='all'|'listed';
 
 const normalize=(value:string|undefined)=>String(value||'').trim().toLowerCase();
 const identity=(item:ListedDispensary)=>`${item.id}|${Number(item.latitude).toFixed(6)}|${Number(item.longitude).toFixed(6)}`;
@@ -11,21 +12,13 @@ const labelKey=(name:string|undefined,city:string|undefined,region:string|undefi
 export default function EnabledDispensaryBrowseFilter(){
  useEffect(()=>{
   let cancelled=false;
-  let mode:'all'|'enabled'='all';
+  let scope:BrowseScope='all';
   let listed:ListedDispensary[]=[];
   let timer:number|undefined;
 
   const publishScope=()=>{
-   document.documentElement.dataset.geoweedoBrowseScope=mode==='enabled'?'listed':'all';
-   window.dispatchEvent(new CustomEvent('geoweedo:browse-scope-change',{detail:{scope:mode==='enabled'?'listed':'all'}}));
-  };
-
-  const syncControl=(button:HTMLButtonElement)=>{
-   const active=mode==='enabled';
-   button.classList.toggle('active',active);
-   button.setAttribute('aria-pressed',active?'true':'false');
-   button.textContent=active?'All':'Listed';
-   button.title=active?'Show all mapped locations':'Show listed gameplay dispensaries only';
+   document.documentElement.dataset.geoweedoBrowseScope=scope;
+   window.dispatchEvent(new CustomEvent('geoweedo:browse-scope-change',{detail:{scope}}));
   };
 
   const syncListToggle=()=>{
@@ -39,24 +32,43 @@ export default function EnabledDispensaryBrowseFilter(){
    listButton.tabIndex=isHide?-1:0;
   };
 
-  const ensureToolbarButton=()=>{
+  const ensureScopeSelect=()=>{
    const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
    if(!tools)return null;
-   let button=tools.querySelector<HTMLButtonElement>('.map-enabled-filter-button');
-   if(button){syncControl(button);return button;}
-   button=document.createElement('button');
-   button.type='button';
-   button.className='map-enabled-filter-button';
-   syncControl(button);
-   const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
-   if(listButton)tools.insertBefore(button,listButton);else tools.appendChild(button);
-   button.addEventListener('click',()=>{
-    mode=mode==='enabled'?'all':'enabled';
-    syncControl(button!);
+
+   tools.querySelector('.map-enabled-filter-button')?.remove();
+
+   let select=tools.querySelector<HTMLSelectElement>('.map-scope-filter-select');
+   if(select){
+    if(select.value!==scope)select.value=scope;
+    return select;
+   }
+
+   select=document.createElement('select');
+   select.className='map-scope-filter-select';
+   select.setAttribute('aria-label','Dispensary map scope');
+   select.title='Choose which dispensary locations to show';
+
+   const allOption=document.createElement('option');
+   allOption.value='all';
+   allOption.textContent='All';
+   select.appendChild(allOption);
+
+   const listedOption=document.createElement('option');
+   listedOption.value='listed';
+   listedOption.textContent='Listed';
+   select.appendChild(listedOption);
+
+   select.value=scope;
+   select.addEventListener('change',()=>{
+    scope=select!.value==='listed'?'listed':'all';
     publishScope();
     apply();
    });
-   return button;
+
+   const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
+   if(listButton)tools.insertBefore(select,listButton);else tools.appendChild(select);
+   return select;
   };
 
   const removePanelTabs=()=>document.querySelectorAll('.map-browser-scope-tabs').forEach(node=>node.remove());
@@ -65,9 +77,10 @@ export default function EnabledDispensaryBrowseFilter(){
    if(cancelled||!document.querySelector('.map-first-home'))return;
    removePanelTabs();
    syncListToggle();
-   const control=ensureToolbarButton();
-   if(control)syncControl(control);
+   const control=ensureScopeSelect();
+   if(control&&control.value!==scope)control.value=scope;
 
+   const listedOnly=scope==='listed';
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
    const listedIds=new Set(listed.map(identity));
    const listedLabels=new Set(listed.map(item=>labelKey(item.name,item.city,item.region)));
@@ -81,7 +94,7 @@ export default function EnabledDispensaryBrowseFilter(){
 
    document.querySelectorAll<HTMLElement>('.maplibregl-marker[data-location-identity]').forEach(marker=>{
     if(!marker.dataset.enabledFilterOriginalDisplay)marker.dataset.enabledFilterOriginalDisplay=marker.style.display||'__empty__';
-    if(mode==='enabled')marker.style.setProperty('display',listedIds.has(marker.dataset.locationIdentity||'')?'':'none','important');
+    if(listedOnly)marker.style.setProperty('display',listedIds.has(marker.dataset.locationIdentity||'')?'':'none','important');
     else{
      const original=marker.dataset.enabledFilterOriginalDisplay;
      if(original==='__empty__')marker.style.removeProperty('display');
@@ -93,10 +106,10 @@ export default function EnabledDispensaryBrowseFilter(){
     const state=section.querySelector<HTMLElement>('.map-browser-state-head strong')?.textContent?.trim()||'';
     const stateCount=regionCounts.get(state)||0;
     section.dataset.listedCount=String(stateCount);
-    section.style.display=mode==='enabled'&&stateCount===0?'none':'';
+    section.style.display=listedOnly&&stateCount===0?'none':'';
 
     section.querySelectorAll<HTMLElement>('.map-browser-row').forEach(row=>{
-     if(mode==='all'){row.style.display='';row.dataset.listedVisible='true';return;}
+     if(!listedOnly){row.style.display='';row.dataset.listedVisible='true';return;}
      const name=row.querySelector<HTMLElement>('.map-browser-row-copy strong')?.textContent?.trim()||'';
      const city=row.querySelector<HTMLElement>('.map-browser-row-copy small')?.textContent?.trim()||'';
      const show=listedLabels.has(labelKey(name,city,state));
@@ -107,7 +120,7 @@ export default function EnabledDispensaryBrowseFilter(){
     const count=section.querySelector<HTMLElement>('.map-browser-state-head small');
     if(count){
      if(!count.dataset.enabledFilterOriginal)count.dataset.enabledFilterOriginal=count.textContent||'';
-     const next=mode==='enabled'?`${stateCount.toLocaleString()} listed dispensar${stateCount===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
+     const next=listedOnly?`${stateCount.toLocaleString()} listed dispensar${stateCount===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
      if(count.textContent!==next)count.textContent=next;
     }
    });
@@ -115,19 +128,19 @@ export default function EnabledDispensaryBrowseFilter(){
    const summary=panel?.querySelector<HTMLElement>('.map-browser-panel-head strong');
    if(summary){
     if(!summary.dataset.enabledFilterOriginal)summary.dataset.enabledFilterOriginal=summary.textContent||'';
-    const next=mode==='enabled'?`${listed.length.toLocaleString()} listed locations · ${countries.size.toLocaleString()} countr${countries.size===1?'y':'ies'}`:summary.dataset.enabledFilterOriginal;
+    const next=listedOnly?`${listed.length.toLocaleString()} listed locations · ${countries.size.toLocaleString()} countr${countries.size===1?'y':'ies'}`:summary.dataset.enabledFilterOriginal;
     if(summary.textContent!==next)summary.textContent=next;
    }
 
    const existingEmpty=panel?.querySelector<HTMLElement>('.enabled-filter-empty');
-   if(mode==='enabled'&&panel&&listed.length===0){
+   if(listedOnly&&panel&&listed.length===0){
     if(!existingEmpty){
      const list=panel.querySelector<HTMLElement>('.map-browser-list');
      if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed gameplay dispensaries match the active filters.';list.appendChild(node);}
     }
    }else existingEmpty?.remove();
 
-   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope:mode==='enabled'?'listed':'all',visibleRows:mode==='enabled'?listed.length:undefined,visibleStates:mode==='enabled'?regionCounts.size:undefined,countries:mode==='enabled'?countries.size:undefined}}));
+   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope,visibleRows:listedOnly?listed.length:undefined,visibleStates:listedOnly?regionCounts.size:undefined,countries:listedOnly?countries.size:undefined}}));
   };
 
   document.documentElement.dataset.geoweedoBrowseScope='all';
