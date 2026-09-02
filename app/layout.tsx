@@ -14,6 +14,7 @@ import './mobile-game-map.css';
 import './mobile-home-mode.css';
 import './enabled-browse-filter.css';
 import './home-play-promo.css';
+import './pending-game-reward.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
@@ -29,6 +30,7 @@ import EnabledDispensaryBrowseFilter from '@/components/EnabledDispensaryBrowseF
 import DispensaryBrowseTierOrder from '@/components/DispensaryBrowseTierOrder';
 import HomePlayCardEnhancer from '@/components/HomePlayCardEnhancer';
 import AdminGoogleApiStatus from '@/components/AdminGoogleApiStatus';
+import PendingGameRewardClaim from '@/components/PendingGameRewardClaim';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -45,7 +47,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<AdminGoogleApiStatus/><HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<PendingGameRewardClaim/><AdminGoogleApiStatus/><HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
