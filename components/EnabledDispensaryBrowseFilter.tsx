@@ -18,35 +18,39 @@ export default function EnabledDispensaryBrowseFilter(){
   const enabledIdentities=()=>new Set(enabled.map(identity));
   const enabledLabels=()=>new Set(enabled.map(item=>labelKey(item.name,item.city,item.region)));
 
-  const ensureTabs=(panel:HTMLElement)=>{
-   let tabs=panel.querySelector<HTMLElement>('.map-browser-scope-tabs');
-   if(tabs)return tabs;
-   tabs=document.createElement('div');
-   tabs.className='map-browser-scope-tabs';
-   tabs.setAttribute('role','tablist');
-   tabs.setAttribute('aria-label','Browse dispensary scope');
-   tabs.innerHTML='<button type="button" class="active" data-scope="all" role="tab" aria-selected="true">All Locations</button><button type="button" data-scope="enabled" role="tab" aria-selected="false">Enabled</button>';
-   const head=panel.querySelector('.map-browser-panel-head');
-   if(head)head.insertAdjacentElement('afterend',tabs);
-   tabs.addEventListener('click',event=>{
-    const target=(event.target as HTMLElement).closest<HTMLButtonElement>('button[data-scope]');
-    if(!target)return;
-    mode=target.dataset.scope==='enabled'?'enabled':'all';
-    tabs?.querySelectorAll<HTMLButtonElement>('button[data-scope]').forEach(button=>{
-     const active=button.dataset.scope===mode;
-     button.classList.toggle('active',active);
-     button.setAttribute('aria-selected',active?'true':'false');
-    });
+  const ensureToolbarButton=()=>{
+   const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
+   if(!tools)return null;
+   let button=tools.querySelector<HTMLButtonElement>('.map-enabled-filter-button');
+   if(button)return button;
+   button=document.createElement('button');
+   button.type='button';
+   button.className='map-enabled-filter-button';
+   button.textContent='Enabled';
+   button.setAttribute('aria-pressed','false');
+   button.title='Show enabled dispensaries only';
+   const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
+   if(listButton)tools.insertBefore(button,listButton);else tools.appendChild(button);
+   button.addEventListener('click',()=>{
+    mode=mode==='enabled'?'all':'enabled';
+    button?.classList.toggle('active',mode==='enabled');
+    button?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
+    button!.title=mode==='enabled'?'Show all mapped locations':'Show enabled dispensaries only';
     apply();
    });
-   return tabs;
+   return button;
   };
+
+  const removePanelTabs=()=>document.querySelectorAll('.map-browser-scope-tabs').forEach(node=>node.remove());
 
   const apply=()=>{
    if(cancelled||!document.querySelector('.map-first-home'))return;
-   const panel=document.querySelector<HTMLElement>('.map-browser-panel');
-   if(panel)ensureTabs(panel);
+   removePanelTabs();
+   const control=ensureToolbarButton();
+   control?.classList.toggle('active',mode==='enabled');
+   control?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
 
+   const panel=document.querySelector<HTMLElement>('.map-browser-panel');
    const ids=enabledIdentities();
    const labels=enabledLabels();
 
