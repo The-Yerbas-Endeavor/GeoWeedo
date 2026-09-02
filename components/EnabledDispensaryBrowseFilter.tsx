@@ -81,8 +81,28 @@ export default function EnabledDispensaryBrowseFilter(){
     const regionMatches=!regionFiltered||state===selectedRegion;
     section.dataset.listedCount=String(stateCount);section.dataset.mappedCount=String(mappedCount);
     section.style.display=(!regionMatches||(listedOnly&&stateCount===0))?'none':'';
+
+    const rows=Array.from(section.querySelectorAll<HTMLElement>('.map-browser-row'));
+    const listedRows:HTMLElement[]=[];
+    const mappedOnlyRows:HTMLElement[]=[];
     let sectionVisibleRows=0;
-    section.querySelectorAll<HTMLElement>('.map-browser-row').forEach(row=>{const name=row.querySelector<HTMLElement>('.map-browser-row-copy strong')?.textContent?.trim()||'';const city=row.querySelector<HTMLElement>('.map-browser-row-copy small')?.textContent?.trim()||'';const listedMatch=listedLabels.has(labelKey(name,city,state));const show=regionMatches&&(!listedOnly||listedMatch);row.style.display=show?'':'none';row.dataset.listedVisible=show?'true':'false';if(show)sectionVisibleRows++;});
+    for(const row of rows){
+      const name=row.querySelector<HTMLElement>('.map-browser-row-copy strong')?.textContent?.trim()||'';
+      const city=row.querySelector<HTMLElement>('.map-browser-row-copy small')?.textContent?.trim()||'';
+      const listedMatch=listedLabels.has(labelKey(name,city,state));
+      const show=regionMatches&&(!listedOnly||listedMatch);
+      row.style.display=show?'':'none';
+      row.dataset.listedVisible=show?'true':'false';
+      row.dataset.listedStatus=listedMatch?'listed':'mapped';
+      if(listedMatch)listedRows.push(row);else mappedOnlyRows.push(row);
+      if(show)sectionVisibleRows++;
+    }
+
+    const desiredRows=[...listedRows,...mappedOnlyRows];
+    const currentRows=Array.from(section.querySelectorAll<HTMLElement>('.map-browser-row'));
+    const needsReorder=desiredRows.some((row,index)=>currentRows[index]!==row);
+    if(needsReorder)desiredRows.forEach(row=>section.appendChild(row));
+
     if(regionMatches)selectedRegionRows+=sectionVisibleRows;
     if(countNode){const next=`${mappedCount.toLocaleString()} mapped · ${stateCount.toLocaleString()} listed`;if(countNode.textContent!==next)countNode.textContent=next;}
    });
