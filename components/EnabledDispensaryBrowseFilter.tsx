@@ -17,6 +17,10 @@ export default function EnabledDispensaryBrowseFilter(){
 
   const enabledIdentities=()=>new Set(enabled.map(identity));
   const enabledLabels=()=>new Set(enabled.map(item=>labelKey(item.name,item.city,item.region)));
+  const publishScope=()=>{
+   document.documentElement.dataset.geoweedoBrowseScope=mode==='enabled'?'listed':'all';
+   window.dispatchEvent(new CustomEvent('geoweedo:browse-scope-change',{detail:{scope:mode==='enabled'?'listed':'all'}}));
+  };
 
   const ensureToolbarButton=()=>{
    const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
@@ -36,6 +40,7 @@ export default function EnabledDispensaryBrowseFilter(){
     button?.classList.toggle('active',mode==='enabled');
     button?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
     button!.title=mode==='enabled'?'Show all mapped locations':'Show listed dispensaries only';
+    publishScope();
     apply();
    });
    return button;
@@ -74,9 +79,11 @@ export default function EnabledDispensaryBrowseFilter(){
      const city=row.querySelector<HTMLElement>('.map-browser-row-copy small')?.textContent?.trim()||'';
      const show=mode==='all'||labels.has(labelKey(name,city,state));
      row.style.display=show?'':'none';
+     row.dataset.listedVisible=show?'true':'false';
      if(show){stateVisible++;visibleRows++;visibleStates.add(state);}
     });
     section.style.display=mode==='enabled'&&stateVisible===0?'none':'';
+    section.dataset.listedCount=String(stateVisible);
     const count=section.querySelector<HTMLElement>('.map-browser-state-head small');
     if(count){
      if(!count.dataset.enabledFilterOriginal)count.dataset.enabledFilterOriginal=count.textContent||'';
@@ -87,16 +94,22 @@ export default function EnabledDispensaryBrowseFilter(){
    const summary=panel?.querySelector<HTMLElement>('.map-browser-panel-head strong');
    if(summary){
     if(!summary.dataset.enabledFilterOriginal)summary.dataset.enabledFilterOriginal=summary.textContent||'';
-    summary.textContent=mode==='enabled'?`${visibleRows.toLocaleString()} listed · ${visibleStates.size.toLocaleString()} states`:summary.dataset.enabledFilterOriginal;
+    if(mode==='enabled')summary.textContent=`${visibleRows.toLocaleString()} listed locations · ${visibleStates.size.toLocaleString()} states`;
+    else summary.textContent=summary.dataset.enabledFilterOriginal;
    }
 
-   const empty=panel?.querySelector<HTMLElement>('.map-browser-empty');
-   if(mode==='enabled'&&panel&&!empty&&visibleRows===0){
-    const list=panel.querySelector<HTMLElement>('.map-browser-list');
-    if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed dispensaries match the active filters.';list.appendChild(node);}
-   }else if(visibleRows>0||mode==='all')panel?.querySelector('.enabled-filter-empty')?.remove();
+   const existingEmpty=panel?.querySelector<HTMLElement>('.enabled-filter-empty');
+   if(mode==='enabled'&&panel&&visibleRows===0){
+    if(!existingEmpty){
+     const list=panel.querySelector<HTMLElement>('.map-browser-list');
+     if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed dispensaries match the active filters.';list.appendChild(node);}
+    }
+   }else existingEmpty?.remove();
+
+   window.dispatchEvent(new CustomEvent('geoweedo:listed-filter-applied',{detail:{scope:mode==='enabled'?'listed':'all',visibleRows,visibleStates:visibleStates.size}}));
   };
 
+  document.documentElement.dataset.geoweedoBrowseScope='all';
   fetch('/api/dispensaries',{cache:'no-store'})
    .then(response=>response.ok?response.json():Promise.reject())
    .then(data=>{if(cancelled)return;enabled=Array.isArray(data?.dispensaries)?data.dispensaries:[];apply();})
@@ -110,7 +123,7 @@ export default function EnabledDispensaryBrowseFilter(){
   window.addEventListener('resize',apply);
   apply();
 
-  return()=>{cancelled=true;window.clearTimeout(timer);observer.disconnect();window.removeEventListener('resize',apply);};
+  return()=>{cancelled=true;window.clearTimeout(timer);observer.disconnect();window.removeEventListener('resize',apply);delete document.documentElement.dataset.geoweedoBrowseScope;};
  },[]);
  return null;
 }
