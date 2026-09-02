@@ -111,33 +111,43 @@ async function lookupKartaview(lat: number, lng: number, approvedPhotoId: string
   return { provider: 'kartaview' as const, photos: windowed, initialIndex: Math.max(0, targetIndex - start), selectedPhotoId: approvedPhotoId || target?.id || null, attribution: 'KartaView contributors', quality };
 }
 
-async function lookupGoogle(lat: number, lng: number, approvedPhotoId = '') {
-  const apiKey = String(process.env.GOOGLE_MAPS_API_KEY || '').trim();
-  if (!apiKey) throw new Error('Google Street View is selected but GOOGLE_MAPS_API_KEY is not configured.');
-
+async function getGoogleMetadata(apiKey: string, params: { pano?: string; lat?: number; lng?: number }) {
   const metadataUrl = new URL('https://maps.googleapis.com/maps/api/streetview/metadata');
-  if (approvedPhotoId) {
-    metadataUrl.searchParams.set('pano', approvedPhotoId);
-  } else {
-    metadataUrl.searchParams.set('location', `${lat},${lng}`);
+  if (params.pano) metadataUrl.searchParams.set('pano', params.pano);
+  else {
+    metadataUrl.searchParams.set('location', `${params.lat},${params.lng}`);
     metadataUrl.searchParams.set('radius', '500');
   }
   metadataUrl.searchParams.set('key', apiKey);
   incrementImageryProviderUsage('google', 'metadata');
-
   const response = await fetch(metadataUrl, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`Google Street View metadata returned ${response.status}`);
-  const metadata = await response.json();
+  return response.json();
+}
+
+async function lookupGoogle(lat: number, lng: number, approvedPhotoId = '') {
+  const apiKey = String(process.env.GOOGLE_MAPS_API_KEY || '').trim();
+  if (!apiKey) throw new Error('Google Street View is selected but GOOGLE_MAPS_API_KEY is not configured.');
+
+  let metadata = await getGoogleMetadata(apiKey, approvedPhotoId ? { pano: approvedPhotoId } : { lat, lng });
+  let recoveredFromStalePano = false;
+
+  // Google panorama IDs can disappear or be replaced over time. A saved ID
+  // should not strand a live game round: retry by the approved coordinates and
+  // use Google's current nearest panorama when one is available.
+  if (approvedPhotoId && (metadata?.status !== 'OK' || !metadata?.pano_id || !metadata?.location)) {
+    metadata = await getGoogleMetadata(apiKey, { lat, lng });
+    recoveredFromStalePano = metadata?.status === 'OK' && Boolean(metadata?.pano_id) && Boolean(metadata?.location);
+  }
+
   if (metadata?.status !== 'OK' || !metadata?.pano_id || !metadata?.location) {
     return {
       provider: 'google' as const,
       photos: [],
       quality: gradeImagery(undefined, []),
-      message: approvedPhotoId
-        ? 'The selected Google Street View panorama is no longer available.'
-        : metadata?.status === 'ZERO_RESULTS'
-          ? 'No Google Street View imagery found within 500 meters.'
-          : `Google Street View lookup returned ${String(metadata?.status || 'UNKNOWN_ERROR')}.`,
+      message: metadata?.status === 'ZERO_RESULTS'
+        ? 'No Google Street View imagery found within 500 meters.'
+        : `Google Street View lookup returned ${String(metadata?.status || 'UNKNOWN_ERROR')}.`,
       attribution: 'Google Street View',
     };
   }
@@ -159,10 +169,18 @@ async function lookupGoogle(lat: number, lng: number, approvedPhotoId = '') {
     width: 640,
     height: 400,
     qualityLevel: 1,
-    qualityStatus: 'GOOGLE_360',
-    status: 'GOOGLE_360',
+    qualityStatus: recoveredFromStalePano ? 'GOOGLE_360_RECOVERED' : 'GOOGLE_360',
+    status: recoveredFromStalePano ? 'GOOGLE_360_RECOVERED' : 'GOOGLE_360',
   };
-  return { provider: 'google' as const, photos: [panorama], initialIndex: 0, selectedPhotoId: panoId, attribution: 'Google Street View', quality: gradeImagery(panorama, [panorama]) };
+  return {
+    provider: 'google' as const,
+    photos: [panorama],
+    initialIndex: 0,
+    selectedPhotoId: panoId,
+    recoveredFromStalePano,
+    attribution: 'Google Street View',
+    quality: gradeImagery(panorama, [panorama]),
+  };
 }
 
 function selectedProvider(request: NextRequest): Provider {
