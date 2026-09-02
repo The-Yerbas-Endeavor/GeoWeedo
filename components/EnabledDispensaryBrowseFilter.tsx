@@ -26,16 +26,16 @@ export default function EnabledDispensaryBrowseFilter(){
    button=document.createElement('button');
    button.type='button';
    button.className='map-enabled-filter-button';
-   button.textContent='Enabled';
+   button.textContent='Listed';
    button.setAttribute('aria-pressed','false');
-   button.title='Show enabled dispensaries only';
+   button.title='Show listed dispensaries only';
    const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
    if(listButton)tools.insertBefore(button,listButton);else tools.appendChild(button);
    button.addEventListener('click',()=>{
     mode=mode==='enabled'?'all':'enabled';
     button?.classList.toggle('active',mode==='enabled');
     button?.setAttribute('aria-pressed',mode==='enabled'?'true':'false');
-    button!.title=mode==='enabled'?'Show all mapped locations':'Show enabled dispensaries only';
+    button!.title=mode==='enabled'?'Show all mapped locations':'Show listed dispensaries only';
     apply();
    });
    return button;
@@ -80,20 +80,20 @@ export default function EnabledDispensaryBrowseFilter(){
     const count=section.querySelector<HTMLElement>('.map-browser-state-head small');
     if(count){
      if(!count.dataset.enabledFilterOriginal)count.dataset.enabledFilterOriginal=count.textContent||'';
-     count.textContent=mode==='enabled'?`${stateVisible.toLocaleString()} enabled dispensar${stateVisible===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
+     count.textContent=mode==='enabled'?`${stateVisible.toLocaleString()} listed dispensar${stateVisible===1?'y':'ies'}`:count.dataset.enabledFilterOriginal;
     }
    });
 
    const summary=panel?.querySelector<HTMLElement>('.map-browser-panel-head strong');
    if(summary){
     if(!summary.dataset.enabledFilterOriginal)summary.dataset.enabledFilterOriginal=summary.textContent||'';
-    summary.textContent=mode==='enabled'?`${visibleRows.toLocaleString()} enabled · ${visibleStates.size.toLocaleString()} states`:summary.dataset.enabledFilterOriginal;
+    summary.textContent=mode==='enabled'?`${visibleRows.toLocaleString()} listed · ${visibleStates.size.toLocaleString()} states`:summary.dataset.enabledFilterOriginal;
    }
 
    const empty=panel?.querySelector<HTMLElement>('.map-browser-empty');
    if(mode==='enabled'&&panel&&!empty&&visibleRows===0){
     const list=panel.querySelector<HTMLElement>('.map-browser-list');
-    if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No enabled dispensaries match the active filters.';list.appendChild(node);}
+    if(list){const node=document.createElement('div');node.className='map-browser-empty enabled-filter-empty';node.textContent='No listed dispensaries match the active filters.';list.appendChild(node);}
    }else if(visibleRows>0||mode==='all')panel?.querySelector('.enabled-filter-empty')?.remove();
   };
 
