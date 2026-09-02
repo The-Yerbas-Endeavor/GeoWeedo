@@ -58,12 +58,24 @@ export default function EnabledDispensaryBrowseFilter(){
    return status==='PLAY'||status==='★';
   };
 
+  const ensureListedRowsRendered=()=>{
+   if(mode!=='enabled')return false;
+   const collapsed=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-browser-state-head[aria-expanded="false"]'));
+   if(!collapsed.length)return false;
+   collapsed.forEach(button=>button.click());
+   window.clearTimeout(timer);
+   timer=window.setTimeout(apply,40);
+   return true;
+  };
+
   const apply=()=>{
    if(cancelled||!document.querySelector('.map-first-home'))return;
    removePanelTabs();
    syncListToggle();
    const control=ensureToolbarButton();
    if(control)syncControl(control);
+
+   if(ensureListedRowsRendered())return;
 
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
 
