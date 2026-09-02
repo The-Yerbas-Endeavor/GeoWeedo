@@ -11,6 +11,7 @@ import './streetview-center.css';
 import './map-overlay-order.css';
 import './mobile.css';
 import './mobile-game-map.css';
+import './mobile-home-mode.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';
@@ -20,6 +21,7 @@ import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 import GeolocationReliability from '@/components/GeolocationReliability';
 import StateCandidateStreetViewVerifier from '@/components/StateCandidateStreetViewVerifier';
 import MobileGuessMapController from '@/components/MobileGuessMapController';
+import MobileHomeMode from '@/components/MobileHomeMode';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -36,7 +38,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
