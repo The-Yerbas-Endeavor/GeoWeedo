@@ -27,19 +27,40 @@ export default function BrowseCountryPartition(){
         list.querySelectorAll(`.${HEADING_CLASS}`).forEach(node=>node.remove());
         const sections=Array.from(list.children).filter((node):node is HTMLElement=>node instanceof HTMLElement&&node.classList.contains('map-browser-state'));
         if(!sections.length)return;
+        const listedMode=document.documentElement.dataset.geoweedoBrowseScope==='listed';
         const regionCountry=new Map(regionsRef.current.map(item=>[item.region,item.country||'USA']));
         const buckets=new Map<string,HTMLElement[]>();
-        for(const section of sections){const region=section.querySelector('strong')?.textContent?.trim()||'';const country=regionCountry.get(region)||'USA';const continent=continentFor(country);const key=`${continent}|${country}`;const bucket=buckets.get(key);if(bucket)bucket.push(section);else buckets.set(key,[section]);}
+        for(const section of sections){
+          const region=section.querySelector('.map-browser-state-head strong')?.textContent?.trim()||'';
+          const listedCount=Number(section.dataset.listedCount||0);
+          if(listedMode&&listedCount<=0)continue;
+          const country=regionCountry.get(region)||'USA';const continent=continentFor(country);const key=`${continent}|${country}`;const bucket=buckets.get(key);if(bucket)bucket.push(section);else buckets.set(key,[section]);
+        }
         const ordered=Array.from(buckets.entries()).sort(([a],[b])=>{const [ac,an]=a.split('|'),[bc,bn]=b.split('|');const rank=(v:string)=>v==='AMERICAS'?0:v==='EUROPE'?1:2;return rank(ac)-rank(bc)||an.localeCompare(bn);});
-        for(const [key,items] of ordered){const [continent,country]=key.split('|');const stats=countriesRef.current.find(item=>item.country===country);const fallbackMapped=items.reduce((sum,item)=>sum+Number((item.querySelector('small')?.textContent||'').replace(/[^0-9]/g,'')||0),0);list.appendChild(heading(continent,`${country} · ${(stats?.mapped??fallbackMapped).toLocaleString()} mapped`));for(const item of items)list.appendChild(item);}
+        let listedTotal=0;
+        for(const [key,items] of ordered){
+          const [continent,country]=key.split('|');
+          const stats=countriesRef.current.find(item=>item.country===country);
+          const fallbackMapped=items.reduce((sum,item)=>sum+Number((item.querySelector('.map-browser-state-head small')?.textContent||'').replace(/[^0-9]/g,'')||0),0);
+          const listedCount=items.reduce((sum,item)=>sum+Number(item.dataset.listedCount||0),0);
+          if(listedMode)listedTotal+=listedCount;
+          const detail=listedMode?`${country} · ${listedCount.toLocaleString()} listed`:`${country} · ${(stats?.mapped??fallbackMapped).toLocaleString()} mapped`;
+          list.appendChild(heading(continent,detail));for(const item of items)list.appendChild(item);
+        }
         const panelHead=document.querySelector('.map-browser-panel-head strong');
-        if(panelHead){const mapped=countriesRef.current.reduce((sum,item)=>sum+item.mapped,0);const countries=countriesRef.current.filter(item=>item.mapped>0).length;if(mapped>0)panelHead.textContent=`${mapped.toLocaleString()} mapped locations · ${countries} countr${countries===1?'y':'ies'}`;}
+        if(panelHead){
+          if(listedMode){const countries=ordered.length;panelHead.textContent=`${listedTotal.toLocaleString()} listed locations · ${countries} countr${countries===1?'y':'ies'}`;}
+          else{const mapped=countriesRef.current.reduce((sum,item)=>sum+item.mapped,0);const countries=countriesRef.current.filter(item=>item.mapped>0).length;if(mapped>0)panelHead.textContent=`${mapped.toLocaleString()} mapped locations · ${countries} countr${countries===1?'y':'ies'}`;}
+        }
       }finally{if(!cancelled)watch();}
     };
     function schedule(){if(cancelled||scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;partition();});}
+    const onScopeChange=()=>schedule();
     fetch('/api/map-candidates',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{if(cancelled)return;regionsRef.current=Array.isArray(data.regions)?data.regions:[];countriesRef.current=Array.isArray(data.countries)?data.countries:[];schedule();}).catch(()=>{});
+    window.addEventListener('geoweedo:browse-scope-change',onScopeChange);
+    window.addEventListener('geoweedo:listed-filter-applied',onScopeChange);
     watch();schedule();
-    return()=>{cancelled=true;observer.disconnect();};
+    return()=>{cancelled=true;observer.disconnect();window.removeEventListener('geoweedo:browse-scope-change',onScopeChange);window.removeEventListener('geoweedo:listed-filter-applied',onScopeChange);};
   },[]);
   return null;
 }
