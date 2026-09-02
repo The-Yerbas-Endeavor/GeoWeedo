@@ -19,6 +19,7 @@ import DispensaryCardEnhancer from '@/components/DispensaryCardEnhancer';
 import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 import GeolocationReliability from '@/components/GeolocationReliability';
 import StateCandidateStreetViewVerifier from '@/components/StateCandidateStreetViewVerifier';
+import MobileGuessMapController from '@/components/MobileGuessMapController';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -35,7 +36,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
