@@ -20,8 +20,9 @@ export default function AdminTrafficOverview({totals,daily,excludedMatchedSessio
   '--traffic-accent':'var(--accent)',
  } as CSSProperties;
  return <section className="traffic-overview-shell" style={style}>
-  <div className="traffic-overview-topline"><div><span className="eyebrow">FIRST-PARTY ANALYTICS</span><h2>Traffic overview</h2><p>At-a-glance site activity. Trends compare the newer half of the selected range with the earlier half.</p></div><div className="traffic-overview-status"><span className="traffic-live-dot"/> {totals.activeNow.toLocaleString()} active now{excludedMatchedSessions>0&&<span className="traffic-excluded-pill">{excludedMatchedSessions.toLocaleString()} excluded</span>}</div></div>
+  <div className="traffic-overview-topline"><div><span className="eyebrow">FIRST-PARTY ANALYTICS</span><h2>Traffic overview</h2><p>At-a-glance site activity. Trends compare the newer half of the selected range with the earlier half.</p></div>{excludedMatchedSessions>0&&<div className="traffic-overview-status"><span className="traffic-excluded-pill">{excludedMatchedSessions.toLocaleString()} excluded</span></div>}</div>
   <div className="traffic-kpi-grid">
+   <MetricCard label="Current visitors" value={totals.activeNow.toLocaleString()} daily={daily} sub="Seen in the last minute"/>
    <MetricCard label="Visitors" value={totals.visitors.toLocaleString()} metric="visitors" daily={daily}/>
    <MetricCard label="Sessions" value={totals.sessions.toLocaleString()} metric="sessions" daily={daily} sub={`${totals.sessions?Math.max(1,totals.pageViews/totals.sessions).toFixed(1):'0'} pages / session`}/>
    <MetricCard label="Page views" value={totals.pageViews.toLocaleString()} metric="page_views" daily={daily}/>
