@@ -1,0 +1,5 @@
+.map-browser-scope-tabs{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.025)}
+.map-browser-scope-tabs button{min-height:36px;padding:7px 12px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:transparent;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer}
+.map-browser-scope-tabs button:hover,.map-browser-scope-tabs button:focus-visible{border-color:rgba(103,214,110,.45);color:var(--text);outline:none}
+.map-browser-scope-tabs button.active{background:var(--accent);border-color:var(--accent);color:#081108}
+@media(max-width:760px){.map-browser-scope-tabs{padding:8px 10px;position:sticky;top:0;z-index:2;background:rgba(11,14,12,.98)}.map-browser-scope-tabs button{flex:1;min-height:42px;font-size:12px}}
