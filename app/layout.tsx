@@ -28,6 +28,7 @@ import MobileHomeMode from '@/components/MobileHomeMode';
 import EnabledDispensaryBrowseFilter from '@/components/EnabledDispensaryBrowseFilter';
 import DispensaryBrowseTierOrder from '@/components/DispensaryBrowseTierOrder';
 import HomePlayCardEnhancer from '@/components/HomePlayCardEnhancer';
+import AdminGoogleApiStatus from '@/components/AdminGoogleApiStatus';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -44,7 +45,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<AdminGoogleApiStatus/><HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
