@@ -1,35 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyticsNetworkHash, pruneAnalytics, recordAnalyticsEvent } from '@/lib/analytics';
+import { analyticsNetworkHash, analyticsStableNetworkHash, pruneAnalytics, recordAnalyticsEvent } from '@/lib/analytics';
 
 export const runtime='nodejs';
-
 function clean(value:unknown,max=500){return typeof value==='string'?value.slice(0,max):'';}
 function ipFrom(request:NextRequest){return clean(request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()||request.headers.get('x-real-ip')||'',128);}
 function positiveInt(value:unknown,max:number){const n=Number(value);return Number.isFinite(n)&&n>=0?Math.min(Math.round(n),max):null;}
-
-export async function POST(request:NextRequest){
- try{
-  const body=await request.json().catch(()=>null) as Record<string,unknown>|null;
-  if(!body)return NextResponse.json({error:'Invalid analytics payload.'},{status:400});
-  const sessionId=clean(body.sessionId,100),visitorId=clean(body.visitorId,100),eventType=clean(body.eventType,80),pagePath=clean(body.path,500);
-  if(!sessionId||!visitorId||!eventType)return NextResponse.json({error:'Missing analytics identifiers.'},{status:400});
-  if(!/^[a-zA-Z0-9._:-]+$/.test(sessionId)||!/^[a-zA-Z0-9._:-]+$/.test(visitorId)||!/^[a-z0-9_:-]+$/i.test(eventType))return NextResponse.json({error:'Invalid analytics identifiers.'},{status:400});
-  const props=body.properties&&typeof body.properties==='object'&&!Array.isArray(body.properties)?body.properties as Record<string,unknown>:null;
-  const ip=ipFrom(request);
-  recordAnalyticsEvent({
-   sessionId,visitorId,eventType,path:pagePath||null,durationMs:positiveInt(body.durationMs,86400000),properties:props,
-   networkHash:ip?analyticsNetworkHash(ip):null,
-   country:clean(request.headers.get('cf-ipcountry')||request.headers.get('x-vercel-ip-country')||request.headers.get('x-country-code'),80)||null,
-   region:clean(request.headers.get('x-vercel-ip-country-region'),120)||null,
-   city:clean(request.headers.get('x-vercel-ip-city'),120)||null,
-   userAgent:clean(request.headers.get('user-agent'),500)||null,
-   language:clean(body.language,80)||null,timezone:clean(body.timezone,100)||null,
-   screenWidth:positiveInt(body.screenWidth,20000),screenHeight:positiveInt(body.screenHeight,20000),referrer:clean(body.referrer,1000)||null,
-  });
-  if(Math.random()<0.01)pruneAnalytics(Number(process.env.ANALYTICS_RAW_RETENTION_DAYS||90));
-  return NextResponse.json({ok:true});
- }catch(error){
-  console.error('GeoWeedo analytics event error',error);
-  return NextResponse.json({error:'Analytics event could not be recorded.'},{status:500});
- }
-}
+export async function POST(request:NextRequest){try{const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return NextResponse.json({error:'Invalid analytics payload.'},{status:400});const sessionId=clean(body.sessionId,100),visitorId=clean(body.visitorId,100),eventType=clean(body.eventType,80),pagePath=clean(body.path,500);if(!sessionId||!visitorId||!eventType)return NextResponse.json({error:'Missing analytics identifiers.'},{status:400});if(!/^[a-zA-Z0-9._:-]+$/.test(sessionId)||!/^[a-zA-Z0-9._:-]+$/.test(visitorId)||!/^[a-z0-9_:-]+$/i.test(eventType))return NextResponse.json({error:'Invalid analytics identifiers.'},{status:400});const props=body.properties&&typeof body.properties==='object'&&!Array.isArray(body.properties)?body.properties as Record<string,unknown>:null,ip=ipFrom(request);recordAnalyticsEvent({sessionId,visitorId,eventType,path:pagePath||null,durationMs:positiveInt(body.durationMs,86400000),properties:props,networkHash:ip?analyticsNetworkHash(ip):null,stableNetworkHash:ip?analyticsStableNetworkHash(ip):null,country:clean(request.headers.get('cf-ipcountry')||request.headers.get('x-vercel-ip-country')||request.headers.get('x-country-code'),80)||null,region:clean(request.headers.get('x-vercel-ip-country-region'),120)||null,city:clean(request.headers.get('x-vercel-ip-city'),120)||null,userAgent:clean(request.headers.get('user-agent'),500)||null,language:clean(body.language,80)||null,timezone:clean(body.timezone,100)||null,screenWidth:positiveInt(body.screenWidth,20000),screenHeight:positiveInt(body.screenHeight,20000),referrer:clean(body.referrer,1000)||null});if(Math.random()<0.01)pruneAnalytics(Number(process.env.ANALYTICS_RAW_RETENTION_DAYS||90));return NextResponse.json({ok:true});}catch(error){console.error('GeoWeedo analytics event error',error);return NextResponse.json({error:'Analytics event could not be recorded.'},{status:500});}}
