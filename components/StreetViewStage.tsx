@@ -8,128 +8,27 @@ type StreetPhoto = { id:string; lat:number; lng:number; heading:number; fieldOfV
 type ApiProvider = 'google'|'kartaview';
 type ApiResponse = { provider?:ApiProvider; photos?:StreetPhoto[]; initialIndex?:number; message?:string; error?:string; attribution?:string };
 
-declare global {
- interface Window {
-  google?: any;
-  __geoWeedoGoogleMapsPromise?: Promise<any>;
- }
-}
+declare global { interface Window { google?:any; __geoWeedoGoogleMapsPromise?:Promise<any>; } }
 
-function distanceMeters(a:{lat:number;lng:number},b:{lat:number;lng:number}){
- const radius=6371008.8,toRad=(v:number)=>v*Math.PI/180,dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng),lat1=toRad(a.lat),lat2=toRad(b.lat);
- const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
- return radius*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
-}
-
-async function readApiResponse(response:Response):Promise<ApiResponse>{
- const text=await response.text();
- if(!text.trim())throw new Error(`Street imagery API returned an empty response (${response.status}).`);
- try{return JSON.parse(text) as ApiResponse;}catch{
-  const looksHtml=/^\s*</.test(text);
-  throw new Error(looksHtml?`Street imagery API returned an HTML error page (${response.status}). Check the GeoWeedo server log.`:`Street imagery API returned an invalid response (${response.status}).`);
- }
-}
-
-async function loadGoogleMaps(){
- if(window.google?.maps?.StreetViewPanorama)return window.google;
- if(window.__geoWeedoGoogleMapsPromise)return window.__geoWeedoGoogleMapsPromise;
- window.__geoWeedoGoogleMapsPromise=(async()=>{
-  const response=await fetch('/api/street-imagery/google-config',{cache:'no-store'});
-  const data=await response.json().catch(()=>null);
-  if(!response.ok||!data?.apiKey)throw new Error(data?.error||'Google Street View browser configuration is unavailable.');
-  await new Promise<void>((resolve,reject)=>{
-   const existing=document.querySelector<HTMLScriptElement>('script[data-geoweedo-google-maps]');
-   if(existing){
-    if(window.google?.maps?.StreetViewPanorama){resolve();return;}
-    existing.addEventListener('load',()=>resolve(),{once:true});
-    existing.addEventListener('error',()=>reject(new Error('Google Maps JavaScript failed to load.')),{once:true});
-    return;
-   }
-   const script=document.createElement('script');
-   script.dataset.geoweedoGoogleMaps='1';
-   script.async=true;
-   script.defer=true;
-   script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(String(data.apiKey))}&v=weekly`;
-   script.onload=()=>resolve();
-   script.onerror=()=>reject(new Error('Google Maps JavaScript failed to load.'));
-   document.head.appendChild(script);
-  });
-  if(!window.google?.maps?.StreetViewPanorama)throw new Error('Google Street View did not initialize.');
-  return window.google;
- })().catch(error=>{window.__geoWeedoGoogleMapsPromise=undefined;throw error;});
- return window.__geoWeedoGoogleMapsPromise;
-}
+function distanceMeters(a:{lat:number;lng:number},b:{lat:number;lng:number}){const radius=6371008.8,toRad=(v:number)=>v*Math.PI/180,dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng),lat1=toRad(a.lat),lat2=toRad(b.lat);const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;return radius*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));}
+async function readApiResponse(response:Response):Promise<ApiResponse>{const text=await response.text();if(!text.trim())throw new Error(`Street imagery API returned an empty response (${response.status}).`);try{return JSON.parse(text) as ApiResponse;}catch{const looksHtml=/^\s*</.test(text);throw new Error(looksHtml?`Street imagery API returned an HTML error page (${response.status}). Check the GeoWeedo server log.`:`Street imagery API returned an invalid response (${response.status}).`);}}
+async function loadGoogleMaps(){if(window.google?.maps?.StreetViewPanorama)return window.google;if(window.__geoWeedoGoogleMapsPromise)return window.__geoWeedoGoogleMapsPromise;window.__geoWeedoGoogleMapsPromise=(async()=>{const response=await fetch('/api/street-imagery/google-config',{cache:'no-store'});const data=await response.json().catch(()=>null);if(!response.ok||!data?.apiKey)throw new Error(data?.error||'Google Street View browser configuration is unavailable.');await new Promise<void>((resolve,reject)=>{const existing=document.querySelector<HTMLScriptElement>('script[data-geoweedo-google-maps]');if(existing){if(window.google?.maps?.StreetViewPanorama){resolve();return;}existing.addEventListener('load',()=>resolve(),{once:true});existing.addEventListener('error',()=>reject(new Error('Google Maps JavaScript failed to load.')),{once:true});return;}const script=document.createElement('script');script.dataset.geoweedoGoogleMaps='1';script.async=true;script.defer=true;script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(String(data.apiKey))}&v=weekly`;script.onload=()=>resolve();script.onerror=()=>reject(new Error('Google Maps JavaScript failed to load.'));document.head.appendChild(script);});if(!window.google?.maps?.StreetViewPanorama)throw new Error('Google Street View did not initialize.');return window.google;})().catch(error=>{window.__geoWeedoGoogleMapsPromise=undefined;throw error;});return window.__geoWeedoGoogleMapsPromise;}
 
 export default function StreetViewStage({latitude,longitude,heading=0,photoId,imageryProvider='kartaview',imageUrl,projection='',fieldOfView=0}:Props){
  const rootRef=useRef<HTMLDivElement|null>(null),sphereRef=useRef<HTMLDivElement|null>(null),googleRef=useRef<HTMLDivElement|null>(null),viewerRef=useRef<Viewer|null>(null),googleViewerRef=useRef<any>(null),failedPhotoIdsRef=useRef<Set<string>>(new Set());
  const [photos,setPhotos]=useState<StreetPhoto[]>([]),[index,setIndex]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[actualProvider,setActualProvider]=useState<'google'|'kartaview'|'geoweedo'>(imageryProvider==='geoweedo'?'geoweedo':'kartaview'),[attribution,setAttribution]=useState(imageryProvider==='geoweedo'?'GeoWeedo':'KartaView contributors'),[isAdmin,setIsAdmin]=useState(false),[skippingBadFrame,setSkippingBadFrame]=useState(false),[googleLoading,setGoogleLoading]=useState(false);
  useEffect(()=>{setIsAdmin(window.location.pathname.startsWith('/admin'));},[]);
- useEffect(()=>{failedPhotoIdsRef.current.clear();setSkippingBadFrame(false);setGoogleLoading(false);setError(null);setIndex(0);if(imageryProvider==='geoweedo'){setActualProvider('geoweedo');setAttribution('GeoWeedo');if(!imageUrl){setPhotos([]);setError('The approved GeoWeedo-hosted image is missing.');setLoading(false);return;}setPhotos([{id:photoId||'geoweedo-hosted',lat:latitude,lng:longitude,heading,fieldOfView,projection:projection.toUpperCase(),imageUrl,sequenceId:'geoweedo',sequenceIndex:0}]);setLoading(false);return;}const c=new AbortController();setLoading(true);setPhotos([]);const q=new URLSearchParams({lat:String(latitude),lng:String(longitude)});if(photoId)q.set('photoId',photoId);fetch(`/api/street-imagery?${q}`,{signal:c.signal,cache:'no-store'}).then(async r=>{const d=await readApiResponse(r);if(!r.ok)throw new Error(d.error||`Street imagery lookup failed (${r.status}).`);return d;}).then(d=>{setActualProvider(d.provider==='google'?'google':'kartaview');setAttribution(d.attribution|| (d.provider==='google'?'Google Street View':'KartaView contributors'));const p=d.photos||[];setPhotos(p);setIndex(Math.min(Math.max(d.initialIndex||0,0),Math.max(0,p.length-1)));if(!p.length)setError(d.message||'No street imagery is available near this location yet.');}).catch(e=>{if(e?.name!=='AbortError')setError(e instanceof Error?e.message:'Street imagery failed to load.');}).finally(()=>setLoading(false));return()=>c.abort();},[latitude,longitude,heading,photoId,imageryProvider,imageUrl,projection,fieldOfView]);
- const current=photos[index];
- const isGooglePanorama=Boolean(current&&actualProvider==='google'&&current.projection==='GOOGLE_PANORAMA');
- const isSphere=useMemo(()=>Boolean(current&&!isGooglePanorama&&(current.projection==='SPHERE'||current.projection==='EQUIRECTANGULAR'||current.fieldOfView>=300)),[current,isGooglePanorama]);
- const providerTitle='STREET VIEW';
+ useEffect(()=>{failedPhotoIdsRef.current.clear();setSkippingBadFrame(false);setGoogleLoading(false);setError(null);setIndex(0);if(imageryProvider==='geoweedo'){setActualProvider('geoweedo');setAttribution('GeoWeedo');if(!imageUrl){setPhotos([]);setError('The approved GeoWeedo-hosted image is missing.');setLoading(false);return;}setPhotos([{id:photoId||'geoweedo-hosted',lat:latitude,lng:longitude,heading,fieldOfView,projection:projection.toUpperCase(),imageUrl,sequenceId:'geoweedo',sequenceIndex:0}]);setLoading(false);return;}const c=new AbortController();setLoading(true);setPhotos([]);const q=new URLSearchParams({lat:String(latitude),lng:String(longitude)});if(photoId)q.set('photoId',photoId);fetch(`/api/street-imagery?${q}`,{signal:c.signal,cache:'no-store'}).then(async r=>{const d=await readApiResponse(r);if(!r.ok)throw new Error(d.error||`Street imagery lookup failed (${r.status}).`);return d;}).then(d=>{setActualProvider(d.provider==='google'?'google':'kartaview');setAttribution(d.attribution||(d.provider==='google'?'Google Street View':'KartaView contributors'));const p=d.photos||[];setPhotos(p);setIndex(Math.min(Math.max(d.initialIndex||0,0),Math.max(0,p.length-1)));if(!p.length)setError(d.message||'No street imagery is available near this location yet.');}).catch(e=>{if(e?.name!=='AbortError')setError(e instanceof Error?e.message:'Street imagery failed to load.');}).finally(()=>setLoading(false));return()=>c.abort();},[latitude,longitude,heading,photoId,imageryProvider,imageUrl,projection,fieldOfView]);
+ const current=photos[index];const isGooglePanorama=Boolean(current&&actualProvider==='google'&&current.projection==='GOOGLE_PANORAMA');const isSphere=useMemo(()=>Boolean(current&&!isGooglePanorama&&(current.projection==='SPHERE'||current.projection==='EQUIRECTANGULAR'||current.fieldOfView>=300)),[current,isGooglePanorama]);const providerTitle='STREET VIEW';
  useEffect(()=>{const panel=rootRef.current?.closest('.map-streetview-panel');const headingLabel=panel?.querySelector<HTMLElement>('.map-streetview-head span');if(headingLabel)headingLabel.textContent=providerTitle;},[providerTitle]);
  useEffect(()=>{const el=sphereRef.current;viewerRef.current?.destroy();viewerRef.current=null;if(!current||!isSphere||!el)return;const v=new Viewer({container:el,panorama:current.imageUrl,navbar:['zoom','move','fullscreen'],defaultYaw:((current.heading||0)*Math.PI)/180,mousemove:true,mousewheel:true,mousewheelCtrlKey:false,touchmoveTwoFingers:false,keyboard:'always',moveInertia:.9,moveSpeed:1.4});viewerRef.current=v;return()=>{if(viewerRef.current===v)viewerRef.current=null;v.destroy();};},[current,isSphere]);
- useEffect(()=>{
-  const el=googleRef.current;
-  if(!current||!isGooglePanorama||!el)return;
-  let cancelled=false;
-  setGoogleLoading(true);
-  setError(null);
-  loadGoogleMaps().then((google)=>{
-   if(cancelled||!googleRef.current)return;
-   const panorama=new google.maps.StreetViewPanorama(googleRef.current,{
-    pano:current.sequenceId||current.id,
-    pov:{heading:current.heading||0,pitch:0},
-    zoom:0,
-    addressControl:false,
-    fullscreenControl:true,
-    linksControl:true,
-    motionTracking:false,
-    motionTrackingControl:false,
-    panControl:true,
-    scrollwheel:true,
-    showRoadLabels:true,
-    zoomControl:true,
-   });
-   googleViewerRef.current=panorama;
-   const statusListener=panorama.addListener('status_changed',()=>{
-    const status=panorama.getStatus?.();
-    if(status&&String(status)!=='OK')setError(`Google Street View panorama returned ${String(status)}.`);
-    else setError(null);
-    setGoogleLoading(false);
-   });
-   window.setTimeout(()=>{if(!cancelled)setGoogleLoading(false);},1200);
-   return()=>statusListener?.remove?.();
-  }).catch((e)=>{if(!cancelled){setGoogleLoading(false);setError(e instanceof Error?e.message:'Google Street View failed to load.');}});
-  return()=>{cancelled=true;if(googleViewerRef.current){try{googleViewerRef.current.setVisible(false);window.google?.maps?.event?.clearInstanceListeners?.(googleViewerRef.current);}catch{}googleViewerRef.current=null;}};
- },[current,isGooglePanorama]);
+ useEffect(()=>{const el=googleRef.current;if(!current||!isGooglePanorama||!el)return;let cancelled=false;setGoogleLoading(true);setError(null);loadGoogleMaps().then((google)=>{if(cancelled||!googleRef.current)return;const panorama=new google.maps.StreetViewPanorama(googleRef.current,{pano:current.sequenceId||current.id,pov:{heading:current.heading||0,pitch:0},zoom:0,addressControl:false,fullscreenControl:true,linksControl:true,motionTracking:false,motionTrackingControl:false,panControl:true,scrollwheel:true,showRoadLabels:true,zoomControl:true});googleViewerRef.current=panorama;
+   // Google bills Dynamic Street View per panorama object instantiation. Count the same event locally.
+   fetch('/api/street-imagery/google-panorama-usage',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'}}).catch(()=>{});
+   const statusListener=panorama.addListener('status_changed',()=>{const status=panorama.getStatus?.();if(status&&String(status)!=='OK')setError(`Google Street View panorama returned ${String(status)}.`);else setError(null);setGoogleLoading(false);});window.setTimeout(()=>{if(!cancelled)setGoogleLoading(false);},1200);return()=>statusListener?.remove?.();}).catch((e)=>{if(!cancelled){setGoogleLoading(false);setError(e instanceof Error?e.message:'Google Street View failed to load.');}});return()=>{cancelled=true;if(googleViewerRef.current){try{googleViewerRef.current.setVisible(false);window.google?.maps?.event?.clearInstanceListeners?.(googleViewerRef.current);}catch{}googleViewerRef.current=null;}};},[current,isGooglePanorama]);
  const step=(d:-1|1)=>{setSkippingBadFrame(false);setIndex(v=>Math.min(Math.max(v+d,0),Math.max(0,photos.length-1)));};
- const skipFailedFlatFrame=()=>{
-  if(!current)return;
-  failedPhotoIdsRef.current.add(current.id);
-  const nextForward=photos.findIndex((photo,i)=>i>index&&!failedPhotoIdsRef.current.has(photo.id));
-  let nextIndex=nextForward;
-  if(nextIndex<0){for(let i=index-1;i>=0;i--){if(!failedPhotoIdsRef.current.has(photos[i].id)){nextIndex=i;break;}}}
-  if(nextIndex>=0&&nextIndex!==index){setSkippingBadFrame(true);setIndex(nextIndex);return;}
-  setSkippingBadFrame(false);
-  setError('Street View imagery was found, but the available sequence images could not be loaded.');
- };
+ const skipFailedFlatFrame=()=>{if(!current)return;failedPhotoIdsRef.current.add(current.id);const nextForward=photos.findIndex((photo,i)=>i>index&&!failedPhotoIdsRef.current.has(photo.id));let nextIndex=nextForward;if(nextIndex<0){for(let i=index-1;i>=0;i--){if(!failedPhotoIdsRef.current.has(photos[i].id)){nextIndex=i;break;}}}if(nextIndex>=0&&nextIndex!==index){setSkippingBadFrame(true);setIndex(nextIndex);return;}setSkippingBadFrame(false);setError('Street View imagery was found, but the available sequence images could not be loaded.');};
  useEffect(()=>{const key=(e:KeyboardEvent)=>{const t=e.target as HTMLElement|null;if(t&&/INPUT|TEXTAREA|SELECT|BUTTON/.test(t.tagName))return;const k=e.key.toLowerCase(),v=viewerRef.current;if(isGooglePanorama)return;if((k==='arrowleft'||k==='a')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw-.12,pitch:p.pitch});}else if(k==='arrowleft'||k==='a')step(-1);else if((k==='arrowright'||k==='d')&&isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw+.12,pitch:p.pitch});}else if(k==='arrowright'||k==='d')step(1);else if(k==='arrowup'||k==='w'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.min(Math.PI/2,p.pitch+.1)});}else return;}else if(k==='arrowdown'||k==='s'){if(isSphere&&v){const p=v.getPosition();v.rotate({yaw:p.yaw,pitch:Math.max(-Math.PI/2,p.pitch-.1)});}else return;}else return;e.preventDefault();};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[isSphere,isGooglePanorama,photos.length]);
- const label=actualProvider==='geoweedo'?'GeoWeedo hosted':actualProvider==='google'?'Google Street View':'KartaView';
- const meters=current?distanceMeters({lat:latitude,lng:longitude},{lat:current.lat,lng:current.lng}):null;
- return <div ref={rootRef} className={`streetview-wrap ${isGooglePanorama||isSphere?'streetview-spherical':'streetview-sequence'}`} data-imagery-provider={actualProvider}>
-  {loading&&<div className="map-error"><strong>Loading Street View…</strong></div>}
-  {!loading&&current&&<>{isGooglePanorama?<><div ref={googleRef} className="streetview-canvas interactive-sphere" tabIndex={0}/>{googleLoading&&<div className="map-error" style={{pointerEvents:'none'}}><strong>Loading true 360° Street View…</strong></div>}<div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · use road arrows to move</div></>:isSphere?<><div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0}/><div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div></>:<div className="street-photo-stage" tabIndex={0} style={{cursor:'default'}}>
-   <img key={current.id} src={current.imageUrl} alt={`${label} street imagery`} draggable={false} onLoad={()=>{setSkippingBadFrame(false);setError(null);}} onError={skipFailedFlatFrame} style={{width:'100%',height:'100%',objectFit:'contain',objectPosition:'initial',transform:'none',pointerEvents:'none',userSelect:'none'}}/>
-   {skippingBadFrame&&<div className="map-error" style={{pointerEvents:'none'}}><strong>Finding the next Street View image…</strong></div>}
-   <button type="button" className="street-nav street-nav-prev" onClick={()=>step(-1)} disabled={index<=0}>‹</button><button type="button" className="street-nav street-nav-next" onClick={()=>step(1)} disabled={index>=photos.length-1}>›</button>
-   <div className="street-drag-hint">← → or A/D: travel Street View</div>
-  </div>}
-   <div className="street-provider-attribution" style={{position:'absolute',right:10,bottom:10,zIndex:12,padding:'5px 8px',borderRadius:7,background:'rgba(5,10,7,.78)',color:'#fff',fontSize:11,pointerEvents:'none'}}>{label} · {attribution}</div>
-   {isAdmin&&meters!==null&&<div className="street-admin-diagnostic" style={{position:'absolute',left:10,bottom:10,zIndex:12,padding:'5px 8px',borderRadius:7,background:'rgba(5,10,7,.78)',color:'#cfe8d2',fontSize:11,pointerEvents:'none'}}>Imagery {current.lat.toFixed(6)}, {current.lng.toFixed(6)} · {meters<1000?`${Math.round(meters)} m`:`${(meters/1000).toFixed(2)} km`} from selected location</div>}
-  </>}
-  {!loading&&error&&<div className="map-error"><strong>Street View unavailable</strong><span>{error}</span></div>}
- </div>;
+ const label=actualProvider==='geoweedo'?'GeoWeedo hosted':actualProvider==='google'?'Google Street View':'KartaView';const meters=current?distanceMeters({lat:latitude,lng:longitude},{lat:current.lat,lng:current.lng}):null;
+ return <div ref={rootRef} className={`streetview-wrap ${isGooglePanorama||isSphere?'streetview-spherical':'streetview-sequence'}`} data-imagery-provider={actualProvider}>{loading&&<div className="map-error"><strong>Loading Street View…</strong></div>}{!loading&&current&&<>{isGooglePanorama?<><div ref={googleRef} className="streetview-canvas interactive-sphere" tabIndex={0}/>{googleLoading&&<div className="map-error" style={{pointerEvents:'none'}}><strong>Loading true 360° Street View…</strong></div>}<div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · use road arrows to move</div></>:isSphere?<><div ref={sphereRef} className="streetview-canvas interactive-sphere" tabIndex={0}/><div className="street-drag-hint">Drag to look around · wheel/pinch to zoom · WASD/arrows to look</div></>:<div className="street-photo-stage" tabIndex={0} style={{cursor:'default'}}><img key={current.id} src={current.imageUrl} alt={`${label} street imagery`} draggable={false} onLoad={()=>{setSkippingBadFrame(false);setError(null);}} onError={skipFailedFlatFrame} style={{width:'100%',height:'100%',objectFit:'contain',objectPosition:'initial',transform:'none',pointerEvents:'none',userSelect:'none'}}/>{skippingBadFrame&&<div className="map-error" style={{pointerEvents:'none'}}><strong>Finding the next Street View image…</strong></div>}<button type="button" className="street-nav street-nav-prev" onClick={()=>step(-1)} disabled={index<=0}>‹</button><button type="button" className="street-nav street-nav-next" onClick={()=>step(1)} disabled={index>=photos.length-1}>›</button><div className="street-drag-hint">← → or A/D: travel Street View</div></div>}<div className="street-provider-attribution" style={{position:'absolute',right:10,bottom:10,zIndex:12,padding:'5px 8px',borderRadius:7,background:'rgba(5,10,7,.78)',color:'#fff',fontSize:11,pointerEvents:'none'}}>{label} · {attribution}</div>{isAdmin&&meters!==null&&<div className="street-admin-diagnostic" style={{position:'absolute',left:10,bottom:10,zIndex:12,padding:'5px 8px',borderRadius:7,background:'rgba(5,10,7,.78)',color:'#cfe8d2',fontSize:11,pointerEvents:'none'}}>Imagery {current.lat.toFixed(6)}, {current.lng.toFixed(6)} · {meters<1000?`${Math.round(meters)} m`:`${(meters/1000).toFixed(2)} km`} from selected location</div>}</>}{!loading&&error&&<div className="map-error"><strong>Street View unavailable</strong><span>{error}</span></div>}</div>;
 }
