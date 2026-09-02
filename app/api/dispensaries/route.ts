@@ -7,7 +7,9 @@ import {getDatabase} from '@/lib/sqlite';
 export async function GET() {
   const sponsorships = await activeSponsorshipMap();
   const db=getDatabase();
-  const claimed=new Set((db.prepare(`SELECT DISTINCT location_id FROM dispensary_user_owner_assignments WHERE status='verified'`).all() as {location_id:string}[]).map(row=>row.location_id));
+  let claimedRows:{location_id:string}[]=[];
+  try{claimedRows=db.prepare(`SELECT DISTINCT location_id FROM dispensary_user_owner_assignments WHERE status='verified'`).all() as {location_id:string}[];}catch{}
+  const claimed=new Set(claimedRows.map(row=>row.location_id));
   const dispensaries = (await readApprovedDispensaries())
     .filter((item) => item.verified && item.active)
     .map((item) => {
@@ -25,7 +27,5 @@ export async function GET() {
     })
     .sort((a, b) => Number(b.sponsored)-Number(a.sponsored) || Number(b.claimed)-Number(a.claimed) || b.sponsorPriority-a.sponsorPriority || a.name.localeCompare(b.name));
 
-  return NextResponse.json({ dispensaries }, {
-    headers: { 'Cache-Control': 'no-store' },
-  });
+  return NextResponse.json({ dispensaries }, {headers: { 'Cache-Control': 'no-store' }});
 }
