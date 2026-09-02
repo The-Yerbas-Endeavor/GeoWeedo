@@ -18,6 +18,13 @@ function recentTrend(hours:number,excludeAdmin:boolean,excludeIps:string[]){
  const daily=buckets.map(({_visitors,_sessions,...bucket})=>({...bucket,visitors:_visitors.size,sessions:_sessions.size}));
  return {daily,totals:{pageViews:rows.length,visitors:totalVisitors.size,sessions:totalSessions.size},granularity:bucketMinutes===60?'hour':`${bucketMinutes} minutes`,hours:range};
 }
+function currentVisitors(excludeAdmin:boolean,excludeIps:string[]){
+ const database=getAnalyticsDb(),since=new Date(Date.now()-10*60000).toISOString(),ips=Array.from(new Set(excludeIps.filter(Boolean))),today=new Date().toISOString().slice(0,10),dailyHashes=ips.map(ip=>analyticsNetworkHashForDay(ip,today)),stableHashes=ips.map(analyticsStableNetworkHash),clauses=[`s.last_seen_at>=?`],params:any[]=[since];
+ if(excludeAdmin)clauses.push(`EXISTS (SELECT 1 FROM analytics_events ae WHERE ae.session_id=s.id AND ae.event_type='page_view' AND COALESCE(ae.path,'/') NOT LIKE '/admin%')`);
+ if(dailyHashes.length){clauses.push(`(s.network_hash IS NULL OR s.network_hash NOT IN (${dailyHashes.map(()=>'?').join(',')}))`);params.push(...dailyHashes)}
+ if(stableHashes.length){clauses.push(`(s.stable_network_hash IS NULL OR s.stable_network_hash NOT IN (${stableHashes.map(()=>'?').join(',')}))`);params.push(...stableHashes)}
+ return Number((database.prepare(`SELECT COUNT(DISTINCT s.visitor_id) value FROM analytics_sessions s WHERE ${clauses.join(' AND ')}`).get(...params) as any)?.value||0);
+}
 export async function GET(request:NextRequest){
  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
  const excludeAdmin=request.nextUrl.searchParams.get('excludeAdmin')==='1';
@@ -27,5 +34,6 @@ export async function GET(request:NextRequest){
  const start=clean(request.nextUrl.searchParams.get('start'),10),end=clean(request.nextUrl.searchParams.get('end'),10),path=clean(request.nextUrl.searchParams.get('path'),300);
  if(start&&end){try{return NextResponse.json({trend:analyticsTrend({start,end,path,excludeAdmin,excludeIps}),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Could not query traffic trend.'},{status:400});}}
  const daysRaw=Number(request.nextUrl.searchParams.get('days')||30),days=Number.isFinite(daysRaw)?Math.min(90,Math.max(1,Math.round(daysRaw))):30;
- return NextResponse.json({...analyticsSummary(days,{excludeAdmin,excludeIps}),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});
+ const summary=analyticsSummary(days,{excludeAdmin,excludeIps});summary.totals.activeNow=currentVisitors(excludeAdmin,excludeIps);
+ return NextResponse.json({...summary,currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});
 }
