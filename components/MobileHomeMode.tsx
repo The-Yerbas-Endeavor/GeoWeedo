@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { trackAnalyticsEvent } from '@/components/AnalyticsTracker';
 
 type HomeMode = 'choose' | 'search' | 'play';
+type SelectedDispensary={id:string;name:string}|null;
 
 export default function MobileHomeMode() {
   const [mode, setMode] = useState<HomeMode>('choose');
+  const [selectedDispensary,setSelectedDispensary]=useState<SelectedDispensary>(null);
 
   useEffect(() => {
     document.body.dataset.mobileHomeMode = mode;
@@ -24,6 +26,20 @@ export default function MobileHomeMode() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [mode]);
+
+  useEffect(()=>{
+    if(mode!=='search'){setSelectedDispensary(null);return;}
+    const sync=()=>{
+      const card=document.querySelector<HTMLElement>('.map-first-home .map-location-card[data-location-id]');
+      const id=card?.dataset.locationId?.trim()||'';
+      const name=card?.querySelector('h3')?.textContent?.trim()||'';
+      setSelectedDispensary(id?{id,name:name||'Dispensary'}:null);
+    };
+    sync();
+    const observer=new MutationObserver(sync);
+    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});
+    return()=>observer.disconnect();
+  },[mode]);
 
   const choose=(next:HomeMode)=>{
     if(next==='search')trackAnalyticsEvent('home_search_selected',{surface:'mobile_choice'});
@@ -48,9 +64,16 @@ export default function MobileHomeMode() {
           </div>
         </section>
       ) : (
-        <button type="button" className="mobile-home-mode-back" onClick={() => choose('choose')}>
-          ‹ Search or Play
-        </button>
+        <>
+          <button type="button" className="mobile-home-mode-back" onClick={() => choose('choose')}>
+            ‹ Search or Play
+          </button>
+          {mode==='search'&&selectedDispensary&&(
+            <a className="mobile-selected-dispensary-info" href={`/dispensary/${encodeURIComponent(selectedDispensary.id)}`} title={`Open ${selectedDispensary.name} profile`}>
+              Info · {selectedDispensary.name}
+            </a>
+          )}
+        </>
       )}
     </div>
   );
