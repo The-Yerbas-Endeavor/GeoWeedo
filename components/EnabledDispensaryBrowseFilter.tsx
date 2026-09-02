@@ -21,6 +21,17 @@ export default function EnabledDispensaryBrowseFilter(){
    button.title=listed?'Show all mapped locations':'Show listed gameplay dispensaries only';
   };
 
+  const syncListToggle=()=>{
+   const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
+   if(!tools)return;
+   const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
+   if(!listButton)return;
+   const isHide=/^hide list$/i.test((listButton.textContent||'').trim());
+   listButton.style.display=isHide?'none':'';
+   listButton.setAttribute('aria-hidden',isHide?'true':'false');
+   listButton.tabIndex=isHide?-1:0;
+  };
+
   const ensureToolbarButton=()=>{
    const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');
    if(!tools)return null;
@@ -50,6 +61,7 @@ export default function EnabledDispensaryBrowseFilter(){
   const apply=()=>{
    if(cancelled||!document.querySelector('.map-first-home'))return;
    removePanelTabs();
+   syncListToggle();
    const control=ensureToolbarButton();
    if(control)syncControl(control);
 
