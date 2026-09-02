@@ -26,6 +26,12 @@ export default function HomePlayCardEnhancer() {
       if (!playButton) return;
 
       const meta = parseMeta(card);
+
+      // Wait for the async map coverage response before replacing the live React markup.
+      // This keeps the promo from freezing the initial approved-only mapped count and
+      // prevents U.S. states / countries from becoming permanent em dashes.
+      if (!meta.states || !meta.countries) return;
+
       card.dataset.promoEnhanced = 'true';
       card.classList.add('home-play-card-promo');
 
@@ -41,7 +47,9 @@ export default function HomePlayCardEnhancer() {
 
       const brand = document.createElement('div');
       brand.className = 'home-promo-brand';
-      brand.innerHTML = '<img src="/assets/geoweedo/geoweedo-icon-48.png" alt="" class="home-promo-mascot"/><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
+      // favicon.ico contains the full multi-resolution GeoWeedo icon set. The browser
+      // can select a much larger embedded frame than the old 48px PNG being enlarged.
+      brand.innerHTML = '<img src="/assets/geoweedo/favicon.ico" alt="" class="home-promo-mascot"/><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
 
       const divider = document.createElement('div');
       divider.className = 'home-promo-divider';
@@ -86,7 +94,7 @@ export default function HomePlayCardEnhancer() {
       window.clearTimeout(timer);
       timer = window.setTimeout(enhance, 20);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     enhance();
 
     return () => {
