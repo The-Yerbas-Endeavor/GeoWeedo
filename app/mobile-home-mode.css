@@ -31,7 +31,8 @@
 
   .mobile-home-mode-back{position:fixed;z-index:75;left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));min-height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.15);border-radius:999px;background:rgba(11,14,12,.91);color:var(--text);font-size:12px;font-weight:800;box-shadow:0 8px 25px rgba(0,0,0,.38);backdrop-filter:blur(10px);cursor:pointer}
 
-  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"]{
+  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"],
+  body[data-mobile-home-mode="play"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"]{
     display:block!important;
     position:fixed!important;
     z-index:74!important;
