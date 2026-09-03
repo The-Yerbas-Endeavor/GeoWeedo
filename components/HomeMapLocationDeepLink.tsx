@@ -6,13 +6,13 @@ export default function HomeMapLocationDeepLink(){
  useEffect(()=>{
   const profileMatch=window.location.pathname.match(/^\/dispensary\/([^/]+)/);
   if(profileMatch){
-   const locationId=decodeURIComponent(profileMatch[1] ?? '');
-   if(!locationId)return;
+   const identifier=decodeURIComponent(profileMatch[1] ?? '');
+   if(!identifier)return;
    const rewrite=()=>{
     const addressCard=Array.from(document.querySelectorAll<HTMLElement>('.profile-info-card')).find(card=>(card.querySelector(':scope > span')?.textContent||'').trim()==='ADDRESS');
     const link=addressCard?.querySelector<HTMLAnchorElement>('a');
     if(!link)return false;
-    link.href=`/?location=${encodeURIComponent(locationId)}`;
+    link.href=`/?location=${encodeURIComponent(identifier)}`;
     link.removeAttribute('target');
     link.removeAttribute('rel');
     link.title='Show this dispensary on the GeoWeedo map';
@@ -29,10 +29,15 @@ export default function HomeMapLocationDeepLink(){
 
   const params=new URLSearchParams(window.location.search),locationParam=params.get('location');
   if(!locationParam)return;
-  const locationId=locationParam;
   let disposed=false;
   async function focus(){
    try{
+    let locationId=locationParam;
+    const resolveResponse=await fetch(`/api/dispensary-resolve/${encodeURIComponent(locationParam)}`,{cache:'no-store'});
+    if(resolveResponse.ok){
+     const resolved=await resolveResponse.json();
+     locationId=String(resolved?.locationId||locationParam);
+    }
     const response=await fetch(`/api/dispensaries/${encodeURIComponent(locationId)}`,{cache:'no-store'});
     if(!response.ok)return;
     const data=await response.json();
