@@ -31,44 +31,45 @@ export default function HomeMapLocationDeepLink(){
   if(!rawLocationParam)return;
   const locationParam:string=rawLocationParam;
   let disposed=false;
+
+  const minimizeIntro=()=>{
+   const close=document.querySelector<HTMLButtonElement>('.home-play-card button[aria-label="Close game intro"]');
+   if(close)close.click();
+  };
+
   async function focus(){
    try{
+    minimizeIntro();
     let locationId:string=locationParam;
     const resolveResponse=await fetch(`/api/dispensary-resolve/${encodeURIComponent(locationParam)}`,{cache:'no-store'});
     if(resolveResponse.ok){
      const resolved=await resolveResponse.json();
      locationId=String(resolved?.locationId||locationParam);
     }
-    const response=await fetch(`/api/dispensaries/${encodeURIComponent(locationId)}`,{cache:'no-store'});
-    if(!response.ok)return;
-    const data=await response.json();
-    const name=String(data?.location?.name||'').trim();
-    if(!name||disposed)return;
-    const attempt=()=>{
+    if(disposed)return;
+
+    const clickExactPin=()=>{
      if(disposed)return false;
-     const input=document.querySelector<HTMLInputElement>('.map-browser-tools input[aria-label="Search dispensaries"]');
-     if(input&&input.value!==name){
-      const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
-      setter?.call(input,name);
-      input.dispatchEvent(new Event('input',{bubbles:true}));
-      input.dispatchEvent(new Event('change',{bubbles:true}));
-     }
-     const rows=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-browser-row'));
-     const row=rows.find(button=>(button.querySelector('strong')?.textContent||'').trim().toLowerCase()===name.toLowerCase());
-     if(row){
-      row.click();
+     const marker=Array.from(document.querySelectorAll<HTMLElement>('.maplibregl-marker[data-location-identity]')).find(node=>(node.dataset.locationIdentity||'').startsWith(`${locationId}|`));
+     if(!marker)return false;
+     marker.click();
+     window.setTimeout(()=>{
+      if(disposed)return;
+      const zoom=document.querySelector<HTMLButtonElement>(`.map-location-card[data-location-id="${CSS.escape(locationId)}"] .map-location-focus`);
+      zoom?.click();
       window.history.replaceState({},'',window.location.pathname);
-      return true;
-     }
-     return false;
+     },30);
+     return true;
     };
-    if(attempt())return;
-    const observer=new MutationObserver(()=>{if(attempt())observer.disconnect();});
+
+    if(clickExactPin())return;
+    const observer=new MutationObserver(()=>{if(clickExactPin())observer.disconnect();});
     observer.observe(document.body,{childList:true,subtree:true});
-    const timers=[300,700,1200,2000,3200].map(delay=>window.setTimeout(()=>{if(attempt())observer.disconnect();},delay));
-    window.setTimeout(()=>{observer.disconnect();timers.forEach(window.clearTimeout);},5000);
+    const timers=[80,160,300,500,800,1200,1800].map(delay=>window.setTimeout(()=>{if(clickExactPin())observer.disconnect();},delay));
+    window.setTimeout(()=>{observer.disconnect();timers.forEach(window.clearTimeout);},2500);
    }catch{}
   }
+
   void focus();
   return()=>{disposed=true;};
  },[]);
