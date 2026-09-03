@@ -22,6 +22,7 @@ import AnalyticsTracker from '@/components/AnalyticsTracker';
 import ProductAnalyticsEvents from '@/components/ProductAnalyticsEvents';
 import DispensaryCardEnhancer from '@/components/DispensaryCardEnhancer';
 import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
+import HomeLocationSelectionCardMinimizer from '@/components/HomeLocationSelectionCardMinimizer';
 import GeolocationReliability from '@/components/GeolocationReliability';
 import StateCandidateStreetViewVerifier from '@/components/StateCandidateStreetViewVerifier';
 import MobileGuessMapController from '@/components/MobileGuessMapController';
@@ -47,7 +48,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<PendingGameRewardClaim/><AdminGoogleApiStatus/><HomePlayCardEnhancer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<PendingGameRewardClaim/><AdminGoogleApiStatus/><HomePlayCardEnhancer/><HomeLocationSelectionCardMinimizer/><EnabledDispensaryBrowseFilter/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
