@@ -27,12 +27,13 @@ export default function HomeMapLocationDeepLink(){
    return;
   }
 
-  const params=new URLSearchParams(window.location.search),locationParam=params.get('location');
-  if(!locationParam)return;
+  const params=new URLSearchParams(window.location.search),rawLocationParam=params.get('location');
+  if(!rawLocationParam)return;
+  const locationParam:string=rawLocationParam;
   let disposed=false;
   async function focus(){
    try{
-    let locationId=locationParam;
+    let locationId:string=locationParam;
     const resolveResponse=await fetch(`/api/dispensary-resolve/${encodeURIComponent(locationParam)}`,{cache:'no-store'});
     if(resolveResponse.ok){
      const resolved=await resolveResponse.json();
