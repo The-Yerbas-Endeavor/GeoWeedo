@@ -46,7 +46,7 @@ function randomGameplayViewport(){const regions=[{west:-124.5,east:-116,south:42
 
 export default function GuessMap({guess,actual=null,revealed=false,onGuess,locations=[],browseMode=false}:Props){
   const nodeRef=useRef<HTMLDivElement|null>(null),mapRef=useRef<LibreMap|null>(null),guessMarkerRef=useRef<Marker|null>(null),actualMarkerRef=useRef<Marker|null>(null),userMarkerRef=useRef<Marker|null>(null),selectedMarkerRef=useRef<Marker|null>(null),baseMapRef=useRef<BaseMap>('street'),browseMarkerRefs=useRef<Map<string,Marker>>(new Map());
-  const revealedRef=useRef(revealed),previousRevealedRef=useRef(revealed),browseModeRef=useRef(browseMode),onGuessRef=useRef(onGuess);
+  const revealedRef=useRef(revealed),previousRevealedRef=useRef(revealed),browseModeRef=useRef(browseMode),onGuessRef=useRef(onGuess),deepLinkFocusRef=useRef(false);
   const [browseLoadedCount,setBrowseLoadedCount]=useState(0),[mapWarning,setMapWarning]=useState<string|null>(null),[mapReady,setMapReady]=useState(false),[searchInput,setSearchInput]=useState(''),[searchQuery,setSearchQuery]=useState(''),[region,setRegion]=useState('all'),[locating,setLocating]=useState(false),[selectedLocation,setSelectedLocation]=useState<MapLocation|null>(null),[browserOpen,setBrowserOpen]=useState(true),[streetViewOpen,setStreetViewOpen]=useState(false),[expandedStates,setExpandedStates]=useState<Record<string,boolean>>({}),[layersOpen,setLayersOpen]=useState(false),[baseMap,setBaseMap]=useState<BaseMap>('street'),[showPlayable,setShowPlayable]=useState(true),[showBrowse,setShowBrowse]=useState(true),[showSponsored,setShowSponsored]=useState(true);
 
   const normalizedSearch=searchQuery.trim().toLowerCase();
@@ -66,7 +66,39 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
   const focusLocation=(item:MapLocation,zoom=14)=>{setSelectedLocation(item);setBrowserOpen(true);setStreetViewOpen(true);showSelectedMarker(item);const map=mapRef.current;if(map)map.easeTo({center:[item.lng,item.lat],zoom:Math.max(map.getZoom(),zoom),duration:550});};
   const toggleState=(state:string,items:MapLocation[])=>{setExpandedStates(current=>({...current,[state]:!current[state]}));const map=mapRef.current;if(map&&items.length<=MAX_AUTO_FIT_RESULTS)fitLocations(map,items,10);};
 
+  useEffect(()=>{
+    if(!browseMode)return;
+    const identifier=new URLSearchParams(window.location.search).get('location');
+    if(!identifier)return;
+    let active=true;
+    const close=document.querySelector<HTMLButtonElement>('.home-play-card button[aria-label="Close game intro"]');
+    close?.click();
+    fetch(`/api/dispensary-resolve/${encodeURIComponent(identifier)}`,{cache:'no-store'})
+      .then(async response=>{if(!response.ok)throw new Error('Location not found.');return response.json();})
+      .then(data=>{
+        if(!active)return;
+        const l=data?.location;
+        const item:MapLocation={id:String(l?.id||data?.locationId||''),name:String(l?.name||'Dispensary'),lat:Number(l?.latitude),lng:Number(l?.longitude),city:String(l?.city||''),region:String(l?.region||''),approved:Boolean(l?.approved),imageryReady:Boolean(l?.imageryReady),source:String(l?.source||'GeoWeedo')};
+        if(!item.id||!validLocation(item))return;
+        deepLinkFocusRef.current=true;
+        setSelectedLocation(item);
+        setBrowserOpen(true);
+        setStreetViewOpen(true);
+      })
+      .catch(()=>{});
+    return()=>{active=false;};
+  },[browseMode]);
+
   useEffect(()=>{if(!nodeRef.current||mapRef.current)return;try{const initial=browseMode?USA_HOME_VIEW:randomGameplayViewport();const map=new LibreMap({container:nodeRef.current,style:GAME_STYLE,center:initial.center,zoom:initial.zoom,minZoom:1,maxZoom:19,attributionControl:{},dragRotate:false,pitchWithRotate:false,scrollZoom:true,dragPan:true,doubleClickZoom:true,keyboard:true,touchZoomRotate:true,boxZoom:true});mapRef.current=map;map.touchZoomRotate.disableRotation();map.addControl(new NavigationControl({showCompass:false,visualizePitch:false}),'top-right');map.on('load',()=>{map.resize();switchBaseMap(map,baseMapRef.current);setMapWarning(null);setMapReady(true);});map.on('click',e=>{if(browseModeRef.current||revealedRef.current)return;onGuessRef.current({lat:e.lngLat.lat,lng:e.lngLat.lng});});map.on('error',e=>{const m=e.error?.message||'Map resource failed to load.';console.warn('GeoWeedo map resource warning:',m);if(!/tile/i.test(m))setMapWarning(m);});const timer=window.setTimeout(()=>{map.resize();switchBaseMap(map,baseMapRef.current);if(map.loaded())setMapReady(true);},250);return()=>{window.clearTimeout(timer);setMapReady(false);userMarkerRef.current?.remove();selectedMarkerRef.current?.remove();browseMarkerRefs.current.forEach(marker=>marker.remove());browseMarkerRefs.current.clear();map.remove();mapRef.current=null;};}catch(error){setMapWarning(error instanceof Error?error.message:'Map initialization failed.');}},[]);
+
+  useEffect(()=>{
+    if(!browseMode||!mapReady||!selectedLocation||!deepLinkFocusRef.current)return;
+    const map=mapRef.current;if(!map)return;
+    deepLinkFocusRef.current=false;
+    showSelectedMarker(selectedLocation);
+    map.jumpTo({center:[selectedLocation.lng,selectedLocation.lat],zoom:15});
+    window.history.replaceState({},'',window.location.pathname);
+  },[browseMode,mapReady,selectedLocation]);
 
   useEffect(()=>{const wasRevealed=previousRevealedRef.current;previousRevealedRef.current=revealed;if(browseMode||!wasRevealed||revealed||guess!==null)return;const map=mapRef.current;if(!map)return;const viewport=randomGameplayViewport();map.jumpTo({center:viewport.center,zoom:viewport.zoom});},[browseMode,guess,revealed]);
 
