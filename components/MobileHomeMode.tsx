@@ -50,8 +50,8 @@ export default function MobileHomeMode() {
       {mode === 'choose' ? (
         <section className="mobile-home-choice" aria-label="Choose GeoWeedo mode">
           <div className="mobile-home-brand">
-            <img src="/assets/geoweedo/geoweedo-icon-96.png" alt="GeoWeedo mascot" className="mobile-home-mascot" />
-            <div className="mobile-home-wordmark"><span>Geo</span><strong>Weedo</strong></div>
+            <img src="/assets/geoweedo/mascot-full.png" alt="GeoWeedo mascot" className="mobile-home-mascot" />
+            <img src="/assets/geoweedo/geoweedo-logo-horizontal-light.png" alt="GeoWeedo" className="mobile-home-logo" />
           </div>
           <div className="mobile-home-tagline">WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.</div>
           <p>What would you like to do?</p>
