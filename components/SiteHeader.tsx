@@ -9,12 +9,13 @@ export default function SiteHeader() {
   return (
     <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
       <a className="brand brand-link geoweedo-header-brand" href="/" aria-label="GeoWeedo home">
-        <img
-          src="/assets/geoweedo/geoweedo-mascot.png"
-          alt=""
-          aria-hidden="true"
-          className="geoweedo-header-icon"
-        />
+        <span className="geoweedo-header-icon-frame" aria-hidden="true">
+          <img
+            src="/assets/geoweedo/geoweedo-mascot.png"
+            alt=""
+            className="geoweedo-header-icon"
+          />
+        </span>
         <span className="geoweedo-header-wordmark">GEOWEEDO</span>
       </a>
 
