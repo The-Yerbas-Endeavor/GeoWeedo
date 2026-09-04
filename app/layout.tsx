@@ -39,16 +39,23 @@ export const metadata = {
   manifest: '/assets/geoweedo/site.webmanifest',
   icons: {
     icon: [
-      { url: '/assets/geoweedo/geoweedo-favicon-32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/assets/geoweedo/geoweedo-icon-96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/assets/geoweedo/favicon.ico', sizes: 'any' },
+      { url: '/assets/geoweedo/geoweedo-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/assets/geoweedo/geoweedo-192x192.png', sizes: '192x192', type: 'image/png' },
     ],
-    shortcut: '/assets/geoweedo/geoweedo-favicon-32.png',
-    apple: '/assets/geoweedo/geoweedo-icon-96.png',
+    shortcut: '/assets/geoweedo/favicon.ico',
+    apple: '/assets/geoweedo/apple-touch-icon.png',
   },
   openGraph: {
     title: 'GeoWeedo',
     description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
-    images: ['/assets/geoweedo/geoweedo-icon-96.png'],
+    images: ['/assets/geoweedo/open-graph.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GeoWeedo',
+    description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+    images: ['/assets/geoweedo/twitter.png'],
   },
 };
 
