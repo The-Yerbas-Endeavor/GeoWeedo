@@ -3,8 +3,7 @@
 .nav-link { display: inline-flex; align-items: center; white-space: nowrap; }
 .site-topbar { position: relative; z-index: 20; height: 72px; min-height: 72px; overflow: hidden; }
 .geoweedo-header-brand { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; min-width: 0; }
-.geoweedo-header-icon-frame { display:grid; place-items:center; width:42px; height:42px; flex:0 0 42px; overflow:hidden; border-radius:10px; }
-.geoweedo-header-icon { display:block; width:42px; height:42px; object-fit:contain; transform:scale(3.15); transform-origin:center; }
+.geoweedo-header-icon { display:block; width:42px; height:42px; flex:0 0 42px; object-fit:contain; border-radius:10px; }
 .geoweedo-header-wordmark { display: block; font-size: 18px; line-height: 1; font-weight: 900; letter-spacing: .11em; color: var(--text); white-space: nowrap; }
 
 .info-shell { min-height: 100vh; background: radial-gradient(circle at 50% 0%, #1d2a20 0, #0b0e0c 36%); }
@@ -45,8 +44,7 @@
   .site-topbar .nav-link { display: none; }
   .site-topbar .nav-link:last-child { display: inline-flex; flex: 0 0 auto; padding: 9px 12px; font-size: 12px; }
   .geoweedo-header-brand { gap: 8px; min-width: 0; }
-  .geoweedo-header-icon-frame { width:36px; height:36px; flex-basis:36px; border-radius:9px; }
-  .geoweedo-header-icon { width:36px; height:36px; transform:scale(3.15); }
+  .geoweedo-header-icon { width:36px; height:36px; flex-basis:36px; border-radius:9px; }
   .geoweedo-header-wordmark { font-size: 15px; letter-spacing: .07em; overflow: hidden; text-overflow: ellipsis; }
   .map-first-home .home-map-stage { height: calc(100vh - 60px); }
 }
@@ -56,8 +54,7 @@
 }
 @media (max-width: 420px) {
   .site-topbar { padding: 0 10px; }
-  .geoweedo-header-icon-frame { width:34px; height:34px; flex-basis:34px; }
-  .geoweedo-header-icon { width:34px; height:34px; }
+  .geoweedo-header-icon { width:34px; height:34px; flex-basis:34px; }
   .geoweedo-header-wordmark { font-size: 14px; letter-spacing: .05em; }
   .site-topbar .nav-link:last-child { padding: 8px 10px; }
 }
