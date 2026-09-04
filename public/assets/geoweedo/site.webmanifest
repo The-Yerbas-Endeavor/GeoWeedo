@@ -4,10 +4,10 @@
   "description": "WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.",
   "icons": [
     {
-      "src": "/assets/geoweedo/geoweedo-mascot.png",
-      "sizes": "any",
+      "src": "/assets/geoweedo/geoweedo-icon-96.png",
+      "sizes": "96x96",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "theme_color": "#7ED957",
