@@ -4,15 +4,14 @@ This folder is the single source of truth for GeoWeedo website branding.
 
 ## Live assets
 
-- `geoweedo-mascot.png` — large mascot/brand artwork used by the header, desktop promo card, mobile Search/Play splash, and social preview fallback.
-- `geoweedo-favicon-32.png` — browser favicon/shortcut icon.
-- `geoweedo-icon-96.png` — higher-resolution browser/app icon and current web-app manifest icon.
-- `site.webmanifest` — PWA metadata; keep its icon paths inside this folder.
+- `geoweedo-favicon-32.png` — browser favicon.
+- `geoweedo-icon-96.png` — current visible GeoWeedo brand icon used by the site header, desktop play card, mobile Search/Play splash, app metadata, Apple icon metadata, manifest and Open Graph metadata.
+- `site.webmanifest` — installable web-app metadata.
+
+The previous `geoweedo-mascot.png` in this repository was not the correct source image from the supplied branding package and has been removed so it cannot accidentally be used again.
+
+When the full-resolution transparent mascot/source artwork is added, keep it in this folder and use it only for layouts large enough to preserve its detail. Small UI positions should continue using a purpose-built icon asset rather than scaling or cropping a large mascot image.
 
 Tagline: **WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.**
 
-## Updating the brand
-
-Keep every GeoWeedo-owned logo, mascot, favicon, app icon, social image, and future wordmark in this folder. Do not add branding images back under `app/` or the root of `public/`.
-
-When a new branding package is supplied, replace the matching purpose-specific files here rather than forcing one large mascot image into every UI and metadata role.
+Do not scatter GeoWeedo logo, icon, social, hero or branding assets through `app/`, `components/`, or the public root. Keep them here and reference them as `/assets/geoweedo/<filename>`.
