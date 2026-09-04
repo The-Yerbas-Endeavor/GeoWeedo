@@ -22,8 +22,9 @@
   body[data-mobile-home-mode="play"] .map-first-home .map-data-status{display:none!important}
 
   .mobile-home-choice{position:fixed;z-index:80;left:14px;right:14px;top:50%;transform:translateY(-50%);padding:24px 20px 22px;border:1px solid rgba(126,217,87,.24);border-radius:24px;background:rgba(7,13,10,.97);box-shadow:0 24px 80px rgba(0,0,0,.58);backdrop-filter:blur(16px);text-align:center;overflow:hidden}
-  .mobile-home-brand{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
-  .mobile-home-mascot{display:block;width:84px;height:84px;object-fit:contain;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35))}
+  .mobile-home-brand{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px}
+  .mobile-home-mascot-frame{display:grid;place-items:center;width:108px;height:108px;flex:0 0 108px;overflow:hidden;border-radius:22px}
+  .mobile-home-mascot{display:block;width:108px;height:108px;object-fit:contain;transform:scale(3.15);transform-origin:center;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35))}
   .mobile-home-wordmark{font-size:42px;line-height:.92;font-weight:900;letter-spacing:-.055em;white-space:nowrap}
   .mobile-home-wordmark span{color:#fff}.mobile-home-wordmark strong{color:#7ed957}
   .mobile-home-tagline{margin:4px auto 15px;color:#7ed957;font-size:10px;font-weight:900;letter-spacing:.09em;line-height:1.35}
@@ -42,8 +43,10 @@
   body:not(:has(.map-first-home)) .mobile-home-mode-ui{display:none}
 }
 
-@media (max-width:390px){
-  .mobile-home-mascot{width:70px;height:70px}
+@media (max-width:430px){
+  .mobile-home-brand{gap:8px}
+  .mobile-home-mascot-frame{width:88px;height:88px;flex-basis:88px;border-radius:18px}
+  .mobile-home-mascot{width:88px;height:88px}
   .mobile-home-wordmark{font-size:36px}
   .mobile-home-tagline{font-size:9px}
 }
