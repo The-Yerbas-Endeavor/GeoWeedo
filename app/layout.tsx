@@ -37,13 +37,19 @@ export const metadata = {
   title: 'GeoWeedo',
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
   manifest: '/assets/geoweedo/site.webmanifest',
+  icons: {
+    icon: '/assets/geoweedo/geoweedo-mascot.png',
+    shortcut: '/assets/geoweedo/geoweedo-mascot.png',
+    apple: '/assets/geoweedo/geoweedo-mascot.png',
+  },
+  openGraph: {
+    title: 'GeoWeedo',
+    description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+    images: ['/assets/geoweedo/geoweedo-mascot.png'],
+  },
 };
 
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover' as const,
-};
+export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' as const };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
