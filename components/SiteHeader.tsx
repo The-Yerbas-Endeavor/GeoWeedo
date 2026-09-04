@@ -10,7 +10,7 @@ export default function SiteHeader() {
     <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
       <a className="brand brand-link geoweedo-header-brand" href="/" aria-label="GeoWeedo home">
         <img
-          src="/assets/geoweedo/geoweedo-icon-48.png"
+          src="/assets/geoweedo/geoweedo-mascot.png"
           alt=""
           aria-hidden="true"
           className="geoweedo-header-icon"
