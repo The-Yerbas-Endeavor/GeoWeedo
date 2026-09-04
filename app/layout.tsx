@@ -48,7 +48,7 @@ export const metadata = {
   openGraph: {
     title: 'GeoWeedo',
     description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
-    images: ['/assets/geoweedo/geoweedo-mascot.png'],
+    images: ['/assets/geoweedo/geoweedo-icon-96.png'],
   },
 };
 
