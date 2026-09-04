@@ -1,28 +1,22 @@
-# GeoWeedo Brand Package
+# GeoWeedo branding
 
-Tagline: WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.
+Single source folder: `public/assets/geoweedo/`
 
-This package was regenerated from the approved GeoWeedo mascot concept and prepared for direct web use.
+Tagline: **WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.**
 
-## Recommended deployment folder
-`public/assets/geoweedo/`
+## Live website masters
 
-## Included
-- Brand sheet
-- Mascot hero PNG
-- Horizontal dark logo
-- Horizontal light logo
-- Vertical logo
-- Green app icon master
-- PNG icons from 16px through 512px
-- Apple touch icon
-- Multi-size favicon.ico
-- Hero PNG/JPG/WebP
-- Open Graph PNG/JPG
-- Twitter/X PNG/JPG
-- Square social PNG/JPG
-- site.webmanifest
-- HTML metadata snippet
-- Raster-backed SVG wrapper
+Use these files for the website until the remaining derivative package assets are replaced with the corrected clean package:
 
-The SVG is a raster-backed compatibility wrapper, not a manually traced native vector master.
+- `geoweedo-icon-master.png` — clean mascot/app icon master with green thumbs-up.
+- `geoweedo-logo-horizontal-dark.png` — primary horizontal GeoWeedo wordmark with cannabis leaf inside the final `o`.
+- `geoweedo-logo-horizontal-light.png` — light-background horizontal version.
+- `site.webmanifest` — installable app metadata.
+
+The website header, mobile Search/Play splash, desktop game intro, app/browser icon metadata and social metadata should reference only the clean master assets above.
+
+## Important
+
+Some older derivative files uploaded from the branding sheet contain section captions, dimension labels, or overly tight crops. They are retained temporarily only so existing repository history is not disrupted. Do not use those labeled derivatives on the live website.
+
+A corrected replacement package should be generated only from the clean icon and horizontal-logo masters, with no brand-sheet captions or size labels baked into the output.
