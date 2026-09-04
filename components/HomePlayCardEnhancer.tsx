@@ -25,7 +25,7 @@ export default function HomePlayCardEnhancer() {
       if (close) close.classList.add('home-promo-close');
       const shell = document.createElement('div'); shell.className = 'home-promo-shell';
       const tagline = document.createElement('div'); tagline.className = 'home-promo-tagline'; tagline.textContent = 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.';
-      const brand = document.createElement('div'); brand.className = 'home-promo-brand'; brand.innerHTML = '<img src="/assets/geoweedo/geoweedo-mascot.png" alt="" class="home-promo-mascot"/><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
+      const brand = document.createElement('div'); brand.className = 'home-promo-brand'; brand.innerHTML = '<span class="home-promo-mascot-frame" aria-hidden="true"><img src="/assets/geoweedo/geoweedo-mascot.png" alt="" class="home-promo-mascot"/></span><div class="home-promo-wordmark"><span>Geo</span><strong>Weedo</strong></div>';
       const divider = document.createElement('div'); divider.className = 'home-promo-divider'; divider.innerHTML = '<span></span><b>✦</b><span></span>';
       const intro = document.createElement('div'); intro.className = 'home-promo-intro'; intro.innerHTML = '<div class="home-promo-kicker">THE DISPENSARY DISCOVERY GAME</div><p>Explore real dispensaries around the world, test your geography skills, and <strong>earn YERB rewards.</strong></p>';
       playButton.textContent = playButton.disabled ? 'No quality-approved rounds yet' : 'Play GeoWeedo · 5 Random Rounds'; playButton.classList.add('home-promo-play');
