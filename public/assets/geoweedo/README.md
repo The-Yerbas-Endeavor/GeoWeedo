@@ -1,17 +1,28 @@
-# GeoWeedo branding
+# GeoWeedo Brand Package
 
-This folder is the single source of truth for GeoWeedo website branding.
+Tagline: WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.
 
-## Live assets
+This package was regenerated from the approved GeoWeedo mascot concept and prepared for direct web use.
 
-- `geoweedo-favicon-32.png` — browser favicon.
-- `geoweedo-icon-96.png` — current visible GeoWeedo brand icon used by the site header, desktop play card, mobile Search/Play splash, app metadata, Apple icon metadata, manifest and Open Graph metadata.
-- `site.webmanifest` — installable web-app metadata.
+## Recommended deployment folder
+`public/assets/geoweedo/`
 
-The previous `geoweedo-mascot.png` in this repository was not the correct source image from the supplied branding package and has been removed so it cannot accidentally be used again.
+## Included
+- Brand sheet
+- Mascot hero PNG
+- Horizontal dark logo
+- Horizontal light logo
+- Vertical logo
+- Green app icon master
+- PNG icons from 16px through 512px
+- Apple touch icon
+- Multi-size favicon.ico
+- Hero PNG/JPG/WebP
+- Open Graph PNG/JPG
+- Twitter/X PNG/JPG
+- Square social PNG/JPG
+- site.webmanifest
+- HTML metadata snippet
+- Raster-backed SVG wrapper
 
-When the full-resolution transparent mascot/source artwork is added, keep it in this folder and use it only for layouts large enough to preserve its detail. Small UI positions should continue using a purpose-built icon asset rather than scaling or cropping a large mascot image.
-
-Tagline: **WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.**
-
-Do not scatter GeoWeedo logo, icon, social, hero or branding assets through `app/`, `components/`, or the public root. Keep them here and reference them as `/assets/geoweedo/<filename>`.
+The SVG is a raster-backed compatibility wrapper, not a manually traced native vector master.
