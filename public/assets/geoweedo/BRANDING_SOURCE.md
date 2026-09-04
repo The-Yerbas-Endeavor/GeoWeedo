@@ -1,0 +1,1 @@
+Approved mascot concept: green cannabis-leaf character with sunglasses, magnifying glass/location pin, thumbs-up, and sneakers. Branding package regenerated 2026-09-04. Use only assets in this folder for site branding.
