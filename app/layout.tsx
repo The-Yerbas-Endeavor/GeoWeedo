@@ -38,9 +38,12 @@ export const metadata = {
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
   manifest: '/assets/geoweedo/site.webmanifest',
   icons: {
-    icon: '/assets/geoweedo/geoweedo-mascot.png',
-    shortcut: '/assets/geoweedo/geoweedo-mascot.png',
-    apple: '/assets/geoweedo/geoweedo-mascot.png',
+    icon: [
+      { url: '/assets/geoweedo/geoweedo-favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/assets/geoweedo/geoweedo-icon-96.png', sizes: '96x96', type: 'image/png' },
+    ],
+    shortcut: '/assets/geoweedo/geoweedo-favicon-32.png',
+    apple: '/assets/geoweedo/geoweedo-icon-96.png',
   },
   openGraph: {
     title: 'GeoWeedo',
