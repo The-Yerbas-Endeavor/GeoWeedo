@@ -1,0 +1,1 @@
+GeoWeedo regenerated branding package is staged from the approved mascot concept. Full downloadable package is provided in the ChatGPT work artifact. Live site assets in this folder are updated to the new mascot icon set and metadata.
