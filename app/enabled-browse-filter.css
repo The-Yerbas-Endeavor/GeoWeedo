@@ -1,5 +1,9 @@
-.map-browser-tools .map-enabled-filter-button{border:1px solid rgba(255,255,255,.14);background:rgba(11,14,12,.9);color:var(--text);border-radius:10px;padding:0 14px;font-weight:800;cursor:pointer;white-space:nowrap}
-.map-browser-tools .map-enabled-filter-button:hover,.map-browser-tools .map-enabled-filter-button:focus-visible{border-color:rgba(103,214,110,.55);outline:none}
-.map-browser-tools .map-enabled-filter-button.active{background:var(--accent)!important;border-color:var(--accent)!important;color:#081108!important}
-.map-browser-row[data-listed-status="mapped"]{opacity:.82}.map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}.map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}.map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
-@media(max-width:760px){.map-browser-tools .map-enabled-filter-button{height:44px!important;min-height:44px!important;flex:0 0 auto;padding:0 12px!important}.map-profile-tier-badge{font-size:7px}}
+.map-browser-tools .map-scope-filter-select{height:42px;min-height:42px;border:1px solid rgba(255,255,255,.14);background:rgba(11,14,12,.94);color:var(--text);border-radius:10px;padding:0 34px 0 12px;font:inherit;font-weight:800;cursor:pointer;white-space:nowrap}
+.map-browser-tools .map-scope-filter-select:hover,.map-browser-tools .map-scope-filter-select:focus-visible{border-color:rgba(103,214,110,.55);outline:none}
+.map-browser-row[data-listed-status="mapped"]{opacity:.82}
+.map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}
+.map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}
+.map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
+.geoweedo-scope-generated .map-browser-row{color:inherit;text-decoration:none}
+.geoweedo-scope-generated .map-browser-row-status{color:var(--accent);font-size:9px;font-weight:900;letter-spacing:.06em}
+@media(max-width:760px){.map-browser-tools .map-scope-filter-select{height:44px!important;min-height:44px!important;flex:0 0 auto;padding:0 32px 0 10px!important}.map-profile-tier-badge{font-size:7px}}
