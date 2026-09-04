@@ -1,19 +1,16 @@
 {
   "name": "GeoWeedo",
   "short_name": "GeoWeedo",
+  "description": "WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.",
   "icons": [
     {
-      "src": "/assets/geoweedo/geoweedo-icon-32.png",
-      "sizes": "32x32",
-      "type": "image/png"
-    },
-    {
-      "src": "/assets/geoweedo/geoweedo-icon-48.png",
-      "sizes": "48x48",
-      "type": "image/png"
+      "src": "/assets/geoweedo/geoweedo-mascot.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "theme_color": "#7ED321",
+  "theme_color": "#7ED957",
   "background_color": "#081218",
   "display": "standalone"
 }
