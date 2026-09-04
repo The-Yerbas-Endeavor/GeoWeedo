@@ -12,9 +12,7 @@ export default function MobileHomeMode() {
 
   useEffect(() => {
     document.body.dataset.mobileHomeMode = mode;
-    return () => {
-      delete document.body.dataset.mobileHomeMode;
-    };
+    return () => { delete document.body.dataset.mobileHomeMode; };
   }, [mode]);
 
   useEffect(() => {
@@ -51,23 +49,20 @@ export default function MobileHomeMode() {
     <div className="mobile-home-mode-ui" aria-live="polite">
       {mode === 'choose' ? (
         <section className="mobile-home-choice" aria-label="Choose GeoWeedo mode">
-          <div className="mobile-home-choice-mark" aria-hidden="true">✦</div>
-          <h1>GeoWeedo</h1>
+          <div className="mobile-home-brand">
+            <img src="/assets/geoweedo/geoweedo-mascot.png" alt="GeoWeedo mascot" className="mobile-home-mascot" />
+            <div className="mobile-home-wordmark"><span>Geo</span><strong>Weedo</strong></div>
+          </div>
+          <div className="mobile-home-tagline">WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.</div>
           <p>What would you like to do?</p>
           <div className="mobile-home-choice-actions">
-            <button type="button" className="mobile-home-search" onClick={() => choose('search')}>
-              Search GeoWeedo
-            </button>
-            <button type="button" className="mobile-home-play" onClick={() => choose('play')}>
-              Play GeoWeedo
-            </button>
+            <button type="button" className="mobile-home-search" onClick={() => choose('search')}>Search GeoWeedo</button>
+            <button type="button" className="mobile-home-play" onClick={() => choose('play')}>Play GeoWeedo</button>
           </div>
         </section>
       ) : (
         <>
-          <button type="button" className="mobile-home-mode-back" onClick={() => choose('choose')}>
-            ‹ Search or Play
-          </button>
+          <button type="button" className="mobile-home-mode-back" onClick={() => choose('choose')}>‹ Search or Play</button>
           {mode==='search'&&selectedDispensary&&(
             <a className="mobile-selected-dispensary-info" href={`/dispensary/${encodeURIComponent(selectedDispensary.id)}`} title={`Open ${selectedDispensary.name} profile`}>
               Info · {selectedDispensary.name}
