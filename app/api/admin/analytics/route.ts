@@ -3,52 +3,97 @@ import { analyticsSummary, analyticsTrend, getAnalyticsDb, analyticsNetworkHashF
 import { getAdminFromRequest } from '@/lib/adminAuth';
 
 export const runtime='nodejs';
-function ensureIpColumn(){const database=getAnalyticsDb();const columns=database.prepare(`PRAGMA table_info(analytics_sessions)`).all() as Array<{name:string}>;if(!columns.some(c=>c.name==='ip_address'))database.exec(`ALTER TABLE analytics_sessions ADD COLUMN ip_address TEXT`);database.exec(`CREATE INDEX IF NOT EXISTS analytics_sessions_ip_idx ON analytics_sessions(ip_address,started_at)`);return database;}
+
+function ensureIpColumn(){
+  const database=getAnalyticsDb();
+  const columns=database.prepare(`PRAGMA table_info(analytics_sessions)`).all() as Array<{name:string}>;
+  if(!columns.some(c=>c.name==='ip_address'))database.exec(`ALTER TABLE analytics_sessions ADD COLUMN ip_address TEXT`);
+  database.exec(`CREATE INDEX IF NOT EXISTS analytics_sessions_ip_idx ON analytics_sessions(ip_address,started_at)`);
+  return database;
+}
+
 const IDENTITY_SQL=`CASE WHEN COALESCE(s.user_id,'')<>'' THEN 'u:'||s.user_id WHEN COALESCE(s.ip_address,'')<>'' THEN 'ip:'||s.ip_address WHEN COALESCE(s.stable_network_hash,'')<>'' THEN 'n:'||s.stable_network_hash ELSE 'v:'||s.visitor_id END`;
+const IDENTIFIED_SQL=`(COALESCE(s.user_id,'')<>'' OR COALESCE(s.ip_address,'')<>'')`;
 const HUMAN_SQL=`LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%bot%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%crawler%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%spider%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%headless%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%wget%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%curl/%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%python-requests%' AND LOWER(COALESCE(s.user_agent,'')) NOT LIKE '%go-http-client%'`;
+
 function clean(value:string|null,max=200){return String(value||'').trim().slice(0,max);}
 function requestIp(request:NextRequest){return clean(request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()||request.headers.get('x-real-ip'),128);}
 function classifyDevice(width:number){if(width>0&&width<=760)return 'Mobile';if(width>760&&width<=1100)return 'Tablet';return 'Desktop';}
 function classifyBrowser(ua:string){if(/Edg\//i.test(ua))return 'Edge';if(/OPR\//i.test(ua))return 'Opera';if(/Firefox\//i.test(ua))return 'Firefox';if(/Chrome\//i.test(ua))return 'Chrome';if(/Safari\//i.test(ua)&&!/Chrome\//i.test(ua))return 'Safari';return 'Other';}
-function exclusionContext(range:number,excludeIps:string[]){const ips=Array.from(new Set(excludeIps.filter(Boolean))),dailyHashes:string[]=[];for(let offset=0;offset<=range;offset++){const day=new Date(Date.now()-offset*86400000).toISOString().slice(0,10);for(const ip of ips)dailyHashes.push(analyticsNetworkHashForDay(ip,day));}return{dailyHashes,stableHashes:ips.map(analyticsStableNetworkHash),ips};}
-function sessionFilters(since:string,excludeAdmin:boolean,excludeIps:string[]){const range=Math.max(1,Math.ceil((Date.now()-new Date(since).getTime())/86400000)),{dailyHashes,stableHashes,ips}=exclusionContext(range,excludeIps),clauses=[`s.started_at>=?`,HUMAN_SQL],params:any[]=[since];if(excludeAdmin)clauses.push(`EXISTS (SELECT 1 FROM analytics_events ae WHERE ae.session_id=s.id AND ae.event_type='page_view' AND COALESCE(ae.path,'/') NOT LIKE '/admin%')`);if(dailyHashes.length){clauses.push(`(s.network_hash IS NULL OR s.network_hash NOT IN (${dailyHashes.map(()=>'?').join(',')}))`);params.push(...dailyHashes)}if(stableHashes.length){clauses.push(`(s.stable_network_hash IS NULL OR s.stable_network_hash NOT IN (${stableHashes.map(()=>'?').join(',')}))`);params.push(...stableHashes)}if(ips.length){clauses.push(`(s.ip_address IS NULL OR s.ip_address NOT IN (${ips.map(()=>'?').join(',')}))`);params.push(...ips)}return{where:clauses.join(' AND '),params};}
+
+function exclusionContext(range:number,excludeIps:string[]){
+  const ips=Array.from(new Set(excludeIps.filter(Boolean))),dailyHashes:string[]=[];
+  for(let offset=0;offset<=range;offset++){
+    const day=new Date(Date.now()-offset*86400000).toISOString().slice(0,10);
+    for(const ip of ips)dailyHashes.push(analyticsNetworkHashForDay(ip,day));
+  }
+  return{dailyHashes,stableHashes:ips.map(analyticsStableNetworkHash),ips};
+}
+
+function sessionFilters(since:string,excludeAdmin:boolean,excludeIps:string[]){
+  const range=Math.max(1,Math.ceil((Date.now()-new Date(since).getTime())/86400000));
+  const {dailyHashes,stableHashes,ips}=exclusionContext(range,excludeIps);
+  const clauses=[`s.started_at>=?`,HUMAN_SQL],params:any[]=[since];
+  if(excludeAdmin)clauses.push(`EXISTS (SELECT 1 FROM analytics_events ae WHERE ae.session_id=s.id AND ae.event_type='page_view' AND COALESCE(ae.path,'/') NOT LIKE '/admin%')`);
+  if(dailyHashes.length){clauses.push(`(s.network_hash IS NULL OR s.network_hash NOT IN (${dailyHashes.map(()=>'?').join(',')}))`);params.push(...dailyHashes)}
+  if(stableHashes.length){clauses.push(`(s.stable_network_hash IS NULL OR s.stable_network_hash NOT IN (${stableHashes.map(()=>'?').join(',')}))`);params.push(...stableHashes)}
+  if(ips.length){clauses.push(`(s.ip_address IS NULL OR s.ip_address NOT IN (${ips.map(()=>'?').join(',')}))`);params.push(...ips)}
+  return{where:clauses.join(' AND '),params};
+}
+
 function recentTrend(hours:number,excludeAdmin:boolean,excludeIps:string[]){
- const database=ensureIpColumn(),range=Math.max(1,Math.min(24,hours)),bucketMinutes=range<=1?5:range<=6?15:60,now=Date.now(),start=now-range*3600000,bucketMs=bucketMinutes*60000,count=Math.ceil((now-start)/bucketMs),ips=Array.from(new Set(excludeIps.filter(Boolean))),days=Array.from(new Set([new Date(start).toISOString().slice(0,10),new Date(now).toISOString().slice(0,10)])),dailyHashes=days.flatMap(day=>ips.map(ip=>analyticsNetworkHashForDay(ip,day))),stableHashes=ips.map(analyticsStableNetworkHash);
- const clauses=[`e.event_type='page_view'`,`e.created_at>=?`,`e.created_at<=?`,HUMAN_SQL],params:any[]=[new Date(start).toISOString(),new Date(now).toISOString()];
- if(excludeAdmin)clauses.push(`COALESCE(e.path,'/') NOT LIKE '/admin%'`);
- if(dailyHashes.length){clauses.push(`(s.network_hash IS NULL OR s.network_hash NOT IN (${dailyHashes.map(()=>'?').join(',')}))`);params.push(...dailyHashes)}
- if(stableHashes.length){clauses.push(`(s.stable_network_hash IS NULL OR s.stable_network_hash NOT IN (${stableHashes.map(()=>'?').join(',')}))`);params.push(...stableHashes)}
- if(ips.length){clauses.push(`(s.ip_address IS NULL OR s.ip_address NOT IN (${ips.map(()=>'?').join(',')}))`);params.push(...ips)}
- const rows=database.prepare(`SELECT e.created_at,e.session_id,${IDENTITY_SQL} identity FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE ${clauses.join(' AND ')} ORDER BY e.created_at`).all(...params) as Array<{created_at:string;identity:string;session_id:string}>;
- const buckets=Array.from({length:count},(_,i)=>({day:new Date(start+i*bucketMs).toISOString(),page_views:0,visitors:0,sessions:0,_visitors:new Set<string>(),_sessions:new Set<string>()}));
- const totalVisitors=new Set<string>(),totalSessions=new Set<string>();
- for(const row of rows){const t=new Date(row.created_at).getTime(),index=Math.min(count-1,Math.max(0,Math.floor((t-start)/bucketMs))),bucket=buckets[index];bucket.page_views++;bucket._visitors.add(row.identity);bucket._sessions.add(row.session_id);totalVisitors.add(row.identity);totalSessions.add(row.session_id)}
- const daily=buckets.map(({_visitors,_sessions,...bucket})=>({...bucket,visitors:_visitors.size,sessions:_sessions.size}));
- return {daily,totals:{pageViews:rows.length,visitors:totalVisitors.size,sessions:totalSessions.size},granularity:bucketMinutes===60?'hour':`${bucketMinutes} minutes`,hours:range};
+  const database=ensureIpColumn(),range=Math.max(1,Math.min(24,hours)),bucketMinutes=range<=1?5:range<=6?15:60,now=Date.now(),start=now-range*3600000,bucketMs=bucketMinutes*60000,count=Math.ceil((now-start)/bucketMs),ips=Array.from(new Set(excludeIps.filter(Boolean))),days=Array.from(new Set([new Date(start).toISOString().slice(0,10),new Date(now).toISOString().slice(0,10)])),dailyHashes=days.flatMap(day=>ips.map(ip=>analyticsNetworkHashForDay(ip,day))),stableHashes=ips.map(analyticsStableNetworkHash);
+  const clauses=[`e.event_type='page_view'`,`e.created_at>=?`,`e.created_at<=?`,HUMAN_SQL],params:any[]=[new Date(start).toISOString(),new Date(now).toISOString()];
+  if(excludeAdmin)clauses.push(`COALESCE(e.path,'/') NOT LIKE '/admin%'`);
+  if(dailyHashes.length){clauses.push(`(s.network_hash IS NULL OR s.network_hash NOT IN (${dailyHashes.map(()=>'?').join(',')}))`);params.push(...dailyHashes)}
+  if(stableHashes.length){clauses.push(`(s.stable_network_hash IS NULL OR s.stable_network_hash NOT IN (${stableHashes.map(()=>'?').join(',')}))`);params.push(...stableHashes)}
+  if(ips.length){clauses.push(`(s.ip_address IS NULL OR s.ip_address NOT IN (${ips.map(()=>'?').join(',')}))`);params.push(...ips)}
+  const rows=database.prepare(`SELECT e.created_at,e.session_id,${IDENTITY_SQL} identity FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE ${clauses.join(' AND ')} ORDER BY e.created_at`).all(...params) as Array<{created_at:string;identity:string;session_id:string}>;
+  const buckets=Array.from({length:count},(_,i)=>({day:new Date(start+i*bucketMs).toISOString(),page_views:0,visitors:0,sessions:0,_visitors:new Set<string>(),_sessions:new Set<string>()}));
+  const totalVisitors=new Set<string>(),totalSessions=new Set<string>();
+  for(const row of rows){const t=new Date(row.created_at).getTime(),index=Math.min(count-1,Math.max(0,Math.floor((t-start)/bucketMs))),bucket=buckets[index];bucket.page_views++;bucket._visitors.add(row.identity);bucket._sessions.add(row.session_id);totalVisitors.add(row.identity);totalSessions.add(row.session_id)}
+  const daily=buckets.map(({_visitors,_sessions,...bucket})=>({...bucket,visitors:_visitors.size,sessions:_sessions.size}));
+  return {daily,totals:{pageViews:rows.length,visitors:totalVisitors.size,sessions:totalSessions.size},granularity:bucketMinutes===60?'hour':`${bucketMinutes} minutes`,hours:range};
 }
+
 function currentVisitors(excludeAdmin:boolean,excludeIps:string[]){
- const database=ensureIpColumn(),since=new Date(Date.now()-10*60000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);
- return Number((database.prepare(`SELECT COUNT(DISTINCT ${IDENTITY_SQL}) value FROM analytics_sessions s WHERE ${where}`).get(...params) as any)?.value||0);
+  const database=ensureIpColumn(),since=new Date(Date.now()-10*60000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);
+  return Number((database.prepare(`SELECT COUNT(DISTINCT ${IDENTITY_SQL}) value FROM analytics_sessions s WHERE ${where} AND ${IDENTIFIED_SQL}`).get(...params) as any)?.value||0);
 }
+
 function individualVisitors(days:number,excludeAdmin:boolean,excludeIps:string[]){
- const database=ensureIpColumn(),range=Math.max(1,Math.min(90,days)),since=new Date(Date.now()-range*86400000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);
- const rows=database.prepare(`SELECT ${IDENTITY_SQL} identity,MAX(COALESCE(s.visitor_id,'')) visitor_id,MAX(COALESCE(s.user_id,'')) user_id,MAX(COALESCE(s.ip_address,'')) ip_address,MAX(COALESCE(s.stable_network_hash,'')) network_id,COUNT(*) sessions,MIN(s.started_at) first_seen,MAX(s.last_seen_at) last_seen,MAX(COALESCE(s.country,'')) country,MAX(COALESCE(s.region,'')) region,MAX(COALESCE(s.city,'')) city,MAX(COALESCE(s.screen_width,0)) screen_width,MAX(COALESCE(s.user_agent,'')) user_agent,MAX(COALESCE(s.landing_path,'')) landing_path,MAX(COALESCE(s.referrer,'')) referrer FROM analytics_sessions s WHERE ${where} GROUP BY identity ORDER BY last_seen DESC LIMIT 500`).all(...params) as any[];
- const views=database.prepare(`SELECT ${IDENTITY_SQL} identity,COUNT(*) page_views FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.event_type='page_view' AND e.created_at>=? AND ${where}${excludeAdmin?` AND COALESCE(e.path,'/') NOT LIKE '/admin%'`:''} GROUP BY identity`).all(since,...params) as any[];
- const viewMap=new Map(views.map(row=>[String(row.identity),Number(row.page_views||0)]));
- return rows.map(row=>({visitorId:String(row.identity||row.visitor_id),userId:String(row.user_id||''),ipAddress:String(row.ip_address||''),networkId:String(row.network_id||'').slice(0,12),sessions:Number(row.sessions||0),pageViews:viewMap.get(String(row.identity))||0,firstSeen:String(row.first_seen||''),lastSeen:String(row.last_seen||''),country:String(row.country||''),region:String(row.region||''),city:String(row.city||''),device:classifyDevice(Number(row.screen_width||0)),browser:classifyBrowser(String(row.user_agent||'')),landingPath:String(row.landing_path||''),referrer:String(row.referrer||'')}));
+  const database=ensureIpColumn(),range=Math.max(1,Math.min(90,days)),since=new Date(Date.now()-range*86400000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);
+  const usefulWhere=`${where} AND ${IDENTIFIED_SQL}`;
+  const rows=database.prepare(`SELECT ${IDENTITY_SQL} identity,MAX(COALESCE(s.visitor_id,'')) visitor_id,MAX(COALESCE(s.user_id,'')) user_id,MAX(COALESCE(s.ip_address,'')) ip_address,MAX(COALESCE(s.stable_network_hash,'')) network_id,COUNT(*) sessions,MIN(s.started_at) first_seen,MAX(s.last_seen_at) last_seen,MAX(COALESCE(s.country,'')) country,MAX(COALESCE(s.region,'')) region,MAX(COALESCE(s.city,'')) city,MAX(COALESCE(s.screen_width,0)) screen_width,MAX(COALESCE(s.user_agent,'')) user_agent,MAX(COALESCE(s.landing_path,'')) landing_path,MAX(COALESCE(s.referrer,'')) referrer FROM analytics_sessions s WHERE ${usefulWhere} GROUP BY identity ORDER BY last_seen DESC LIMIT 500`).all(...params) as any[];
+  const views=database.prepare(`SELECT ${IDENTITY_SQL} identity,COUNT(*) page_views FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.event_type='page_view' AND e.created_at>=? AND ${usefulWhere}${excludeAdmin?` AND COALESCE(e.path,'/') NOT LIKE '/admin%'`:''} GROUP BY identity`).all(since,...params) as any[];
+  const viewMap=new Map(views.map(row=>[String(row.identity),Number(row.page_views||0)]));
+  return rows.map(row=>({visitorId:String(row.identity||row.visitor_id),userId:String(row.user_id||''),ipAddress:String(row.ip_address||''),networkId:String(row.network_id||'').slice(0,12),sessions:Number(row.sessions||0),pageViews:viewMap.get(String(row.identity))||0,firstSeen:String(row.first_seen||''),lastSeen:String(row.last_seen||''),country:String(row.country||''),region:String(row.region||''),city:String(row.city||''),device:classifyDevice(Number(row.screen_width||0)),browser:classifyBrowser(String(row.user_agent||'')),landingPath:String(row.landing_path||''),referrer:String(row.referrer||'')}));
 }
-function correctedDaily(days:number,excludeAdmin:boolean,excludeIps:string[]){const database=ensureIpColumn(),range=Math.max(1,Math.min(90,days)),since=new Date(Date.now()-range*86400000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);const rows=database.prepare(`SELECT substr(e.created_at,1,10) day,COUNT(*) page_views,COUNT(DISTINCT e.session_id) sessions,COUNT(DISTINCT ${IDENTITY_SQL}) visitors FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.event_type='page_view' AND e.created_at>=? AND ${where}${excludeAdmin?` AND COALESCE(e.path,'/') NOT LIKE '/admin%'`:''} GROUP BY day ORDER BY day`).all(since,...params) as any[];const byDay=new Map<string,{day:string;page_views:number;visitors:number;sessions:number}>();for(let offset=range-1;offset>=0;offset--){const day=new Date(Date.now()-offset*86400000).toISOString().slice(0,10);byDay.set(day,{day,page_views:0,visitors:0,sessions:0});}for(const row of rows){const target=byDay.get(String(row.day));if(target){target.page_views=Number(row.page_views||0);target.visitors=Number(row.visitors||0);target.sessions=Number(row.sessions||0);}}return Array.from(byDay.values());}
+
+function correctedDaily(days:number,excludeAdmin:boolean,excludeIps:string[]){
+  const database=ensureIpColumn(),range=Math.max(1,Math.min(90,days)),since=new Date(Date.now()-range*86400000).toISOString(),{where,params}=sessionFilters(since,excludeAdmin,excludeIps);
+  const rows=database.prepare(`SELECT substr(e.created_at,1,10) day,COUNT(*) page_views,COUNT(DISTINCT e.session_id) sessions,COUNT(DISTINCT CASE WHEN ${IDENTIFIED_SQL} THEN ${IDENTITY_SQL} END) visitors FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.event_type='page_view' AND e.created_at>=? AND ${where}${excludeAdmin?` AND COALESCE(e.path,'/') NOT LIKE '/admin%'`:''} GROUP BY day ORDER BY day`).all(since,...params) as any[];
+  const byDay=new Map<string,{day:string;page_views:number;visitors:number;sessions:number}>();
+  for(let offset=range-1;offset>=0;offset--){const day=new Date(Date.now()-offset*86400000).toISOString().slice(0,10);byDay.set(day,{day,page_views:0,visitors:0,sessions:0});}
+  for(const row of rows){const target=byDay.get(String(row.day));if(target){target.page_views=Number(row.page_views||0);target.visitors=Number(row.visitors||0);target.sessions=Number(row.sessions||0);}}
+  return Array.from(byDay.values());
+}
+
 export async function GET(request:NextRequest){
- if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
- ensureIpColumn();
- const excludeAdmin=request.nextUrl.searchParams.get('excludeAdmin')==='1';
- const excludeIps=String(request.nextUrl.searchParams.get('excludeIps')||'').split(',').map(v=>v.trim()).filter(Boolean).slice(0,20);
- const daysRaw=Number(request.nextUrl.searchParams.get('days')||30),days=Number.isFinite(daysRaw)?Math.min(90,Math.max(1,Math.round(daysRaw))):30;
- if(request.nextUrl.searchParams.get('mode')==='users')return NextResponse.json({days,users:individualVisitors(days,excludeAdmin,excludeIps)},{headers:{'Cache-Control':'no-store'}});
- const hoursRaw=Number(request.nextUrl.searchParams.get('hours')||0);
- if([1,6,24].includes(hoursRaw)){try{return NextResponse.json({trend:recentTrend(hoursRaw,excludeAdmin,excludeIps),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Could not query recent traffic.'},{status:400});}}
- const start=clean(request.nextUrl.searchParams.get('start'),10),end=clean(request.nextUrl.searchParams.get('end'),10),path=clean(request.nextUrl.searchParams.get('path'),300);
- if(start&&end){try{return NextResponse.json({trend:analyticsTrend({start,end,path,excludeAdmin,excludeIps}),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Could not query traffic trend.'},{status:400});}}
- const summary=analyticsSummary(days,{excludeAdmin,excludeIps});const users=individualVisitors(days,excludeAdmin,excludeIps);summary.totals.visitors=users.length;summary.totals.activeNow=currentVisitors(excludeAdmin,excludeIps);summary.daily=correctedDaily(days,excludeAdmin,excludeIps);
- return NextResponse.json({...summary,currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});
+  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
+  ensureIpColumn();
+  const excludeAdmin=request.nextUrl.searchParams.get('excludeAdmin')==='1';
+  const excludeIps=String(request.nextUrl.searchParams.get('excludeIps')||'').split(',').map(v=>v.trim()).filter(Boolean).slice(0,20);
+  const daysRaw=Number(request.nextUrl.searchParams.get('days')||30),days=Number.isFinite(daysRaw)?Math.min(90,Math.max(1,Math.round(daysRaw))):30;
+  if(request.nextUrl.searchParams.get('mode')==='users')return NextResponse.json({days,users:individualVisitors(days,excludeAdmin,excludeIps)},{headers:{'Cache-Control':'no-store'}});
+  const hoursRaw=Number(request.nextUrl.searchParams.get('hours')||0);
+  if([1,6,24].includes(hoursRaw)){try{return NextResponse.json({trend:recentTrend(hoursRaw,excludeAdmin,excludeIps),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Could not query recent traffic.'},{status:400});}}
+  const start=clean(request.nextUrl.searchParams.get('start'),10),end=clean(request.nextUrl.searchParams.get('end'),10),path=clean(request.nextUrl.searchParams.get('path'),300);
+  if(start&&end){try{return NextResponse.json({trend:analyticsTrend({start,end,path,excludeAdmin,excludeIps}),currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Could not query traffic trend.'},{status:400});}}
+  const summary=analyticsSummary(days,{excludeAdmin,excludeIps});
+  const users=individualVisitors(days,excludeAdmin,excludeIps);
+  summary.totals.visitors=users.length;
+  summary.totals.activeNow=currentVisitors(excludeAdmin,excludeIps);
+  summary.daily=correctedDaily(days,excludeAdmin,excludeIps);
+  return NextResponse.json({...summary,currentAdminIp:requestIp(request)},{headers:{'Cache-Control':'no-store'}});
 }
