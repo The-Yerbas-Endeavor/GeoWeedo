@@ -46,10 +46,10 @@ export default function EnabledDispensaryBrowseFilter(){
    const tools=document.querySelector<HTMLElement>('.map-first-home .map-browser-tools');if(!tools)return null;
    tools.querySelector('.map-enabled-filter-button')?.remove();
    let select=tools.querySelector<HTMLSelectElement>('.map-scope-filter-select');
-   if(select&&Array.from(select.options).map(o=>o.value).join('|')!=='all|listed|playable'){select.remove();select=null;}
+   if(select&&Array.from(select.options).map(o=>o.value).join('|')!=='playable|listed|all'){select.remove();select=null;}
    if(!select){
     select=document.createElement('select');select.className='map-scope-filter-select';select.setAttribute('aria-label','Dispensary map scope');select.title='Choose which dispensary locations to show';
-    for(const [value,label] of [['all','All'],['listed','Listed'],['playable','Playable']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.appendChild(option);}
+    for(const [value,label] of [['playable','Play'],['listed','Listed'],['all','All']]){const option=document.createElement('option');option.value=value;option.textContent=label;select.appendChild(option);}
     select.addEventListener('change',()=>{scope=select!.value==='listed'?'listed':select!.value==='playable'?'playable':'all';publishScope();if(scope!=='all'&&!dataReady)void loadScopeData();scheduleApply(0);});
     const listButton=Array.from(tools.querySelectorAll<HTMLButtonElement>('button')).find(item=>/^(hide list|list \()/i.test((item.textContent||'').trim()));
     if(listButton)tools.insertBefore(select,listButton);else tools.appendChild(select);
