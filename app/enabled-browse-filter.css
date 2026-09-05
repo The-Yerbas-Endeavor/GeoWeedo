@@ -1,3 +1,15 @@
+.map-browser-theme-chooser{display:grid;gap:10px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(103,214,110,.055),rgba(255,255,255,.015))}
+.map-browser-theme-logo{display:block;width:100%;max-width:280px;height:auto;margin:0 auto;border-radius:10px}
+.map-browser-theme-copy{display:grid;gap:3px;text-align:center}
+.map-browser-theme-copy strong{font-size:10px;font-weight:900;letter-spacing:.11em;color:#f4f7f4}
+.map-browser-theme-copy small{font-size:10px;color:#9aa69d;line-height:1.35}
+.map-browser-theme-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.map-browser-theme-actions button{min-height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.12);font:inherit;font-size:12px;font-weight:900;letter-spacing:.05em;cursor:pointer}
+.map-browser-theme-play{background:#67d66e;color:#081108}
+.map-browser-theme-play:hover,.map-browser-theme-play:focus-visible{filter:brightness(1.05);outline:none}
+.map-browser-theme-search{background:rgba(255,255,255,.04);color:#f4f7f4}
+.map-browser-theme-search.active{border-color:rgba(103,214,110,.38);box-shadow:inset 0 0 0 1px rgba(103,214,110,.08)}
+.map-browser-theme-search:hover,.map-browser-theme-search:focus-visible{background:rgba(103,214,110,.08);outline:none}
 .map-browser-tier-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 14px 6px;background:rgba(103,214,110,.045);border-top:1px solid rgba(103,214,110,.12);color:var(--accent)}
 .map-browser-tier-heading strong{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
 .map-browser-tier-heading small{color:#9aa69d;font-size:9px}
@@ -6,4 +18,4 @@
 .map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}
 .map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}
 .map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
-@media(max-width:760px){.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}}
+@media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}}
