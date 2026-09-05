@@ -9,6 +9,7 @@ import './community.css';
 import './profile-details.css';
 import './streetview-center.css';
 import './map-overlay-order.css';
+import './map-controls-cleanup.css';
 import './mobile.css';
 import './mobile-game-map.css';
 import './mobile-home-mode.css';
