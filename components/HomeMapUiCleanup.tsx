@@ -7,8 +7,28 @@ const SEARCH_ACTIVE_CLASS='geoweedo-map-search-active';
 function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value));}
 
 function openBrowsePanel(){
-  const listButton=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button')).find(button=>/^(List|Hide list)/i.test(button.textContent?.trim()||''));
-  if(listButton&&/^List/i.test(listButton.textContent?.trim()||''))listButton.click();
+  let attempts=0;
+  const tryOpen=()=>{
+    const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
+    if(panel){
+      panel.classList.remove('map-browser-panel-search-minimized');
+      panel.setAttribute('aria-label','Browse dispensaries');
+      if(window.innerWidth<=760)window.setTimeout(()=>panel.scrollIntoView({block:'nearest',behavior:'smooth'}),30);
+      return;
+    }
+
+    const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
+    const listButton=buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\b/i.test(button.textContent?.trim()||''));
+    if(listButton){
+      listButton.click();
+      window.setTimeout(tryOpen,40);
+      return;
+    }
+
+    attempts+=1;
+    if(attempts<12)window.setTimeout(tryOpen,50);
+  };
+  tryOpen();
 }
 
 function zoomHomeMapOnce(){
@@ -60,9 +80,10 @@ function bindSearchAction(card:HTMLElement){
     shell.appendChild(search);
   }
   search.addEventListener('click',()=>{
+    document.body.classList.remove(SEARCH_ACTIVE_CLASS);
     const close=card.querySelector<HTMLButtonElement>('.home-promo-close');
     close?.click();
-    window.setTimeout(openBrowsePanel,0);
+    window.setTimeout(openBrowsePanel,75);
   });
 }
 
