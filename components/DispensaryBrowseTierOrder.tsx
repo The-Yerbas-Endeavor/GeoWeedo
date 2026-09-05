@@ -8,7 +8,7 @@ const key=(name:unknown,city:unknown,region:unknown)=>`${norm(name)}|${norm(city
 
 export default function DispensaryBrowseTierOrder(){
  useEffect(()=>{
-  let disposed=false,timer:number|undefined;
+  let disposed=false,timer:number|undefined,searchMode=false;
   const tiers=new Map<string,number>();
   const labels=new Map<string,string>();
 
@@ -17,7 +17,8 @@ export default function DispensaryBrowseTierOrder(){
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
    const promo=document.querySelector<HTMLElement>('.home-play-card-promo');
    if(promo){
-    if(panel)panel.style.display='none';
+    searchMode=false;
+    if(panel){panel.style.display='none';panel.classList.remove('map-browser-search-promo');}
     const play=promo.querySelector<HTMLButtonElement>('.home-promo-play');
     if(play&&!promo.querySelector('.home-promo-search')){
      const search=document.createElement('button');
@@ -25,14 +26,20 @@ export default function DispensaryBrowseTierOrder(){
      search.className='secondary home-promo-search';
      search.textContent='Search Dispensaries';
      search.addEventListener('click',()=>{
-      if(panel)panel.style.display='';
+      searchMode=true;
+      if(panel){panel.style.display='';panel.classList.add('map-browser-search-promo');}
       promo.querySelector<HTMLButtonElement>('button[aria-label="Close game intro"]')?.click();
-      window.setTimeout(()=>document.querySelector<HTMLInputElement>('.map-browser-tools input')?.focus(),0);
+      window.setTimeout(()=>{
+       const currentPanel=document.querySelector<HTMLElement>('.map-browser-panel');
+       if(currentPanel){currentPanel.style.display='';currentPanel.classList.add('map-browser-search-promo');}
+       document.querySelector<HTMLInputElement>('.map-browser-tools input')?.focus();
+      },0);
      });
      play.insertAdjacentElement('afterend',search);
     }
    }else if(panel){
     panel.style.display='';
+    panel.classList.toggle('map-browser-search-promo',searchMode);
    }
   };
 
@@ -67,7 +74,7 @@ export default function DispensaryBrowseTierOrder(){
   }).catch(()=>{});
   scan();
   const observer=new MutationObserver(()=>{window.clearTimeout(timer);timer=window.setTimeout(scan,50);});observer.observe(document.body,{childList:true,subtree:true});
-  return()=>{disposed=true;window.clearTimeout(timer);observer.disconnect();document.querySelector<HTMLElement>('.map-browser-panel')?.style.removeProperty('display');};
+  return()=>{disposed=true;window.clearTimeout(timer);observer.disconnect();const panel=document.querySelector<HTMLElement>('.map-browser-panel');panel?.style.removeProperty('display');panel?.classList.remove('map-browser-search-promo');};
  },[]);
  return null;
 }
