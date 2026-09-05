@@ -40,15 +40,18 @@ function bindSearchAction(card:HTMLElement){
   const shell=card.querySelector<HTMLElement>('.home-promo-shell');
   if(!shell)return;
   let search=shell.querySelector<HTMLButtonElement>('.home-promo-search');
+  const play=shell.querySelector<HTMLElement>('.home-promo-play');
   if(!search){
     search=document.createElement('button');
     search.type='button';
     search.className='home-promo-search';
-    search.textContent='Find Weedo';
-    const play=shell.querySelector('.home-promo-play');
-    if(play?.parentElement===shell)play.insertAdjacentElement('afterend',search);
-    else shell.appendChild(search);
-  } else search.textContent='Find Weedo';
+  }
+  search.textContent='Findo Weedo';
+  if(play?.parentElement===shell){
+    play.insertAdjacentElement('beforebegin',search);
+  }else if(!search.parentElement){
+    shell.appendChild(search);
+  }
   search.addEventListener('click',()=>{
     const close=card.querySelector<HTMLButtonElement>('.home-promo-close');
     close?.click();
