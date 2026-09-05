@@ -56,6 +56,43 @@ function bindSearchAction(card:HTMLElement){
   });
 }
 
+function setReactInputValue(input:HTMLInputElement,value:string){
+  const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
+  setter?.call(input,value);
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+}
+
+function bindMapSearch(input:HTMLInputElement){
+  if(input.dataset.zipSearchBound==='1')return;
+  input.dataset.zipSearchBound='1';
+  input.placeholder='Search dispensary or ZIP code';
+  input.setAttribute('aria-label','Search dispensary or ZIP code');
+  let lookupTimer:number|undefined;
+  let lastZip='';
+  input.addEventListener('input',()=>{
+    window.clearTimeout(lookupTimer);
+    const value=input.value.trim();
+    const zipMatch=value.match(/^\d{5}(?:-\d{4})?$/);
+    if(!zipMatch){lastZip='';return;}
+    const zip=zipMatch[0].slice(0,5);
+    if(zip===lastZip)return;
+    lookupTimer=window.setTimeout(()=>{
+      fetch(`/api/zip-lookup?zip=${encodeURIComponent(zip)}`,{cache:'no-store'})
+        .then(async response=>{const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'ZIP code not found.');return data;})
+        .then(data=>{
+          if(input.value.trim().slice(0,5)!==zip)return;
+          lastZip=zip;
+          const city=String(data.city||'').trim();
+          const region=String(data.region||'').trim();
+          if(!city)return;
+          setReactInputValue(input,city);
+          input.title=`ZIP ${zip} resolved to ${city}${region?`, ${region}`:''}`;
+        })
+        .catch(()=>{});
+    },180);
+  });
+}
+
 function bindPromoDrag(card:HTMLElement){
   if(card.dataset.dragBound==='1')return;
   card.dataset.dragBound='1';
@@ -144,6 +181,8 @@ export default function HomeMapUiCleanup(){
       initializePromo();
       const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
       if(card){bindSearchAction(card);bindPromoDrag(card);}
+      const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');
+      if(mapSearch)bindMapSearch(mapSearch);
     };
 
     bind();
