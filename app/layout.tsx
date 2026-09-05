@@ -33,6 +33,7 @@ import AdminGoogleApiStatus from '@/components/AdminGoogleApiStatus';
 import AdminAmenitiesCheckboxes from '@/components/AdminAmenitiesCheckboxes';
 import PendingGameRewardClaim from '@/components/PendingGameRewardClaim';
 import HomeMapUiCleanup from '@/components/HomeMapUiCleanup';
+import MapBrowserPanelDraggable from '@/components/MapBrowserPanelDraggable';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -63,7 +64,7 @@ export const viewport = { width: 'device-width', initialScale: 1, viewportFit: '
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}<HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileHomeMode/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
