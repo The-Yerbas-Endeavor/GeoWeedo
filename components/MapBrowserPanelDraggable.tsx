@@ -28,8 +28,12 @@ export default function MapBrowserPanelDraggable(){
         panel.style.top=`${Math.min(maxTop,Math.max(8,startTop+event.clientY-startY))}px`;
       };
       const up=()=>{if(!dragging)return;dragging=false;panel.classList.remove('map-browser-panel-dragging');};
-      handle.addEventListener('pointerdown',down);window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);
-      cleanup=()=>{handle.removeEventListener('pointerdown',down);window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);};
+      const expand=(event:MouseEvent)=>{
+        if((event.target as HTMLElement).closest('button,a,input,select'))return;
+        if(panel.classList.contains('map-browser-panel-search-minimized'))panel.classList.remove('map-browser-panel-search-minimized');
+      };
+      handle.addEventListener('pointerdown',down);handle.addEventListener('click',expand);window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);
+      cleanup=()=>{handle.removeEventListener('pointerdown',down);handle.removeEventListener('click',expand);window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);};
     };
     attach();
     const observer=new MutationObserver(()=>attach());observer.observe(document.body,{childList:true,subtree:true});
