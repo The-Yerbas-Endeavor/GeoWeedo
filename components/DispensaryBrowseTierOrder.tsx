@@ -12,30 +12,33 @@ export default function DispensaryBrowseTierOrder(){
   const tiers=new Map<string,number>();
   const labels=new Map<string,string>();
 
-  const ensureThemeChooser=()=>{
+  const syncExperienceCard=()=>{
+   document.querySelectorAll('.map-browser-theme-chooser').forEach(node=>node.remove());
    const panel=document.querySelector<HTMLElement>('.map-browser-panel');
-   if(!panel||panel.querySelector('.map-browser-theme-chooser'))return;
-   const head=panel.querySelector<HTMLElement>('.map-browser-panel-head');
-   if(!head)return;
-
-   const chooser=document.createElement('div');
-   chooser.className='map-browser-theme-chooser';
-   chooser.innerHTML=`<img src="/assets/geoweedo/geoweedo-logo-horizontal-dark.png" alt="GeoWeedo" class="map-browser-theme-logo"><div class="map-browser-theme-copy"><strong>CHOOSE YOUR GEOWEEDO EXPERIENCE</strong><small>Play the discovery game or search real dispensaries.</small></div><div class="map-browser-theme-actions"><button type="button" class="map-browser-theme-play">PLAY</button><button type="button" class="map-browser-theme-search active">SEARCH</button></div>`;
-
-   chooser.querySelector<HTMLButtonElement>('.map-browser-theme-play')?.addEventListener('click',()=>{
-    document.querySelector<HTMLButtonElement>('button[aria-label="Show game intro"]')?.click();
-    panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();
-   });
-   chooser.querySelector<HTMLButtonElement>('.map-browser-theme-search')?.addEventListener('click',()=>{
-    document.querySelector<HTMLInputElement>('.map-browser-tools input')?.focus();
-    panel.querySelector<HTMLElement>('.map-browser-list')?.scrollTo({top:0,behavior:'smooth'});
-   });
-   head.insertAdjacentElement('afterend',chooser);
+   const promo=document.querySelector<HTMLElement>('.home-play-card-promo');
+   if(promo){
+    if(panel)panel.style.display='none';
+    const play=promo.querySelector<HTMLButtonElement>('.home-promo-play');
+    if(play&&!promo.querySelector('.home-promo-search')){
+     const search=document.createElement('button');
+     search.type='button';
+     search.className='secondary home-promo-search';
+     search.textContent='Search Dispensaries';
+     search.addEventListener('click',()=>{
+      if(panel)panel.style.display='';
+      promo.querySelector<HTMLButtonElement>('button[aria-label="Close game intro"]')?.click();
+      window.setTimeout(()=>document.querySelector<HTMLInputElement>('.map-browser-tools input')?.focus(),0);
+     });
+     play.insertAdjacentElement('afterend',search);
+    }
+   }else if(panel){
+    panel.style.display='';
+   }
   };
 
   const scan=()=>{
    if(disposed)return;
-   ensureThemeChooser();
+   syncExperienceCard();
    document.querySelectorAll<HTMLElement>('.map-browser-row-status').forEach(status=>{
     if(status.textContent?.trim().toUpperCase()==='PLAY')status.textContent='ENABLED';
    });
@@ -64,7 +67,7 @@ export default function DispensaryBrowseTierOrder(){
   }).catch(()=>{});
   scan();
   const observer=new MutationObserver(()=>{window.clearTimeout(timer);timer=window.setTimeout(scan,50);});observer.observe(document.body,{childList:true,subtree:true});
-  return()=>{disposed=true;window.clearTimeout(timer);observer.disconnect();};
+  return()=>{disposed=true;window.clearTimeout(timer);observer.disconnect();document.querySelector<HTMLElement>('.map-browser-panel')?.style.removeProperty('display');};
  },[]);
  return null;
 }
