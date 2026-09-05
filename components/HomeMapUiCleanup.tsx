@@ -29,6 +29,33 @@ function applyStoredPosition(card:HTMLElement){
   }catch{}
 }
 
+function openBrowsePanel(){
+  const listButton=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button')).find(button=>/^(List|Hide list)/i.test(button.textContent?.trim()||''));
+  if(listButton&&/^List/i.test(listButton.textContent?.trim()||''))listButton.click();
+}
+
+function bindSearchAction(card:HTMLElement){
+  if(card.dataset.searchBound==='1')return;
+  card.dataset.searchBound='1';
+  const shell=card.querySelector<HTMLElement>('.home-promo-shell');
+  if(!shell)return;
+  let search=shell.querySelector<HTMLButtonElement>('.home-promo-search');
+  if(!search){
+    search=document.createElement('button');
+    search.type='button';
+    search.className='home-promo-search';
+    search.textContent='Search Dispensaries';
+    const play=shell.querySelector('.home-promo-play');
+    if(play?.parentElement===shell)play.insertAdjacentElement('afterend',search);
+    else shell.appendChild(search);
+  }
+  search.addEventListener('click',()=>{
+    const close=card.querySelector<HTMLButtonElement>('.home-promo-close');
+    close?.click();
+    window.setTimeout(openBrowsePanel,0);
+  });
+}
+
 function bindPromoDrag(card:HTMLElement){
   if(card.dataset.dragBound==='1')return;
   card.dataset.dragBound='1';
@@ -101,7 +128,7 @@ export default function HomeMapUiCleanup(){
     const bind=()=>{
       initializeBrowsePanel();
       const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
-      if(card)bindPromoDrag(card);
+      if(card){bindSearchAction(card);bindPromoDrag(card);}
     };
 
     bind();
