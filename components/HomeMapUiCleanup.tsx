@@ -34,6 +34,19 @@ function openBrowsePanel(){
   if(listButton&&/^List/i.test(listButton.textContent?.trim()||''))listButton.click();
 }
 
+function minimizeSearchPanels(active:boolean){
+  if(active){
+    const promo=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
+    promo?.querySelector<HTMLButtonElement>('.home-promo-close')?.click();
+  }
+  const browser=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
+  browser?.classList.toggle('map-browser-panel-search-minimized',active);
+  if(browser){
+    if(active)browser.setAttribute('aria-label','Browse dispensaries — minimized search results');
+    else browser.setAttribute('aria-label','Browse dispensaries');
+  }
+}
+
 function bindSearchAction(card:HTMLElement){
   if(card.dataset.searchBound==='1')return;
   card.dataset.searchBound='1';
@@ -69,6 +82,7 @@ function bindMapSearch(input:HTMLInputElement){
   input.addEventListener('input',()=>{
     window.clearTimeout(lookupTimer);
     const value=input.value.trim();
+    minimizeSearchPanels(Boolean(value));
     const zipMatch=value.match(/^\d{5}(?:-\d{4})?$/);
     if(!zipMatch){
       if(lastZip)window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));
