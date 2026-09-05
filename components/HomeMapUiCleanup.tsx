@@ -11,6 +11,15 @@ function openBrowsePanel(){
   if(listButton&&/^List/i.test(listButton.textContent?.trim()||''))listButton.click();
 }
 
+function zoomHomeMapOnce(){
+  const canvas=document.querySelector<HTMLElement>('.map-first-home .maplibregl-map');
+  if(!canvas||canvas.dataset.homeZoomApplied==='1')return;
+  const zoomIn=document.querySelector<HTMLButtonElement>('.map-first-home .maplibregl-ctrl-zoom-in');
+  if(!zoomIn)return;
+  canvas.dataset.homeZoomApplied='1';
+  zoomIn.click();
+}
+
 function minimizeSearchPanels(active:boolean){
   document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
   if(active){
@@ -150,7 +159,7 @@ export default function HomeMapUiCleanup(){
       const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();
     };
     const bind=()=>{
-      initializeBrowsePanel();initializePromo();
+      initializeBrowsePanel();initializePromo();zoomHomeMapOnce();
       const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){bindSearchAction(card);bindPromoDrag(card);}
       const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);
       syncSearchPanels();
