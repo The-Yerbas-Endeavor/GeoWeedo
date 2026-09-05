@@ -1,71 +1,62 @@
 import 'server-only';
 
-type Row={name:string;streetAddress:string;city?:string;region:string;country:string;licenseNumber?:string;dataSource:string;sourceUrl:string;sourceLicense:string;imageryStatus:'missing_coordinates'};
-type Dataset={module:'Adult_Use'|'Licenses';tab:'Adult_Use'|'Licenses';label:string;accept:(type:string,license:string)=>boolean};
-type DownloadAction={kind:'post'|'get'|'submit';target?:string;argument?:string;href?:string;name?:string;value?:string};
+type Row={
+ name:string;
+ streetAddress?:string;
+ city?:string;
+ region:string;
+ country:string;
+ latitude?:number;
+ longitude?:number;
+ website?:string;
+ licenseNumber?:string;
+ dataSource:string;
+ sourceUrl:string;
+ sourceLicense:string;
+ imageryStatus:'unchecked'|'missing_coordinates';
+};
 
-const SOURCE='https://www.michigan.gov/cra/verify-a-license-1';
-const HOSTS=['https://aca-prod.accela.com','https://aca3.accela.com'];
-const DATASETS:Dataset[]=[
- {module:'Adult_Use',tab:'Adult_Use',label:'adult-use establishments',accept:(type,license)=>(/mari(?:j|h)uana\s+retailer/i.test(type)||/^AU-R-/i.test(license))},
- {module:'Licenses',tab:'Licenses',label:'medical marijuana facilities',accept:(type)=>/provisioning\s+center/i.test(type)},
-];
+type LayerRef={url:string;label:string};
+
+const SOURCE='https://michigan.maps.arcgis.com/apps/webappviewer/index.html?id=cd5a1a76daaf470b823a382691c0ff60';
+const APP_ID='cd5a1a76daaf470b823a382691c0ff60';
+const ARCGIS='https://www.arcgis.com/sharing/rest/content/items';
+const RETAIL_RE=/mari(?:j|h)uana\s+retailer|adult[- ]use.*retailer|provisioning\s+center/i;
 
 function clean(value:unknown){return String(value??'').replace(/&amp;/g,'&').replace(/&#39;|&apos;|&#x27;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}
 function key(value:string){return value.toLowerCase().replace(/[^a-z0-9]/g,'');}
-function decodeHtml(value:string){return value.replace(/&amp;/g,'&').replace(/&#39;|&apos;|&#x27;/g,"'").replace(/&quot;/g,'"').replace(/&#x2F;/g,'/');}
-function pick(row:Record<string,string>,names:string[]){for(const name of names){const value=row[key(name)];if(value)return clean(value);}return '';}
-function parseAddress(value:string){const address=clean(value);const match=address.match(/^(.*?)(?:,\s*|\s+)([A-Za-z .'-]{2,60}),?\s+MI\s+(\d{5}(?:-\d{4})?)(?:\s+United States)?$/i);return{streetAddress:address,city:match?.[2]?.trim()};}
-function isHtml(text:string,contentType:string|null){return /^\s*</.test(text)||/text\/html|application\/xhtml/i.test(contentType||'');}
+function normalized(input:Record<string,unknown>){const out:Record<string,unknown>={};for(const [name,value] of Object.entries(input||{}))out[key(name)]=value;return out;}
+function pick(row:Record<string,unknown>,names:string[]){for(const name of names){const value=row[key(name)];if(value!==undefined&&value!==null&&clean(value))return clean(value);}return '';}
+function number(value:unknown){if(value===undefined||value===null||value==='')return undefined;const n=Number(value);return Number.isFinite(n)?n:undefined;}
+function readiness(lat?:number,lng?:number){return lat!==undefined&&lng!==undefined?'unchecked' as const:'missing_coordinates' as const;}
+function parseAddress(value:string){const address=clean(value);const match=address.match(/^(.*?)(?:,\s*|\s+)([A-Za-z .'-]{2,60}),?\s+MI\s+(\d{5}(?:-\d{4})?)(?:\s+United States)?$/i);return{streetAddress:address||undefined,city:match?.[2]?.trim()};}
 
-function cookiesFrom(response:Response){const headers=response.headers as Headers&{getSetCookie?:()=>string[]};const raw=headers.getSetCookie?.()??(response.headers.get('set-cookie')?[response.headers.get('set-cookie')!]:[]);return raw.map(item=>item.split(';',1)[0]).filter(Boolean);}
-function mergeCookies(current:string[],response:Response){const map=new Map(current.map(item=>[item.split('=',1)[0],item]));for(const item of cookiesFrom(response))map.set(item.split('=',1)[0],item);return Array.from(map.values());}
-function hiddenFields(html:string){const values=new URLSearchParams();const input=/<input\b[^>]*>/gi;let match:RegExpExecArray|null;while((match=input.exec(html))!==null){const tag=match[0];const type=tag.match(/\btype=["']?([^"'\s>]+)/i)?.[1]?.toLowerCase()||'';if(type&&type!=='hidden')continue;const name=decodeHtml(tag.match(/\bname=["']([^"']+)["']/i)?.[1]||'');if(!name)continue;const value=decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1]||'');values.set(name,value);}return values;}
-function searchButton(html:string){const tags=html.match(/<button\b[^>]*>[\s\S]*?<\/button>|<input\b[^>]*>/gi)||[];for(const tag of tags){const label=clean(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1]||tag);if(!/^search$/i.test(label)&&!/search all records/i.test(label))continue;const name=decodeHtml(tag.match(/\bname=["']([^"']+)["']/i)?.[1]||'');const value=decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1]||'Search');if(name)return{name,value};}return{name:'ctl00$PlaceHolderMain$btnNewSearch',value:'Search'};}
-function downloadAction(html:string):DownloadAction|null{
- const elements=html.match(/<a\b[^>]*>[\s\S]*?<\/a>|<button\b[^>]*>[\s\S]*?<\/button>|<input\b[^>]*>/gi)||[];
- for(const element of elements){const value=decodeHtml(element.match(/\bvalue=["']([^"']*)["']/i)?.[1]||'');const label=clean(value||element);if(!/download\s+results|export\s+results/i.test(label))continue;
-  const href=decodeHtml(element.match(/\bhref=["']([^"']+)["']/i)?.[1]||'');const onclick=decodeHtml(element.match(/\bonclick=["']([^"']+)["']/i)?.[1]||'');const script=`${href} ${onclick}`;
-  const post=script.match(/__doPostBack\(['"]([^'"]+)['"],\s*['"]([^'"]*)['"]\)/i);if(post)return{kind:'post',target:post[1],argument:post[2]};
-  if(href&&!/^javascript:/i.test(href))return{kind:'get',href};
-  const name=decodeHtml(element.match(/\bname=["']([^"']+)["']/i)?.[1]||'');if(name)return{kind:'submit',name,value:value||'Download results'};
- }
- const scriptPost=html.match(/__doPostBack\(['"]([^'"]*(?:download|export)[^'"]*)['"],\s*['"]([^'"]*)['"]\)/i);if(scriptPost)return{kind:'post',target:scriptPost[1],argument:scriptPost[2]};
- return null;
-}
-function generatedDownloadUrl(html:string,base:string){
- const candidates:string[]=[];
- for(const re of [/\bhref=["']([^"']+)["']/gi,/\b(?:location(?:\.href)?|window\.open)\s*(?:=|\()\s*["']([^"']+)["']/gi,/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^;]+;\s*url=([^"']+)["']/gi]){let m:RegExpExecArray|null;while((m=re.exec(html))!==null)candidates.push(decodeHtml(m[1]));}
- for(const candidate of candidates){if(/download|export|report|\.csv(?:\?|$)|\.txt(?:\?|$)|\.xls(?:x)?(?:\?|$)/i.test(candidate)&&!/^javascript:/i.test(candidate)){try{return new URL(candidate,base).toString();}catch{}}}
- return null;
-}
+async function getJson(url:string,label:string){let response:Response;try{response=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.4 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(20000)});}catch(error){throw new Error(`${label} request failed: ${error instanceof Error?error.message:String(error)}`);}if(!response.ok)throw new Error(`${label} returned HTTP ${response.status}`);const body=await response.json();if(body?.error)throw new Error(`${label} returned ArcGIS error ${body.error.code||''}: ${body.error.message||'unknown error'}`);return body;}
 
-function parseCsv(csv:string){const records:string[][]=[];let row:string[]=[],cell='',quoted=false;const text=csv.replace(/^\uFEFF/,'');for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;continue;}if(ch===','&&!quoted){row.push(cell.trim());cell='';continue;}if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());cell='';if(row.some(value=>value))records.push(row);row=[];continue;}cell+=ch;}row.push(cell.trim());if(row.some(value=>value))records.push(row);if(records.length<2)return[];const headers=records[0].map(key);return records.slice(1).map(cells=>{const out:Record<string,string>={};headers.forEach((header,index)=>{out[header]=cells[index]??'';});return out;});}
+function findWebMapId(app:any){const candidates=[app?.map?.itemId,app?.map?.webMapId,app?.values?.webmap,app?.values?.webMap,app?.webmap,app?.webMapId];for(const value of candidates){if(typeof value==='string'&&/^[a-f0-9]{32}$/i.test(value))return value;}const text=JSON.stringify(app);const matches=[...text.matchAll(/(?:webmap|webMap|itemId)[^a-f0-9]{0,20}([a-f0-9]{32})/gi)].map(m=>m[1]);return matches[0];}
 
-async function request(url:string,init:RequestInit,cookies:string[]){const headers=new Headers(init.headers);headers.set('User-Agent','Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36');headers.set('Accept-Language','en-US,en;q=0.9');headers.set('Accept-Encoding','gzip, deflate, br');if(cookies.length)headers.set('Cookie',cookies.join('; '));return fetch(url,{...init,headers,cache:'no-store',redirect:'follow',signal:AbortSignal.timeout(25000)});}
-async function performAction(action:DownloadAction,html:string,url:string,host:string,cookies:string[]){
- if(action.kind==='get')return request(new URL(action.href!,url).toString(),{headers:{Accept:'text/csv,application/csv,text/plain,application/octet-stream,*/*',Referer:url}},cookies);
- const fields=hiddenFields(html);if(action.kind==='post'){fields.set('__EVENTTARGET',action.target||'');fields.set('__EVENTARGUMENT',action.argument||'');}else{fields.delete('__EVENTTARGET');fields.delete('__EVENTARGUMENT');fields.set(action.name||'',action.value||'Download results');}
- return request(url,{method:'POST',headers:{Accept:'text/csv,application/csv,text/plain,application/octet-stream,*/*','Content-Type':'application/x-www-form-urlencoded',Origin:host,Referer:url},body:fields.toString()},cookies);
-}
-async function resolveCsvResponse(response:Response,url:string,host:string,cookies:string[],label:string){
- cookies.splice(0,cookies.length,...mergeCookies(cookies,response));if(!response.ok)throw new Error(`${label} Download results returned ${response.status}`);let body=await response.text();let contentType=response.headers.get('content-type');
- if(!isHtml(body,contentType)){const rows=parseCsv(body);if(!rows.length)throw new Error(`${label} export contained no parseable records`);return rows;}
- for(let hop=0;hop<3;hop++){
-  const direct=generatedDownloadUrl(body,url);if(direct){const next=await request(direct,{headers:{Accept:'text/csv,application/csv,text/plain,application/octet-stream,*/*',Referer:url}},cookies);cookies.splice(0,cookies.length,...mergeCookies(cookies,next));if(!next.ok)throw new Error(`${label} generated export URL returned ${next.status}`);body=await next.text();contentType=next.headers.get('content-type');if(!isHtml(body,contentType)){const rows=parseCsv(body);if(rows.length)return rows;}continue;}
-  const nested=downloadAction(body);if(nested){const next=await performAction(nested,body,url,host,cookies);cookies.splice(0,cookies.length,...mergeCookies(cookies,next));if(!next.ok)throw new Error(`${label} nested Download results returned ${next.status}`);body=await next.text();contentType=next.headers.get('content-type');if(!isHtml(body,contentType)){const rows=parseCsv(body);if(rows.length)return rows;}continue;}
-  break;
- }
- const title=clean(body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||'').slice(0,100);throw new Error(`${label} Download results remained HTML after following Accela export redirects${title?` (${title})`:''}`);
+function collectLayerRefs(value:any,out:LayerRef[]=[],parent=''):LayerRef[]{if(!value)return out;if(Array.isArray(value)){for(const item of value)collectLayerRefs(item,out,parent);return out;}if(typeof value!=='object')return out;const label=clean(value.title||value.name||parent);if(typeof value.url==='string'&&/\/FeatureServer(?:\/\d+)?\/?$/i.test(value.url))out.push({url:value.url.replace(/\/$/,''),label});for(const [name,child] of Object.entries(value))collectLayerRefs(child,out,label||name);return out;}
+
+async function expandLayers(ref:LayerRef):Promise<LayerRef[]>{if(/\/FeatureServer\/\d+$/i.test(ref.url))return[ref];const meta=await getJson(`${ref.url}?f=json`,'Michigan CRA ArcGIS service metadata');const layers=Array.isArray(meta.layers)?meta.layers:[];return layers.map((layer:any)=>({url:`${ref.url}/${layer.id}`,label:clean(layer.name||ref.label)}));}
+
+async function queryLayer(layer:LayerRef){const features:any[]=[];let offset=0;for(let page=0;page<20;page++){const params=new URLSearchParams({where:'1=1',outFields:'*',returnGeometry:'true',outSR:'4326',f:'json',resultOffset:String(offset),resultRecordCount:'2000'});const body=await getJson(`${layer.url}/query?${params.toString()}`,`Michigan CRA ArcGIS layer ${layer.label||layer.url}`);const batch=Array.isArray(body.features)?body.features:[];features.push(...batch);if(!body.exceededTransferLimit||batch.length===0)break;offset+=batch.length;}return features;}
+
+function featureToRow(feature:any,layerLabel:string):Row|null{const attrs=normalized(feature?.attributes||{});const type=pick(attrs,['License Type','Record Type','Type','Facility Type','LicenseType','Category'])||layerLabel;const licenseNumber=pick(attrs,['License Number','License #','Record Number','Record #','LicenseNumber','License_ID','License ID']);const haystack=`${layerLabel} ${type} ${licenseNumber}`;
+ if(!RETAIL_RE.test(haystack)&&!/^AU-R-/i.test(licenseNumber))return null;
+ const status=pick(attrs,['Status','Record Status','License Status','LicenseStatus']);if(status&&!/active|approved|current/i.test(status))return null;
+ const name=pick(attrs,['DBA','DBA Name','Doing Business As','License Name','Licensee Name','Business Name','Facility Name','Establishment Name','Name']);if(!name)return null;
+ const rawAddress=pick(attrs,['Address','Street Address','Facility Address','Physical Address','Location Address','Premise Address']);const parsed=parseAddress(rawAddress);const city=pick(attrs,['City','Facility City','Physical City','Premise City'])||parsed.city;
+ const geometry=feature?.geometry||{};const latitude=number(geometry.y??attrs.latitude??attrs.lat),longitude=number(geometry.x??attrs.longitude??attrs.lng??attrs.lon);
+ if(latitude!==undefined&&(latitude<41.5||latitude>49.0))return null;if(longitude!==undefined&&(longitude<-91.0||longitude>-82.0))return null;
+ const website=pick(attrs,['Website','Web Site','URL','Business Website'])||undefined;
+ return{name,streetAddress:parsed.streetAddress,city:city||undefined,region:'Michigan',country:'USA',latitude,longitude,website,licenseNumber:licenseNumber||undefined,dataSource:'Michigan CRA Active Cannabis Business Map',sourceUrl:SOURCE,sourceLicense:'Official Michigan Cannabis Regulatory Agency public Find a Facility ArcGIS map; adult-use Marijuana Retailer and medical Provisioning Center locations only.',imageryStatus:readiness(latitude,longitude)};
 }
 
-async function downloadDataset(host:string,dataset:Dataset){const url=`${host}/MIMM/Cap/CapHome.aspx?TabName=${dataset.tab}&module=${dataset.module}`;let cookies:string[]=[];const initial=await request(url,{headers:{Accept:'text/html,application/xhtml+xml'}},cookies);cookies=mergeCookies(cookies,initial);if(!initial.ok)throw new Error(`${dataset.label} initial Accela page returned ${initial.status}`);const initialHtml=await initial.text();if(!/__VIEWSTATE|ACA_CS_FIELD/i.test(initialHtml))throw new Error(`${dataset.label} Accela page did not expose a searchable public form`);
- const form=hiddenFields(initialHtml),button=searchButton(initialHtml);form.set(button.name,button.value);form.set('ctl00$PlaceHolderMain$ddlSearchType',form.get('ctl00$PlaceHolderMain$ddlSearchType')||'0');
- const search=await request(url,{method:'POST',headers:{Accept:'text/html,application/xhtml+xml','Content-Type':'application/x-www-form-urlencoded',Origin:host,Referer:url},body:form.toString()},cookies);cookies=mergeCookies(cookies,search);if(!search.ok)throw new Error(`${dataset.label} blank Accela search returned ${search.status}`);const searchHtml=await search.text();const action=downloadAction(searchHtml);if(!action)throw new Error(`${dataset.label} blank Accela search returned results but no recognizable Download results control`);
- const download=await performAction(action,searchHtml,url,host,cookies);return resolveCsvResponse(download,url,host,cookies,dataset.label);
+export async function fetchMichiganCandidates():Promise<Row[]>{
+ const app=await getJson(`https://michigan.maps.arcgis.com/sharing/rest/content/items/${APP_ID}/data?f=json`,'Michigan CRA ArcGIS application');const webMapId=findWebMapId(app);if(!webMapId)throw new Error('Michigan CRA ArcGIS application did not expose its public web-map item id.');
+ const map=await getJson(`${ARCGIS}/${webMapId}/data?f=json`,'Michigan CRA ArcGIS web map');const rawRefs=collectLayerRefs(map);const uniqueRefs=new Map(rawRefs.map(ref=>[ref.url,ref]));if(!uniqueRefs.size)throw new Error('Michigan CRA ArcGIS web map did not expose any FeatureServer layers.');
+ const expanded=(await Promise.all(Array.from(uniqueRefs.values()).map(expandLayers))).flat();const candidateLayers=expanded.filter(layer=>RETAIL_RE.test(layer.label));const layers=candidateLayers.length?candidateLayers:expanded;
+ const settled=await Promise.allSettled(layers.map(async layer=>({layer,features:await queryLayer(layer)})));const errors=settled.filter((result):result is PromiseRejectedResult=>result.status==='rejected').map(result=>result.reason instanceof Error?result.reason.message:String(result.reason));const rows:Row[]=[];
+ for(const result of settled){if(result.status!=='fulfilled')continue;for(const feature of result.value.features){const row=featureToRow(feature,result.value.layer.label);if(row)rows.push(row);}}
+ const unique=new Map<string,Row>();for(const row of rows){const identity=(row.licenseNumber?`license:${row.licenseNumber}`:`place:${row.name}|${row.streetAddress||''}|${row.city||''}`).toLowerCase();if(!unique.has(identity))unique.set(identity,row);}if(!unique.size)throw new Error(`Michigan CRA ArcGIS map returned zero recognizable Marijuana Retailer or Provisioning Center locations${errors.length?`; layer errors: ${errors.join(' | ')}`:''}. Refusing an unverified import.`);return Array.from(unique.values());
 }
-async function officialDownload(dataset:Dataset){const errors:string[]=[];for(const host of HOSTS){try{return await downloadDataset(host,dataset);}catch(error){errors.push(`${new URL(host).host}: ${error instanceof Error?error.message:String(error)}`);}}throw new Error(errors.join(' ; '));}
-
-export async function fetchMichiganCandidates():Promise<Row[]>{const results=await Promise.allSettled(DATASETS.map(dataset=>officialDownload(dataset)));const failures=results.map((result,index)=>result.status==='rejected'?`${DATASETS[index].label}: ${result.reason instanceof Error?result.reason.message:String(result.reason)}`:'').filter(Boolean);if(failures.length)throw new Error(`Michigan CRA official Accela license-download workflow failed. ${failures.join(' | ')}`);
- const rows:Row[]=[];for(let index=0;index<DATASETS.length;index++){const dataset=DATASETS[index],records=(results[index] as PromiseFulfilledResult<Record<string,string>[]>).value;for(const record of records){const status=pick(record,['Status','Record Status','License Status']);if(!/^active$/i.test(status))continue;const licenseNumber=pick(record,['Record Number','License Number','License #','Record #']);const recordType=pick(record,['Record Type','License Type','Type']);if(!dataset.accept(recordType,licenseNumber))continue;const name=pick(record,['Licensee Name','License Name','Business Name','Name','DBA Name']);const address=pick(record,['Address','Street Address','Facility Address','Physical Address']);if(!name||!address||!licenseNumber)continue;const parsed=parseAddress(address);rows.push({name,streetAddress:parsed.streetAddress,city:parsed.city,region:'Michigan',country:'USA',licenseNumber,dataSource:'Michigan CRA Accela License Download',sourceUrl:SOURCE,sourceLicense:'Official Michigan Cannabis Regulatory Agency Verify a License database export; Active adult-use Marijuana Retailer and medical Provisioning Center license records only.',imageryStatus:'missing_coordinates'});}}
- const unique=new Map<string,Row>();for(const row of rows)if(!unique.has(row.licenseNumber!.toLowerCase()))unique.set(row.licenseNumber!.toLowerCase(),row);if(!unique.size)throw new Error('Michigan CRA official Accela downloads completed but yielded zero Active Marijuana Retailer or Provisioning Center records; refusing an unverified import.');return Array.from(unique.values());}
