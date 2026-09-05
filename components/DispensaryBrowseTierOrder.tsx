@@ -12,7 +12,11 @@ export default function DispensaryBrowseTierOrder(){
   const tiers=new Map<string,number>();
   const labels=new Map<string,string>();
   const scan=()=>{
-   if(disposed||!tiers.size)return;
+   if(disposed)return;
+   document.querySelectorAll<HTMLElement>('.map-browser-row-status').forEach(status=>{
+    if(status.textContent?.trim().toUpperCase()==='PLAY')status.textContent='ENABLED';
+   });
+   if(!tiers.size)return;
    document.querySelectorAll<HTMLElement>('.map-browser-state').forEach(section=>{
     const state=section.querySelector('.map-browser-state-head strong')?.textContent?.trim()||'';
     const rows=Array.from(section.querySelectorAll<HTMLElement>(':scope > .map-browser-row'));
@@ -34,6 +38,7 @@ export default function DispensaryBrowseTierOrder(){
    for(const item of (data.dispensaries||[]) as Item[]){const rank=item.sponsored&&item.claimed?4:item.claimed?3:2;const k=key(item.name,item.city,item.region);tiers.set(k,rank);labels.set(k,rank===4?'SPONSORED + CLAIMED':rank===3?'CLAIMED / LISTED':'LISTED');}
    scan();
   }).catch(()=>{});
+  scan();
   const observer=new MutationObserver(()=>{window.clearTimeout(timer);timer=window.setTimeout(scan,50);});observer.observe(document.body,{childList:true,subtree:true});
   return()=>{disposed=true;window.clearTimeout(timer);observer.disconnect();};
  },[]);
