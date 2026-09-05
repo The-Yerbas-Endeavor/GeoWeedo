@@ -11,8 +11,31 @@ export default function DispensaryBrowseTierOrder(){
   let disposed=false,timer:number|undefined;
   const tiers=new Map<string,number>();
   const labels=new Map<string,string>();
+
+  const ensureThemeChooser=()=>{
+   const panel=document.querySelector<HTMLElement>('.map-browser-panel');
+   if(!panel||panel.querySelector('.map-browser-theme-chooser'))return;
+   const head=panel.querySelector<HTMLElement>('.map-browser-panel-head');
+   if(!head)return;
+
+   const chooser=document.createElement('div');
+   chooser.className='map-browser-theme-chooser';
+   chooser.innerHTML=`<img src="/assets/geoweedo/geoweedo-logo-horizontal-dark.png" alt="GeoWeedo" class="map-browser-theme-logo"><div class="map-browser-theme-copy"><strong>CHOOSE YOUR GEOWEEDO EXPERIENCE</strong><small>Play the discovery game or search real dispensaries.</small></div><div class="map-browser-theme-actions"><button type="button" class="map-browser-theme-play">PLAY</button><button type="button" class="map-browser-theme-search active">SEARCH</button></div>`;
+
+   chooser.querySelector<HTMLButtonElement>('.map-browser-theme-play')?.addEventListener('click',()=>{
+    document.querySelector<HTMLButtonElement>('button[aria-label="Show game intro"]')?.click();
+    panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();
+   });
+   chooser.querySelector<HTMLButtonElement>('.map-browser-theme-search')?.addEventListener('click',()=>{
+    document.querySelector<HTMLInputElement>('.map-browser-tools input')?.focus();
+    panel.querySelector<HTMLElement>('.map-browser-list')?.scrollTo({top:0,behavior:'smooth'});
+   });
+   head.insertAdjacentElement('afterend',chooser);
+  };
+
   const scan=()=>{
    if(disposed)return;
+   ensureThemeChooser();
    document.querySelectorAll<HTMLElement>('.map-browser-row-status').forEach(status=>{
     if(status.textContent?.trim().toUpperCase()==='PLAY')status.textContent='ENABLED';
    });
@@ -33,6 +56,7 @@ export default function DispensaryBrowseTierOrder(){
     const current=rows;if(ranked.some((x,i)=>current[i]!==x.row))ranked.forEach(x=>section.appendChild(x.row));
    });
   };
+
   fetch('/api/dispensaries',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{
    if(disposed)return;
    for(const item of (data.dispensaries||[]) as Item[]){const rank=item.sponsored&&item.claimed?4:item.claimed?3:2;const k=key(item.name,item.city,item.region);tiers.set(k,rank);labels.set(k,rank===4?'SPONSORED + CLAIMED':rank===3?'CLAIMED / LISTED':'LISTED');}
