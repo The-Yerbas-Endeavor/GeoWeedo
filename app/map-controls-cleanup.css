@@ -1,0 +1,13 @@
+/* Browse scope belongs in the map toolbar. The Layers panel is map-style only. */
+.map-layers-panel .map-layers-section:last-child {
+  display: none;
+}
+
+/* Keep the remaining base-map chooser visually compact now that it has one job. */
+.map-layers-panel {
+  width: 210px;
+}
+
+.map-layers-panel .map-layers-section {
+  border-bottom: 0;
+}
