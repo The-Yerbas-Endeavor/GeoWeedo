@@ -1,10 +1,9 @@
-.map-browser-priority>.map-browser-state-head{background:rgba(103,214,110,.045)}
-.map-browser-priority>.map-browser-state-head strong{color:var(--accent)}
-.map-browser-priority>.map-browser-state-head small{color:#9aa69d}
-.map-browser-priority .map-browser-row-status{color:var(--accent);font-size:9px;font-weight:900;letter-spacing:.06em}
-.map-browser-all-locations>.map-browser-state-head{border-top:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.018)}
-.map-browser-all-groups>.map-browser-state>.map-browser-state-head{padding-left:24px}
+.map-browser-tier-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 14px 6px;background:rgba(103,214,110,.045);border-top:1px solid rgba(103,214,110,.12);color:var(--accent)}
+.map-browser-tier-heading strong{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.map-browser-tier-heading small{color:#9aa69d;font-size:9px}
+.map-browser-tier-heading-muted{background:rgba(255,255,255,.018);border-top-color:rgba(255,255,255,.08);color:#b8c3ba}
+.map-browser-state-list .map-browser-row-status{color:var(--accent);font-size:9px;font-weight:900;letter-spacing:.06em}
 .map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}
 .map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}
 .map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
-@media(max-width:760px){.map-browser-all-groups>.map-browser-state>.map-browser-state-head{padding-left:20px}.map-profile-tier-badge{font-size:7px}}
+@media(max-width:760px){.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}}
