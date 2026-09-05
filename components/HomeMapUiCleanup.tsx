@@ -114,6 +114,7 @@ function bindPromoDrag(card:HTMLElement){
 export default function HomeMapUiCleanup(){
   useLayoutEffect(()=>{
     let browseInitialized=false;
+    let promoInitialized=false;
 
     const initializeBrowsePanel=()=>{
       if(browseInitialized)return;
@@ -125,8 +126,22 @@ export default function HomeMapUiCleanup(){
       document.body.classList.add('geoweedo-home-browse-ready');
     };
 
+    const initializePromo=()=>{
+      if(promoInitialized)return;
+      const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
+      if(card){
+        promoInitialized=true;
+        return;
+      }
+      const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');
+      if(!collapsed)return;
+      promoInitialized=true;
+      collapsed.click();
+    };
+
     const bind=()=>{
       initializeBrowsePanel();
+      initializePromo();
       const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
       if(card){bindSearchAction(card);bindPromoDrag(card);}
     };
