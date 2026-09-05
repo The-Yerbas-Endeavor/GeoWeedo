@@ -2,33 +2,9 @@
 
 import { useLayoutEffect } from 'react';
 
-const POSITION_KEY='geoweedo_home_promo_position';
 const SEARCH_ACTIVE_CLASS='geoweedo-map-search-active';
 
-type StoredPosition={x:number;y:number};
-
 function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value));}
-
-function applyStoredPosition(card:HTMLElement){
-  if(window.innerWidth<=650)return;
-  try{
-    const raw=sessionStorage.getItem(POSITION_KEY);
-    if(!raw)return;
-    const saved=JSON.parse(raw) as StoredPosition;
-    if(!Number.isFinite(saved.x)||!Number.isFinite(saved.y))return;
-    const stage=card.closest<HTMLElement>('.home-map-stage');
-    if(!stage)return;
-    const stageRect=stage.getBoundingClientRect();
-    const cardRect=card.getBoundingClientRect();
-    const x=clamp(saved.x,8,Math.max(8,stageRect.width-cardRect.width-8));
-    const y=clamp(saved.y,8,Math.max(8,stageRect.height-cardRect.height-8));
-    card.style.left=`${x}px`;
-    card.style.top=`${y}px`;
-    card.style.right='auto';
-    card.style.bottom='auto';
-    card.style.transform='none';
-  }catch{}
-}
 
 function openBrowsePanel(){
   const listButton=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button')).find(button=>/^(List|Hide list)/i.test(button.textContent?.trim()||''));
@@ -125,7 +101,15 @@ function bindPromoDrag(card:HTMLElement){
   if(card.dataset.dragBound==='1')return;
   card.dataset.dragBound='1';
   card.classList.add('home-promo-draggable');
-  applyStoredPosition(card);
+
+  if(window.innerWidth>650){
+    card.style.left='50%';
+    card.style.top='50%';
+    card.style.right='auto';
+    card.style.bottom='auto';
+    card.style.transform='translate(-50%,-50%)';
+  }
+
   let dragging=false,offsetX=0,offsetY=0,stage:HTMLElement|null=null;
   const move=(event:PointerEvent)=>{
     if(!dragging||!stage)return;
@@ -138,8 +122,6 @@ function bindPromoDrag(card:HTMLElement){
     if(!dragging)return;
     dragging=false;card.classList.remove('home-promo-dragging');
     window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop);window.removeEventListener('pointercancel',stop);
-    const x=parseFloat(card.style.left),y=parseFloat(card.style.top);
-    if(Number.isFinite(x)&&Number.isFinite(y)){try{sessionStorage.setItem(POSITION_KEY,JSON.stringify({x,y}));}catch{}}
   };
   card.addEventListener('pointerdown',(event)=>{
     if(window.innerWidth<=650||event.button!==0)return;
@@ -147,6 +129,9 @@ function bindPromoDrag(card:HTMLElement){
     if(target?.closest('button,a,input,select,textarea,[role="button"]'))return;
     stage=card.closest<HTMLElement>('.home-map-stage');if(!stage)return;
     const rect=card.getBoundingClientRect();offsetX=event.clientX-rect.left;offsetY=event.clientY-rect.top;dragging=true;card.classList.add('home-promo-dragging');event.preventDefault();
+    card.style.left=`${rect.left-stage.getBoundingClientRect().left}px`;
+    card.style.top=`${rect.top-stage.getBoundingClientRect().top}px`;
+    card.style.right='auto';card.style.bottom='auto';card.style.transform='none';
     window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',stop,{once:true});window.addEventListener('pointercancel',stop,{once:true});
   });
 }
