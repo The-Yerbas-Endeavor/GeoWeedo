@@ -1,9 +1,29 @@
 @media (max-width:650px){
-  /* Keep the browse/search controls visually behind the gameplay card. */
+  /* Keep browse controls behind the game chooser until Findo Weedo is selected. */
   .map-first-home .map-browser-tools,
   .map-first-home .map-layers-panel,
   .map-first-home .map-data-status,
   .map-first-home .map-hint{z-index:2!important}
+
+  body.geoweedo-findo-active .map-first-home .map-browser-tools{z-index:45!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+  body.geoweedo-findo-active .map-first-home .map-layers-panel,
+  body.geoweedo-findo-active .map-first-home .map-data-status,
+  body.geoweedo-findo-active .map-first-home .map-hint{z-index:40!important}
+
+  /* Mobile browse is a centered bottom sheet, never a draggable desktop panel. */
+  .map-first-home .map-browser-panel,
+  .map-first-home .map-browser-panel.map-browser-panel-draggable{
+    left:50%!important;
+    right:auto!important;
+    top:auto!important;
+    bottom:max(10px,env(safe-area-inset-bottom))!important;
+    width:min(92vw,520px)!important;
+    max-width:min(92vw,520px)!important;
+    transform:translateX(-50%)!important;
+    touch-action:auto!important;
+  }
+  .map-first-home .map-browser-panel.map-browser-panel-dragging{transform:translateX(-50%)!important}
+  .map-first-home .map-browser-panel-head{touch-action:auto!important;cursor:default!important}
 
   .map-first-home .home-play-card.home-play-card-promo{
     z-index:50!important;
@@ -27,4 +47,6 @@
 
 @media (max-width:430px){
   .map-first-home .home-play-card.home-play-card-promo{width:84vw!important;max-height:76vh!important}
+  .map-first-home .map-browser-panel,
+  .map-first-home .map-browser-panel.map-browser-panel-draggable{width:94vw!important;max-width:94vw!important}
 }
