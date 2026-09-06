@@ -9,7 +9,6 @@ import { getUserFromRequest } from '@/lib/userAuth';
 export const runtime = 'nodejs';
 const ATOMIC = 100_000_000;
 const MAX_HUNT_SCORE = 5000;
-const MAX_GUESSES = 8;
 
 function mapStatus(status: string) {
   if (status === 'posted') return 'earned';
@@ -17,9 +16,9 @@ function mapStatus(status: string) {
   return status;
 }
 
-function huntScore(distanceKm: number, guesses: number) {
-  const base = Math.max(1000, 4500 - (guesses - 1) * 500);
-  const precision = Math.round(Math.max(0, 500 * (1 - distanceKm / 2)));
+function huntScore(distanceKm: number, guesses: number, winRadiusKm: number) {
+  const base = Math.max(500, 4500 - (guesses - 1) * 400);
+  const precision = Math.round(Math.max(0, 500 * (1 - distanceKm / winRadiusKm)));
   return Math.min(MAX_HUNT_SCORE, base + precision);
 }
 
@@ -35,13 +34,14 @@ export async function POST(request: NextRequest) {
   const guesses = Number(body?.guesses);
   const distanceKm = Number(body?.distanceKm);
   const startedAt = typeof body?.startedAt === 'string' && !Number.isNaN(Date.parse(body.startedAt)) ? body.startedAt : new Date().toISOString();
+  const policy = getGameRewardPolicy();
 
   if (!/^hunt-[A-Za-z0-9-]{8,80}$/.test(gameId)) return NextResponse.json({ error: 'Invalid hunt reference.' }, { status: 400 });
   if (!targetId) return NextResponse.json({ error: 'Missing hunt target.' }, { status: 400 });
   if (!Number.isInteger(score) || score < 0 || score > MAX_HUNT_SCORE) return NextResponse.json({ error: 'Invalid hunt score.' }, { status: 400 });
-  if (!Number.isInteger(guesses) || guesses < 1 || guesses > MAX_GUESSES) return NextResponse.json({ error: 'Invalid guess count.' }, { status: 400 });
-  if (!Number.isFinite(distanceKm) || distanceKm < 0 || distanceKm >= 2) return NextResponse.json({ error: 'The hunt was not completed within the 2 km win radius.' }, { status: 400 });
-  if (score !== huntScore(distanceKm, guesses)) return NextResponse.json({ error: 'Hunt score does not match the completed hunt.' }, { status: 400 });
+  if (!Number.isInteger(guesses) || guesses < 1 || guesses > policy.huntMaxGuesses) return NextResponse.json({ error: 'Invalid guess count.' }, { status: 400 });
+  if (!Number.isFinite(distanceKm) || distanceKm < 0 || distanceKm >= policy.huntWinRadiusKm) return NextResponse.json({ error: `The hunt was not completed within the ${policy.huntWinRadiusKm} km win radius.` }, { status: 400 });
+  if (score !== huntScore(distanceKm, guesses, policy.huntWinRadiusKm)) return NextResponse.json({ error: 'Hunt score does not match the completed hunt.' }, { status: 400 });
 
   const candidates = await listCandidates();
   const target = candidates.find((item) => item.id === targetId && item.status !== 'rejected' && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
 
   const db = getDatabase();
   ensureFinanceSchema(db);
-
   const existingGame = db.prepare('SELECT id,user_id,total_score,reward_atomic,reward_status FROM games WHERE id=?').get(gameId) as any;
   if (existingGame) {
     if (existingGame.user_id !== user.id) return NextResponse.json({ error: 'Hunt reference already exists.' }, { status: 409 });
@@ -57,14 +56,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ gameId, totalScore: Number(existingGame.total_score || 0), amountYerb: Number(ledger?.amount_atomic || existingGame.reward_atomic || 0) / ATOMIC, status: mapStatus(String(ledger?.status || existingGame.reward_status || 'not_eligible')), duplicate: true });
   }
 
-  const policy = getGameRewardPolicy();
   const timing = getGameplayRewardTimingStatus(user.walletId, policy);
   const blockedStatus = !policy.enabled ? 'rewards_disabled' : !policy.huntEnabled ? 'mode_disabled' : !timing.allowed ? timing.reason : null;
   const now = new Date().toISOString();
-
   if (blockedStatus) {
-    db.prepare(`INSERT INTO games (id,user_id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at,client_version)
-                VALUES (?,?,'hunt','completed',?,0,?,?,?,?)`).run(gameId, user.id, score, blockedStatus, startedAt, now, 'web');
+    db.prepare(`INSERT INTO games (id,user_id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at,client_version) VALUES (?,?,'hunt','completed',?,0,?,?,?,?)`).run(gameId, user.id, score, blockedStatus, startedAt, now, 'web');
     return NextResponse.json({ gameId, totalScore: score, amountYerb: 0, status: blockedStatus, retryAfterSeconds: timing.retryAfterSeconds, rewardedGamesToday: timing.rewardedGamesToday }, { status: 201 });
   }
 
@@ -83,7 +79,7 @@ export async function POST(request: NextRequest) {
     db.prepare(`INSERT INTO games (id,user_id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at,client_version) VALUES (?,?,'hunt','completed',?,?,?,?,?,?)`).run(gameId, user.id, score, amountAtomic, rewardStatus, startedAt, now, 'web');
     if (amountAtomic > 0) {
       const ledgerId = `ledger-${crypto.randomUUID()}`;
-      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'Weedo Hunt reward',?,?,?)`).run(ledgerId, user.walletId, ledgerStatus === 'posted' ? 'reward_credit' : 'reward_pending', amountAtomic, ledgerStatus, gameId, JSON.stringify({ mode: 'hunt', targetId, targetName: target.name, score, guesses, distanceKm, reviewRequired: policy.reviewRequired }), now, ledgerStatus === 'posted' ? now : null);
+      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'Weedo Hunt reward',?,?,?)`).run(ledgerId, user.walletId, ledgerStatus === 'posted' ? 'reward_credit' : 'reward_pending', amountAtomic, ledgerStatus, gameId, JSON.stringify({ mode: 'hunt', targetId, targetName: target.name, score, guesses, distanceKm, winRadiusKm: policy.huntWinRadiusKm, reviewRequired: policy.reviewRequired }), now, ledgerStatus === 'posted' ? now : null);
       db.prepare(`INSERT INTO reward_claims (id,user_id,game_id,wallet_id,amount_atomic,status,ledger_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(`claim-${crypto.randomUUID()}`, user.id, gameId, user.walletId, amountAtomic, ledgerStatus, ledgerId, now, now);
       if (ledgerStatus === 'posted') postSystemLedgerEntry({ accountCode: 'rewards_pool', entryType: 'reward_expense', amountAtomic: -amountAtomic, referenceType: 'game_reward', referenceId: gameId, memo: 'Weedo Hunt reward', metadata: { userId: user.id, mode: 'hunt', targetId, score, guesses, distanceKm } }, db);
     }
