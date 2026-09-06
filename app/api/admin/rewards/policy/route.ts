@@ -7,16 +7,19 @@ import { getGameRewardPolicy, saveGameRewardPolicy, type GameRewardPolicy } from
 export const runtime = 'nodejs';
 
 function cleanPolicy(body: any): GameRewardPolicy {
-  const yerbPerPoint = Number(body?.yerbPerPoint);
+  const yerbPerPoint = Number(body?.yerbPerPoint ?? 0);
+  const classicPerfectRewardYerb = Number(body?.classicPerfectRewardYerb);
+  const huntPerfectRewardYerb = Number(body?.huntPerfectRewardYerb);
+  const dailyPerfectRewardYerb = Number(body?.dailyPerfectRewardYerb);
   const dailyCapYerb = Number(body?.dailyCapYerb);
-  const perGameCapYerb = Number(body?.perGameCapYerb);
+  const perGameCapYerb = Number(body?.perGameCapYerb ?? 0);
   const rewardCooldownMinutes = Number(body?.rewardCooldownMinutes);
   const maxRewardedGamesPerDay = Number(body?.maxRewardedGamesPerDay);
   const huntMaxGuesses = Number(body?.huntMaxGuesses);
   const huntWinRadiusKm = Number(body?.huntWinRadiusKm);
   const huntStateClueGuess = Number(body?.huntStateClueGuess);
   const huntCityClueGuess = Number(body?.huntCityClueGuess);
-  if (![yerbPerPoint, dailyCapYerb, perGameCapYerb].every((value) => Number.isFinite(value) && value >= 0)) throw new Error('Reward rate and caps must be non-negative numbers.');
+  if (![classicPerfectRewardYerb, huntPerfectRewardYerb, dailyPerfectRewardYerb, dailyCapYerb].every((value) => Number.isFinite(value) && value >= 0)) throw new Error('Game reward values and daily cap must be non-negative numbers.');
   if (!Number.isInteger(rewardCooldownMinutes) || rewardCooldownMinutes < 0) throw new Error('Reward cooldown must be a non-negative whole number of minutes.');
   if (!Number.isInteger(maxRewardedGamesPerDay) || maxRewardedGamesPerDay < 0) throw new Error('Daily rewarded-game limit must be a non-negative whole number.');
   if (!Number.isInteger(huntMaxGuesses) || huntMaxGuesses < 1 || huntMaxGuesses > 25) throw new Error('Hunt maximum guesses must be between 1 and 25.');
@@ -25,7 +28,11 @@ function cleanPolicy(body: any): GameRewardPolicy {
   if (!Number.isInteger(huntCityClueGuess) || huntCityClueGuess < 1 || huntCityClueGuess > huntMaxGuesses) throw new Error('City clue guess must be within the Hunt guess limit.');
   return {
     enabled: Boolean(body?.enabled), classicEnabled: body?.classicEnabled !== false, huntEnabled: body?.huntEnabled !== false, dailyEnabled: body?.dailyEnabled !== false,
-    yerbPerPoint, dailyCapYerb, perGameCapYerb, reviewRequired: body?.reviewRequired !== false,
+    yerbPerPoint: Number.isFinite(yerbPerPoint) && yerbPerPoint >= 0 ? yerbPerPoint : 0,
+    classicPerfectRewardYerb, huntPerfectRewardYerb, dailyPerfectRewardYerb,
+    dailyCapYerb,
+    perGameCapYerb: Number.isFinite(perGameCapYerb) && perGameCapYerb >= 0 ? perGameCapYerb : 0,
+    reviewRequired: body?.reviewRequired !== false,
     rewardCooldownMinutes, maxRewardedGamesPerDay, huntMaxGuesses, huntWinRadiusKm, huntStateClueGuess, huntCityClueGuess,
   };
 }
