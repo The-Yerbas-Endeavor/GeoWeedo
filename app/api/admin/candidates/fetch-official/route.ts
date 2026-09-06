@@ -11,6 +11,7 @@ import { fetchDelawareCandidates } from '@/lib/officialSources/delaware';
 import { fetchFloridaCandidates } from '@/lib/officialSources/florida';
 import { fetchHawaiiCandidates } from '@/lib/officialSources/hawaii';
 import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
+import { fetchLouisianaCandidates } from '@/lib/officialSources/louisiana';
 import { fetchMaineCandidates } from '@/lib/officialSources/maine';
 import { fetchMarylandCandidates } from '@/lib/officialSources/maryland';
 import { fetchMichiganCandidates } from '@/lib/officialSources/michigan';
@@ -53,6 +54,7 @@ const officialSources=[
  {preset:'colorado-med',label:'Colorado MED',fetcher:fetchColoradoCandidates},
  {preset:'florida-ommu',label:'Florida OMMU',fetcher:fetchFloridaCandidates},
  {preset:'hawaii-doh',label:'Hawaii DOH',fetcher:fetchHawaiiCandidates},
+ {preset:'louisiana-ldh',label:'Louisiana LDH',fetcher:fetchLouisianaCandidates},
  {preset:'massachusetts-ccc',label:'Massachusetts CCC',fetcher:fetchMassachusetts},
  {preset:'illinois-idfpr',label:'Illinois IDFPR',fetcher:fetchIllinoisCandidates},
  {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
