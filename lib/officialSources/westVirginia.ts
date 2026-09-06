@@ -14,7 +14,7 @@ type WestVirginiaCandidate={
   imageryStatus:'missing_coordinates';
 };
 
-const SOURCE_URL='https://omc.wv.gov/PublishingImages/Lists/Accordion/NewForm/Copy%20WV%20Medical%20Cannabis%20Facilities%20-%20Dispensary%20List.pdf';
+const SOURCE_URL='https://omc.wv.gov/PublishingImages/Lists/Accordion/NewForm/Copy%20of%20WV%20Medical%20Cannabis%20Facilities%20-%20Dispensary%20List.pdf';
 
 function clean(value:string){return value.replace(/\u00bd/g,'1/2').replace(/\s+/g,' ').trim();}
 function phoneLine(value:string){return /^\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4}$/.test(value);}
@@ -22,7 +22,7 @@ function headerLine(value:string){return /^DISPENSARIES$/i.test(value)||/^Dispen
 function websiteLine(value:string){return /^(?:https?:\/\/|www\.)\S+$/i.test(value);}
 function cityHint(name:string){const match=name.match(/\s+-\s+([^–—-]+)$/);return match?.[1]?.trim();}
 
-function parseAddress(value:string,name:string){
+function parseAddress(value:string,name:string):{streetAddress:string;city?:string}{
  const normalized=clean(value).replace(/\s+-\s+[A-Za-z][A-Za-z .'-]*$/,'').trim();
  const state=normalized.match(/^(.*?)\s*,?\s*WV(?:\s+(\d{5}(?:-\d{4})?))?$/i);
  if(!state)return{streetAddress:normalized};
