@@ -19,6 +19,14 @@ The importer keeps licensed private non-medical cannabis retailers, including es
 
 The importer is fail-closed: if the government page changes and no valid licensed retail rows can be parsed, GeoWeedo rejects the sync instead of importing an empty or unverified result.
 
+## Kentucky
+
+`/admin/data` includes a direct Kentucky Medical Cannabis Program import from the official **Find a Dispensary** page.
+
+The importer keeps dispensaries the state explicitly identifies as open and operating, using the published storefront name, street address, and city. Kentucky does not publish coordinates in that operational list, so imported candidates enter Automated Enrichment before imagery review.
+
+The importer is fail-closed: if the state page layout changes or fewer than 20 recognizable operational dispensaries can be parsed, GeoWeedo rejects the sync rather than accepting a likely partial result.
+
 ## Rhode Island
 
 `/admin/data` includes a direct Rhode Island Cannabis Control Commission import from the official Licensed Compassion Centers page.
