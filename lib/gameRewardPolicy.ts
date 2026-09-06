@@ -7,6 +7,7 @@ export type GameRewardPolicy = {
   huntEnabled: boolean;
   dailyEnabled: boolean;
   yerbPerPoint: number;
+  dailyPerfectRewardYerb: number;
   dailyCapYerb: number;
   perGameCapYerb: number;
   reviewRequired: boolean;
@@ -24,6 +25,7 @@ export const DEFAULT_GAME_REWARD_POLICY: GameRewardPolicy = {
   huntEnabled: true,
   dailyEnabled: true,
   yerbPerPoint: Number(process.env.NEXT_PUBLIC_YERB_PER_POINT || 0.0004),
+  dailyPerfectRewardYerb: 2,
   dailyCapYerb: Number(process.env.NEXT_PUBLIC_YERB_DAILY_CAP || 25),
   perGameCapYerb: 10,
   reviewRequired: true,
@@ -66,6 +68,7 @@ export function getGameRewardPolicy(): GameRewardPolicy {
       huntEnabled: value.huntEnabled !== false,
       dailyEnabled: value.dailyEnabled !== false,
       yerbPerPoint: finiteNonNegative(value.yerbPerPoint, DEFAULT_GAME_REWARD_POLICY.yerbPerPoint),
+      dailyPerfectRewardYerb: finiteNonNegative(value.dailyPerfectRewardYerb, DEFAULT_GAME_REWARD_POLICY.dailyPerfectRewardYerb),
       dailyCapYerb: finiteNonNegative(value.dailyCapYerb, DEFAULT_GAME_REWARD_POLICY.dailyCapYerb),
       perGameCapYerb: finiteNonNegative(value.perGameCapYerb, DEFAULT_GAME_REWARD_POLICY.perGameCapYerb),
       reviewRequired: value.reviewRequired !== false,
@@ -97,6 +100,12 @@ export function calculateGameReward(score: number, policy = getGameRewardPolicy(
   const safeScore = Math.max(0, Math.min(25000, Number(score) || 0));
   const raw = safeScore * policy.yerbPerPoint;
   return Number(Math.min(raw, policy.perGameCapYerb).toFixed(8));
+}
+
+export function calculateDailyReward(score: number, policy = getGameRewardPolicy()) {
+  if (!policy.enabled || !policy.dailyEnabled) return 0;
+  const safeScore = Math.max(0, Math.min(5000, Number(score) || 0));
+  return Number(((safeScore / 5000) * policy.dailyPerfectRewardYerb).toFixed(8));
 }
 
 export function getGameplayRewardTimingStatus(walletId: string, policy = getGameRewardPolicy()) {
