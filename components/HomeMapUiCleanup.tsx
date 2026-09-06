@@ -61,30 +61,9 @@ function syncSearchPanels(){
   if(browser)browser.setAttribute('aria-label',active?'Browse dispensaries — minimized search results':'Browse dispensaries');
 }
 
-function bindSearchAction(card:HTMLElement){
-  if(card.dataset.searchBound==='1')return;
-  card.dataset.searchBound='1';
-  const shell=card.querySelector<HTMLElement>('.home-promo-shell');
-  if(!shell)return;
-  let search=shell.querySelector<HTMLButtonElement>('.home-promo-search');
-  const play=shell.querySelector<HTMLElement>('.home-promo-play');
-  if(!search){
-    search=document.createElement('button');
-    search.type='button';
-    search.className='home-promo-search';
-  }
-  search.textContent='Findo Weedo';
-  if(play?.parentElement===shell){
-    play.insertAdjacentElement('beforebegin',search);
-  }else if(!search.parentElement){
-    shell.appendChild(search);
-  }
-  search.addEventListener('click',()=>{
-    document.body.classList.remove(SEARCH_ACTIVE_CLASS);
-    const close=card.querySelector<HTMLButtonElement>('.home-promo-close');
-    close?.click();
-    window.setTimeout(openBrowsePanel,75);
-  });
+function removeLegacyPromoSearch(card:HTMLElement){
+  card.querySelectorAll<HTMLElement>('.home-promo-search').forEach(button=>button.remove());
+  card.removeAttribute('data-search-bound');
 }
 
 function bindMapSearch(input:HTMLInputElement){
@@ -181,7 +160,7 @@ export default function HomeMapUiCleanup(){
     };
     const bind=()=>{
       initializeBrowsePanel();initializePromo();zoomHomeMapOnce();
-      const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){bindSearchAction(card);bindPromoDrag(card);}
+      const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}
       const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);
       syncSearchPanels();
     };
