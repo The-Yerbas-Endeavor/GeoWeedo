@@ -30,6 +30,7 @@ import { fetchRhodeIslandCandidates } from '@/lib/officialSources/rhodeIsland';
 import { fetchUtahCandidates } from '@/lib/officialSources/utah';
 import { fetchVermontCandidates } from '@/lib/officialSources/vermont';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
+import { fetchWestVirginiaCandidates } from '@/lib/officialSources/westVirginia';
 
 export const runtime='nodejs';
 type CandidateRow={name:string;streetAddress?:string;city?:string;region?:string;country:string;latitude?:number;longitude?:number;website?:string;licenseNumber?:string;dataSource:string;sourceUrl:string;sourceLicense:string;imageryStatus:'unchecked'|'missing_coordinates'};
@@ -81,6 +82,7 @@ const officialSources=[
  {preset:'rhode-island-ccc',label:'Rhode Island CCC',fetcher:fetchRhodeIslandCandidates},
  {preset:'vermont-ccb',label:'Vermont CCB',fetcher:fetchVermontCandidates},
  {preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginiaCandidates},
+ {preset:'west-virginia-omc',label:'West Virginia OMC',fetcher:fetchWestVirginiaCandidates},
  {preset:'delaware-omc',label:'Delaware OMC',fetcher:fetchDelawareCandidates},
  {preset:'maine-ocp',label:'Maine OCP',fetcher:fetchMaineCandidates},
  {preset:'maryland-mca',label:'Maryland MCA',fetcher:fetchMarylandCandidates},
