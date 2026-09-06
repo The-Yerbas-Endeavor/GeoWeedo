@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureFinanceSchema, postSystemLedgerEntry } from '@/lib/financeLedger';
-import { calculateGameReward, getGameRewardPolicy, getGameplayRewardTimingStatus } from '@/lib/gameRewardPolicy';
+import { calculateClassicReward, getGameRewardPolicy, getGameplayRewardTimingStatus } from '@/lib/gameRewardPolicy';
 import { getDatabase } from '@/lib/sqlite';
 import { getUserFromRequest } from '@/lib/userAuth';
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ gameId, totalScore, amountYerb: 0, status: blockedStatus, retryAfterSeconds: timing.retryAfterSeconds, rewardedGamesToday: timing.rewardedGamesToday }, { status: 201 });
   }
 
-  const baseReward = calculateGameReward(totalScore, policy);
+  const baseReward = calculateClassicReward(totalScore, policy);
   const today = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
   const daily = db.prepare(`SELECT COALESCE(SUM(amount_atomic),0) AS amount FROM wallet_ledger WHERE wallet_id=? AND reference_type='game_reward' AND status IN ('pending','held','posted') AND created_at>=?`).get(user.walletId, today) as any;
   const usedToday = Number(daily?.amount || 0) / ATOMIC;
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     scores.forEach((score: number, index: number) => insertRound.run(`round-${crypto.randomUUID()}`, gameId, dispensaryIds[index], index + 1, score, startedAt, now));
     if (amountAtomic > 0) {
       const ledgerId = `ledger-${crypto.randomUUID()}`;
-      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'GeoWeedo gameplay reward',?,?,?)`).run(ledgerId, user.walletId, ledgerStatus === 'posted' ? 'reward_credit' : 'reward_pending', amountAtomic, ledgerStatus, gameId, JSON.stringify({ mode:'standard', totalScore, rounds: scores.length, reviewRequired: policy.reviewRequired }), now, ledgerStatus === 'posted' ? now : null);
+      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'GeoWeedo gameplay reward',?,?,?)`).run(ledgerId, user.walletId, ledgerStatus === 'posted' ? 'reward_credit' : 'reward_pending', amountAtomic, ledgerStatus, gameId, JSON.stringify({ mode:'standard', totalScore, rounds: scores.length, perfectRewardYerb: policy.classicPerfectRewardYerb, reviewRequired: policy.reviewRequired }), now, ledgerStatus === 'posted' ? now : null);
       db.prepare(`INSERT INTO reward_claims (id,user_id,game_id,wallet_id,amount_atomic,status,ledger_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(`claim-${crypto.randomUUID()}`, user.id, gameId, user.walletId, amountAtomic, ledgerStatus, ledgerId, now, now);
       if (ledgerStatus === 'posted') postSystemLedgerEntry({ accountCode: 'rewards_pool', entryType: 'reward_expense', amountAtomic: -amountAtomic, referenceType: 'game_reward', referenceId: gameId, memo: 'GeoWeedo gameplay reward', metadata: { userId: user.id, mode:'standard', totalScore } }, db);
     }
