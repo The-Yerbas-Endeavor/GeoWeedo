@@ -7,6 +7,8 @@ export type GameRewardPolicy = {
   huntEnabled: boolean;
   dailyEnabled: boolean;
   yerbPerPoint: number;
+  classicPerfectRewardYerb: number;
+  huntPerfectRewardYerb: number;
   dailyPerfectRewardYerb: number;
   dailyCapYerb: number;
   perGameCapYerb: number;
@@ -25,6 +27,8 @@ export const DEFAULT_GAME_REWARD_POLICY: GameRewardPolicy = {
   huntEnabled: true,
   dailyEnabled: true,
   yerbPerPoint: Number(process.env.NEXT_PUBLIC_YERB_PER_POINT || 0.0004),
+  classicPerfectRewardYerb: 10,
+  huntPerfectRewardYerb: 2,
   dailyPerfectRewardYerb: 2,
   dailyCapYerb: Number(process.env.NEXT_PUBLIC_YERB_DAILY_CAP || 25),
   perGameCapYerb: 10,
@@ -62,15 +66,19 @@ export function getGameRewardPolicy(): GameRewardPolicy {
   if (!row?.value_json) return DEFAULT_GAME_REWARD_POLICY;
   try {
     const value = JSON.parse(row.value_json) as Partial<GameRewardPolicy>;
+    const legacyRate = finiteNonNegative(value.yerbPerPoint, DEFAULT_GAME_REWARD_POLICY.yerbPerPoint);
+    const legacyCap = finiteNonNegative(value.perGameCapYerb, DEFAULT_GAME_REWARD_POLICY.perGameCapYerb);
     return {
       enabled: value.enabled !== false,
       classicEnabled: value.classicEnabled !== false,
       huntEnabled: value.huntEnabled !== false,
       dailyEnabled: value.dailyEnabled !== false,
-      yerbPerPoint: finiteNonNegative(value.yerbPerPoint, DEFAULT_GAME_REWARD_POLICY.yerbPerPoint),
-      dailyPerfectRewardYerb: finiteNonNegative(value.dailyPerfectRewardYerb, DEFAULT_GAME_REWARD_POLICY.dailyPerfectRewardYerb),
+      yerbPerPoint: legacyRate,
+      classicPerfectRewardYerb: finiteNonNegative(value.classicPerfectRewardYerb, Math.min(25000 * legacyRate, legacyCap)),
+      huntPerfectRewardYerb: finiteNonNegative(value.huntPerfectRewardYerb, Math.min(5000 * legacyRate, legacyCap)),
+      dailyPerfectRewardYerb: finiteNonNegative(value.dailyPerfectRewardYerb, Math.min(5000 * legacyRate, legacyCap)),
       dailyCapYerb: finiteNonNegative(value.dailyCapYerb, DEFAULT_GAME_REWARD_POLICY.dailyCapYerb),
-      perGameCapYerb: finiteNonNegative(value.perGameCapYerb, DEFAULT_GAME_REWARD_POLICY.perGameCapYerb),
+      perGameCapYerb: legacyCap,
       reviewRequired: value.reviewRequired !== false,
       rewardCooldownMinutes: integerNonNegative(value.rewardCooldownMinutes, DEFAULT_GAME_REWARD_POLICY.rewardCooldownMinutes),
       maxRewardedGamesPerDay: integerNonNegative(value.maxRewardedGamesPerDay, DEFAULT_GAME_REWARD_POLICY.maxRewardedGamesPerDay),
@@ -95,17 +103,29 @@ export function saveGameRewardPolicy(policy: GameRewardPolicy, adminId: string) 
   return policy;
 }
 
-export function calculateGameReward(score: number, policy = getGameRewardPolicy()) {
-  if (!policy.enabled) return 0;
-  const safeScore = Math.max(0, Math.min(25000, Number(score) || 0));
-  const raw = safeScore * policy.yerbPerPoint;
-  return Number(Math.min(raw, policy.perGameCapYerb).toFixed(8));
+function proportionalReward(score: number, perfectScore: number, perfectRewardYerb: number) {
+  const safeScore = Math.max(0, Math.min(perfectScore, Number(score) || 0));
+  return Number(((safeScore / perfectScore) * perfectRewardYerb).toFixed(8));
+}
+
+export function calculateClassicReward(score: number, policy = getGameRewardPolicy()) {
+  if (!policy.enabled || !policy.classicEnabled) return 0;
+  return proportionalReward(score, 25000, policy.classicPerfectRewardYerb);
+}
+
+export function calculateHuntReward(score: number, policy = getGameRewardPolicy()) {
+  if (!policy.enabled || !policy.huntEnabled) return 0;
+  return proportionalReward(score, 5000, policy.huntPerfectRewardYerb);
 }
 
 export function calculateDailyReward(score: number, policy = getGameRewardPolicy()) {
   if (!policy.enabled || !policy.dailyEnabled) return 0;
-  const safeScore = Math.max(0, Math.min(5000, Number(score) || 0));
-  return Number(((safeScore / 5000) * policy.dailyPerfectRewardYerb).toFixed(8));
+  return proportionalReward(score, 5000, policy.dailyPerfectRewardYerb);
+}
+
+// Backward-compatible helper for older callers. New code should use a mode-specific calculator.
+export function calculateGameReward(score: number, policy = getGameRewardPolicy()) {
+  return calculateClassicReward(score, policy);
 }
 
 export function getGameplayRewardTimingStatus(walletId: string, policy = getGameRewardPolicy()) {
