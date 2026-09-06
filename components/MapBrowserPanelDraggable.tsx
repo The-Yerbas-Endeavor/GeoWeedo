@@ -14,6 +14,7 @@ export default function MapBrowserPanelDraggable(){
       if(!handle)return;
       let dragging=false,startX=0,startY=0,startLeft=0,startTop=0;
       const down=(event:PointerEvent)=>{
+        if(window.innerWidth<=650)return;
         if(event.button!==0||(event.target as HTMLElement).closest('button,a,input,select'))return;
         const rect=panel.getBoundingClientRect();
         dragging=true;startX=event.clientX;startY=event.clientY;startLeft=rect.left;startTop=rect.top;
