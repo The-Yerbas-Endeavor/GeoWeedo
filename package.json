@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "deploy": "bash scripts/deploy-no-downtime.sh",
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "bash scripts/create-admin.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
