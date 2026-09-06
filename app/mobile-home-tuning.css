@@ -1,0 +1,30 @@
+@media (max-width:650px){
+  /* Keep the browse/search controls visually behind the gameplay card. */
+  .map-first-home .map-browser-tools,
+  .map-first-home .map-layers-panel,
+  .map-first-home .map-data-status,
+  .map-first-home .map-hint{z-index:2!important}
+
+  .map-first-home .home-play-card.home-play-card-promo{
+    z-index:50!important;
+    width:min(82vw,504px)!important;
+    max-height:74vh!important;
+    padding:12px 11px 11px!important;
+  }
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-shell{gap:8px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-logo{width:min(300px,82%)!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-kicker{font-size:13px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-intro p{font-size:11px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-play,
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-search{min-height:42px!important;font-size:13px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-stats{gap:4px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-stat{min-height:61px!important;padding:6px 3px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-stat-icon{font-size:13px!important}
+  .map-first-home .home-play-card.home-play-card-promo .home-promo-stat strong{font-size:15px!important}
+  .map-first-home .home-play-card.home-play-card-promo .game-selector{gap:7px!important}
+  .map-first-home .home-play-card.home-play-card-promo .game-selector-card{min-height:63px!important;padding:8px 9px!important}
+}
+
+@media (max-width:430px){
+  .map-first-home .home-play-card.home-play-card-promo{width:84vw!important;max-height:76vh!important}
+}
