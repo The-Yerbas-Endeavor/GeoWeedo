@@ -14,6 +14,7 @@ import { fetchMichiganCandidates } from '@/lib/officialSources/michigan';
 import { fetchMinnesotaCandidates } from '@/lib/officialSources/minnesota';
 import { fetchMissouriCandidates } from '@/lib/officialSources/missouri';
 import { fetchNewJerseyCandidates } from '@/lib/officialSources/newJersey';
+import { fetchNewMexicoCandidates } from '@/lib/officialSources/newMexico';
 import { fetchRhodeIslandCandidates } from '@/lib/officialSources/rhodeIsland';
 import { fetchVermontCandidates } from '@/lib/officialSources/vermont';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
@@ -51,6 +52,7 @@ const officialSources=[
  {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
  {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticutCandidates},
  {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
+ {preset:'new-mexico-ccd',label:'New Mexico CCD',fetcher:fetchNewMexicoCandidates},
  {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
  {preset:'rhode-island-ccc',label:'Rhode Island CCC',fetcher:fetchRhodeIslandCandidates},
  {preset:'vermont-ccb',label:'Vermont CCB',fetcher:fetchVermontCandidates},
