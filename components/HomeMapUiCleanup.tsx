@@ -40,12 +40,14 @@ function zoomHomeMapOnce(){
   zoomIn.click();
 }
 
+function minimizeGameplayCard(){
+  const promo=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
+  promo?.querySelector<HTMLButtonElement>('.home-promo-close')?.click();
+}
+
 function minimizeSearchPanels(active:boolean){
   document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
-  if(active){
-    const promo=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');
-    promo?.querySelector<HTMLButtonElement>('.home-promo-close')?.click();
-  }
+  if(active)minimizeGameplayCard();
   const browser=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
   browser?.classList.toggle('map-browser-panel-search-minimized',active);
   if(browser){
@@ -106,6 +108,22 @@ function bindMapSearch(input:HTMLInputElement){
   });
 }
 
+function focusSelectedState(select:HTMLSelectElement){
+  const state=select.value.trim();
+  if(!state||state==='all')return;
+  minimizeGameplayCard();
+  openBrowsePanel();
+  let attempts=0;
+  const focus=()=>{
+    const heads=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-state-head'));
+    const target=heads.find(button=>button.querySelector('strong')?.textContent?.trim()===state);
+    if(target){target.click();return;}
+    attempts+=1;
+    if(attempts<12)window.setTimeout(focus,50);
+  };
+  window.setTimeout(focus,20);
+}
+
 function bindPromoDrag(card:HTMLElement){
   if(card.dataset.dragBound==='1')return;
   card.dataset.dragBound='1';
@@ -164,9 +182,14 @@ export default function HomeMapUiCleanup(){
       const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);
       syncSearchPanels();
     };
+    const onChange=(event:Event)=>{
+      const target=event.target;
+      if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]'))focusSelectedState(target);
+    };
+    document.addEventListener('change',onChange);
     bind();const observer=new MutationObserver(bind);observer.observe(document.body,{subtree:true,childList:true});
     const fallback=window.setTimeout(()=>document.body.classList.add('geoweedo-home-browse-ready'),600);
-    return()=>{observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS);};
+    return()=>{document.removeEventListener('change',onChange);observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS);};
   },[]);
   return null;
 }
