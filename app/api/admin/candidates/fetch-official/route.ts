@@ -14,6 +14,7 @@ import { fetchMinnesotaCandidates } from '@/lib/officialSources/minnesota';
 import { fetchMissouriCandidates } from '@/lib/officialSources/missouri';
 import { fetchNewJerseyCandidates } from '@/lib/officialSources/newJersey';
 import { fetchRhodeIslandCandidates } from '@/lib/officialSources/rhodeIsland';
+import { fetchVermontCandidates } from '@/lib/officialSources/vermont';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
 
 export const runtime='nodejs';
@@ -50,6 +51,7 @@ const officialSources=[
  {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
  {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
  {preset:'rhode-island-ccc',label:'Rhode Island CCC',fetcher:fetchRhodeIslandCandidates},
+ {preset:'vermont-ccb',label:'Vermont CCB',fetcher:fetchVermontCandidates},
  {preset:'virginia-cca',label:'Virginia CCA',fetcher:fetchVirginiaCandidates},
  {preset:'delaware-omc',label:'Delaware OMC',fetcher:fetchDelawareCandidates},
  {preset:'maine-ocp',label:'Maine OCP',fetcher:fetchMaineCandidates},
