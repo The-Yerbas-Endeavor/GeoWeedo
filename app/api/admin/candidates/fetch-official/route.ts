@@ -26,6 +26,7 @@ import { fetchOklahomaCandidates } from '@/lib/officialSources/oklahoma';
 import { fetchPennsylvaniaCandidates } from '@/lib/officialSources/pennsylvania';
 import { fetchSouthDakotaCandidates } from '@/lib/officialSources/southDakota';
 import { fetchRhodeIslandCandidates } from '@/lib/officialSources/rhodeIsland';
+import { fetchUtahCandidates } from '@/lib/officialSources/utah';
 import { fetchVermontCandidates } from '@/lib/officialSources/vermont';
 import { fetchVirginiaCandidates } from '@/lib/officialSources/virginia';
 
@@ -73,6 +74,7 @@ const officialSources=[
  {preset:'oklahoma-omma',label:'Oklahoma OMMA',fetcher:fetchOklahomaCandidates},
  {preset:'pennsylvania-doh',label:'Pennsylvania DOH',fetcher:fetchPennsylvaniaCandidates},
  {preset:'south-dakota-doh',label:'South Dakota DOH',fetcher:fetchSouthDakotaCandidates},
+ {preset:'utah-udaf',label:'Utah UDAF',fetcher:fetchUtahCandidates},
  {preset:'montana-dor',label:'Montana DOR',fetcher:fetchMontana},
  {preset:'rhode-island-ccc',label:'Rhode Island CCC',fetcher:fetchRhodeIslandCandidates},
  {preset:'vermont-ccb',label:'Vermont CCB',fetcher:fetchVermontCandidates},
