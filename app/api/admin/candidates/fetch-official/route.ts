@@ -9,6 +9,7 @@ import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchConnecticutCandidates } from '@/lib/officialSources/connecticut';
 import { fetchDelawareCandidates } from '@/lib/officialSources/delaware';
 import { fetchFloridaCandidates } from '@/lib/officialSources/florida';
+import { fetchGeorgiaCandidates } from '@/lib/officialSources/georgia';
 import { fetchHawaiiCandidates } from '@/lib/officialSources/hawaii';
 import { fetchIllinoisCandidates } from '@/lib/officialSources/illinois';
 import { fetchIowaCandidates } from '@/lib/officialSources/iowa';
@@ -63,6 +64,7 @@ const officialSources=[
  {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
  {preset:'colorado-med',label:'Colorado MED',fetcher:fetchColoradoCandidates},
  {preset:'florida-ommu',label:'Florida OMMU',fetcher:fetchFloridaCandidates},
+ {preset:'georgia-gmcc',label:'Georgia GMCC',fetcher:fetchGeorgiaCandidates},
  {preset:'hawaii-doh',label:'Hawaii DOH',fetcher:fetchHawaiiCandidates},
  {preset:'iowa-hhs',label:'Iowa HHS',fetcher:fetchIowaCandidates},
  {preset:'kentucky-kymedcan',label:'Kentucky Medical Cannabis',fetcher:fetchKentuckyCandidates},
