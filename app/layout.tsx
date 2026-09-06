@@ -15,6 +15,7 @@ import './mobile-game-map.css';
 import './mobile-home-mode.css';
 import './enabled-browse-filter.css';
 import './home-play-promo.css';
+import './mobile-home-tuning.css';
 import './pending-game-reward.css';
 import './game-branding.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
