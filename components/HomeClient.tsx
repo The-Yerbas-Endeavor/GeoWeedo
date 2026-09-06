@@ -45,7 +45,7 @@ export default function HomeClient({initialApprovedDispensaries}:Props){
  },[started,gameId,gameStartedAt,gameRounds,round,scores,rewardPolicy.enabled,rewardSubmission]);
 
  const beginGame=()=>{const randomized=shuffle(playableLocations).slice(0,Math.min(5,playableLocations.length));setGameRounds(randomized);setGameId(`game-${crypto.randomUUID()}`);setGameStartedAt(new Date().toISOString());setRewardSubmission(null);setStarted(true);setRound(0);setScores([]);setGuess(null);setRevealed(false);setRoundDistance(null);setRoundScore(null);setGuessMapOpen(false);};
- const openFindo=()=>setHomeCardOpen(false);
+ const openFindo=()=>{setHomeCardOpen(false);window.requestAnimationFrame(()=>{if(document.querySelector('.map-browser-panel'))return;const button=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-browser-tools button')).find(item=>item.textContent?.trim().startsWith('List ('));button?.click();});};
  const backToMap=()=>{setStarted(false);setRound(0);setScores([]);setGuess(null);setRevealed(false);setRoundDistance(null);setRoundScore(null);setGameRounds([]);setGameId(null);setGameStartedAt(null);setRewardSubmission(null);setHomeCardOpen(false);setGuessMapOpen(false);};
  const revealGuess=()=>{if(!guess||!current)return;const distance=distanceKm(guess,{lat:current.latitude,lng:current.longitude});setRoundDistance(distance);setRoundScore(scoreFromDistance(distance));setRevealed(true);setGuessMapOpen(true);};
  const nextRound=()=>{if(roundScore===null)return;setScores(p=>[...p,roundScore]);setRound(p=>p+1);setGuess(null);setRevealed(false);setRoundDistance(null);setRoundScore(null);setGuessMapOpen(false);};
