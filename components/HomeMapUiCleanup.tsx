@@ -3,6 +3,7 @@
 import { useLayoutEffect } from 'react';
 
 const SEARCH_ACTIVE_CLASS='geoweedo-map-search-active';
+const FINDO_ACTIVE_CLASS='geoweedo-findo-active';
 
 function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value));}
 
@@ -13,22 +14,19 @@ function openBrowsePanel(){
     if(panel){
       panel.classList.remove('map-browser-panel-search-minimized');
       panel.setAttribute('aria-label','Browse dispensaries');
-      if(window.innerWidth<=760)window.setTimeout(()=>panel.scrollIntoView({block:'nearest',behavior:'smooth'}),30);
       return;
     }
-
     const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
     const listButton=buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\b/i.test(button.textContent?.trim()||''));
-    if(listButton){
-      listButton.click();
-      window.setTimeout(tryOpen,40);
-      return;
-    }
-
-    attempts+=1;
-    if(attempts<12)window.setTimeout(tryOpen,50);
+    if(listButton){listButton.click();window.setTimeout(tryOpen,40);return;}
+    attempts+=1;if(attempts<12)window.setTimeout(tryOpen,50);
   };
   tryOpen();
+}
+
+function activateFindo(){
+  document.body.classList.add(FINDO_ACTIVE_CLASS);
+  openBrowsePanel();
 }
 
 function zoomHomeMapOnce(){
@@ -36,8 +34,7 @@ function zoomHomeMapOnce(){
   if(!canvas||canvas.dataset.homeZoomApplied==='1')return;
   const zoomIn=document.querySelector<HTMLButtonElement>('.map-first-home .maplibregl-ctrl-zoom-in');
   if(!zoomIn)return;
-  canvas.dataset.homeZoomApplied='1';
-  zoomIn.click();
+  canvas.dataset.homeZoomApplied='1';zoomIn.click();
 }
 
 function minimizeGameplayCard(){
@@ -50,9 +47,7 @@ function minimizeSearchPanels(active:boolean){
   if(active)minimizeGameplayCard();
   const browser=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
   browser?.classList.toggle('map-browser-panel-search-minimized',active);
-  if(browser){
-    browser.setAttribute('aria-label',active?'Browse dispensaries — minimized search results':'Browse dispensaries');
-  }
+  if(browser)browser.setAttribute('aria-label',active?'Browse dispensaries — minimized search results':'Browse dispensaries');
 }
 
 function syncSearchPanels(){
@@ -63,117 +58,47 @@ function syncSearchPanels(){
   if(browser)browser.setAttribute('aria-label',active?'Browse dispensaries — minimized search results':'Browse dispensaries');
 }
 
-function removeLegacyPromoSearch(card:HTMLElement){
-  card.querySelectorAll<HTMLElement>('.home-promo-search').forEach(button=>button.remove());
-  card.removeAttribute('data-search-bound');
-}
+function removeLegacyPromoSearch(card:HTMLElement){card.querySelectorAll<HTMLElement>('.home-promo-search').forEach(button=>button.remove());card.removeAttribute('data-search-bound');}
 
 function bindMapSearch(input:HTMLInputElement){
   if(input.dataset.zipSearchBound==='1')return;
-  input.dataset.zipSearchBound='1';
-  input.placeholder='Search dispensary or ZIP code';
-  input.setAttribute('aria-label','Search dispensary or ZIP code');
-  let lookupTimer:number|undefined;
-  let lastZip='';
+  input.dataset.zipSearchBound='1';input.placeholder='Search dispensary or ZIP code';input.setAttribute('aria-label','Search dispensary or ZIP code');
+  let lookupTimer:number|undefined,lastZip='';
   input.addEventListener('input',()=>{
-    window.clearTimeout(lookupTimer);
-    const value=input.value.trim();
-    minimizeSearchPanels(Boolean(value));
+    window.clearTimeout(lookupTimer);const value=input.value.trim();minimizeSearchPanels(Boolean(value));
     const zipMatch=value.match(/^\d{5}(?:-\d{4})?$/);
-    if(!zipMatch){
-      if(lastZip)window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));
-      lastZip='';
-      input.removeAttribute('title');
-      return;
-    }
-    const zip=zipMatch[0].slice(0,5);
-    if(zip===lastZip)return;
+    if(!zipMatch){if(lastZip)window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));lastZip='';input.removeAttribute('title');return;}
+    const zip=zipMatch[0].slice(0,5);if(zip===lastZip)return;
     lookupTimer=window.setTimeout(()=>{
       fetch(`/api/zip-lookup?zip=${encodeURIComponent(zip)}`,{cache:'no-store'})
         .then(async response=>{const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'ZIP code not found.');return data;})
-        .then(data=>{
-          if(input.value.trim().slice(0,5)!==zip)return;
-          const latitude=Number(data.latitude),longitude=Number(data.longitude);
-          if(!Number.isFinite(latitude)||!Number.isFinite(longitude))throw new Error('ZIP coordinates unavailable.');
-          lastZip=zip;
-          input.title=`Showing mapped dispensaries within 50 miles of ZIP ${zip}`;
-          window.dispatchEvent(new CustomEvent('geoweedo:zip-radius',{detail:{zip,lat:latitude,lng:longitude,radiusMiles:50}}));
-          window.setTimeout(syncSearchPanels,0);
-        })
-        .catch(()=>{
-          lastZip='';
-          window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));
-        });
+        .then(data=>{if(input.value.trim().slice(0,5)!==zip)return;const latitude=Number(data.latitude),longitude=Number(data.longitude);if(!Number.isFinite(latitude)||!Number.isFinite(longitude))throw new Error('ZIP coordinates unavailable.');lastZip=zip;input.title=`Showing mapped dispensaries within 50 miles of ZIP ${zip}`;window.dispatchEvent(new CustomEvent('geoweedo:zip-radius',{detail:{zip,lat:latitude,lng:longitude,radiusMiles:50}}));window.setTimeout(syncSearchPanels,0);})
+        .catch(()=>{lastZip='';window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));});
     },180);
   });
 }
 
 function bindPromoDrag(card:HTMLElement){
-  if(card.dataset.dragBound==='1')return;
-  card.dataset.dragBound='1';
-  card.classList.add('home-promo-draggable');
-
-  if(window.innerWidth>650){
-    card.style.left='50%';
-    card.style.top='50%';
-    card.style.right='auto';
-    card.style.bottom='auto';
-    card.style.transform='translate(-50%,-50%)';
-  }
-
+  if(card.dataset.dragBound==='1')return;card.dataset.dragBound='1';card.classList.add('home-promo-draggable');
+  if(window.innerWidth>650){card.style.left='50%';card.style.top='50%';card.style.right='auto';card.style.bottom='auto';card.style.transform='translate(-50%,-50%)';}
   let dragging=false,offsetX=0,offsetY=0,stage:HTMLElement|null=null;
-  const move=(event:PointerEvent)=>{
-    if(!dragging||!stage)return;
-    const stageRect=stage.getBoundingClientRect(),cardRect=card.getBoundingClientRect();
-    const x=clamp(event.clientX-stageRect.left-offsetX,8,Math.max(8,stageRect.width-cardRect.width-8));
-    const y=clamp(event.clientY-stageRect.top-offsetY,8,Math.max(8,stageRect.height-cardRect.height-8));
-    card.style.left=`${x}px`;card.style.top=`${y}px`;card.style.right='auto';card.style.bottom='auto';card.style.transform='none';
-  };
-  const stop=()=>{
-    if(!dragging)return;
-    dragging=false;card.classList.remove('home-promo-dragging');
-    window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop);window.removeEventListener('pointercancel',stop);
-  };
-  card.addEventListener('pointerdown',(event)=>{
-    if(window.innerWidth<=650||event.button!==0)return;
-    const target=event.target as HTMLElement|null;
-    if(target?.closest('button,a,input,select,textarea,[role="button"]'))return;
-    stage=card.closest<HTMLElement>('.home-map-stage');if(!stage)return;
-    const rect=card.getBoundingClientRect();offsetX=event.clientX-rect.left;offsetY=event.clientY-rect.top;dragging=true;card.classList.add('home-promo-dragging');event.preventDefault();
-    card.style.left=`${rect.left-stage.getBoundingClientRect().left}px`;
-    card.style.top=`${rect.top-stage.getBoundingClientRect().top}px`;
-    card.style.right='auto';card.style.bottom='auto';card.style.transform='none';
-    window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',stop,{once:true});window.addEventListener('pointercancel',stop,{once:true});
-  });
+  const move=(event:PointerEvent)=>{if(!dragging||!stage)return;const stageRect=stage.getBoundingClientRect(),cardRect=card.getBoundingClientRect();const x=clamp(event.clientX-stageRect.left-offsetX,8,Math.max(8,stageRect.width-cardRect.width-8));const y=clamp(event.clientY-stageRect.top-offsetY,8,Math.max(8,stageRect.height-cardRect.height-8));card.style.left=`${x}px`;card.style.top=`${y}px`;card.style.right='auto';card.style.bottom='auto';card.style.transform='none';};
+  const stop=()=>{if(!dragging)return;dragging=false;card.classList.remove('home-promo-dragging');window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop);window.removeEventListener('pointercancel',stop);};
+  card.addEventListener('pointerdown',(event)=>{if(window.innerWidth<=650||event.button!==0)return;const target=event.target as HTMLElement|null;if(target?.closest('button,a,input,select,textarea,[role="button"]'))return;stage=card.closest<HTMLElement>('.home-map-stage');if(!stage)return;const rect=card.getBoundingClientRect();offsetX=event.clientX-rect.left;offsetY=event.clientY-rect.top;dragging=true;card.classList.add('home-promo-dragging');event.preventDefault();card.style.left=`${rect.left-stage.getBoundingClientRect().left}px`;card.style.top=`${rect.top-stage.getBoundingClientRect().top}px`;card.style.right='auto';card.style.bottom='auto';card.style.transform='none';window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',stop,{once:true});window.addEventListener('pointercancel',stop,{once:true});});
 }
 
 export default function HomeMapUiCleanup(){
   useLayoutEffect(()=>{
     let browseInitialized=false,promoInitialized=false;
-    const initializeBrowsePanel=()=>{
-      if(browseInitialized)return;
-      const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');if(!panel)return;
-      panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();browseInitialized=true;document.body.classList.add('geoweedo-home-browse-ready');
-    };
-    const initializePromo=()=>{
-      if(promoInitialized)return;
-      const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}
-      const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();
-    };
-    const bind=()=>{
-      initializeBrowsePanel();initializePromo();zoomHomeMapOnce();
-      const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}
-      const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);
-      syncSearchPanels();
-    };
-    const onChange=(event:Event)=>{
-      const target=event.target;
-      if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]')&&target.value!=='all')minimizeGameplayCard();
-    };
-    document.addEventListener('change',onChange);
+    const initializeBrowsePanel=()=>{if(browseInitialized)return;const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');if(!panel)return;panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();browseInitialized=true;document.body.classList.add('geoweedo-home-browse-ready');};
+    const initializePromo=()=>{if(promoInitialized)return;const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();};
+    const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
+    const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo Weedo on the dispensary map"]'))window.setTimeout(activateFindo,0);};
+    const onChange=(event:Event)=>{const target=event.target;if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]')&&target.value!=='all')minimizeGameplayCard();};
+    document.addEventListener('click',onClick);document.addEventListener('change',onChange);
     bind();const observer=new MutationObserver(bind);observer.observe(document.body,{subtree:true,childList:true});
     const fallback=window.setTimeout(()=>document.body.classList.add('geoweedo-home-browse-ready'),600);
-    return()=>{document.removeEventListener('change',onChange);observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS);};
+    return()=>{document.removeEventListener('click',onClick);document.removeEventListener('change',onChange);observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS,FINDO_ACTIVE_CLASS);};
   },[]);
   return null;
 }
