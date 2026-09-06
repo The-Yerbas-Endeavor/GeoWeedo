@@ -12,6 +12,10 @@ export type GameRewardPolicy = {
   reviewRequired: boolean;
   rewardCooldownMinutes: number;
   maxRewardedGamesPerDay: number;
+  huntMaxGuesses: number;
+  huntWinRadiusKm: number;
+  huntStateClueGuess: number;
+  huntCityClueGuess: number;
 };
 
 export const DEFAULT_GAME_REWARD_POLICY: GameRewardPolicy = {
@@ -25,6 +29,10 @@ export const DEFAULT_GAME_REWARD_POLICY: GameRewardPolicy = {
   reviewRequired: true,
   rewardCooldownMinutes: 0,
   maxRewardedGamesPerDay: 0,
+  huntMaxGuesses: 10,
+  huntWinRadiusKm: 10,
+  huntStateClueGuess: 3,
+  huntCityClueGuess: 6,
 };
 
 const KEY = 'game_reward_policy';
@@ -36,6 +44,14 @@ function finiteNonNegative(value: unknown, fallback: number) {
 function integerNonNegative(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+function positiveInteger(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+function positiveNumber(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function getGameRewardPolicy(): GameRewardPolicy {
@@ -55,6 +71,10 @@ export function getGameRewardPolicy(): GameRewardPolicy {
       reviewRequired: value.reviewRequired !== false,
       rewardCooldownMinutes: integerNonNegative(value.rewardCooldownMinutes, DEFAULT_GAME_REWARD_POLICY.rewardCooldownMinutes),
       maxRewardedGamesPerDay: integerNonNegative(value.maxRewardedGamesPerDay, DEFAULT_GAME_REWARD_POLICY.maxRewardedGamesPerDay),
+      huntMaxGuesses: positiveInteger(value.huntMaxGuesses, DEFAULT_GAME_REWARD_POLICY.huntMaxGuesses),
+      huntWinRadiusKm: positiveNumber(value.huntWinRadiusKm, DEFAULT_GAME_REWARD_POLICY.huntWinRadiusKm),
+      huntStateClueGuess: positiveInteger(value.huntStateClueGuess, DEFAULT_GAME_REWARD_POLICY.huntStateClueGuess),
+      huntCityClueGuess: positiveInteger(value.huntCityClueGuess, DEFAULT_GAME_REWARD_POLICY.huntCityClueGuess),
     };
   } catch {
     return DEFAULT_GAME_REWARD_POLICY;
