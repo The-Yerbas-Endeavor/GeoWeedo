@@ -7,8 +7,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const sponsorships = await activeSponsorshipMap();
-  const initialApprovedDispensaries = (await readApprovedDispensaries())
+  const [sponsorships, approved] = await Promise.all([
+    activeSponsorshipMap(),
+    readApprovedDispensaries(),
+  ]);
+
+  const initialApprovedDispensaries = approved
     .filter((item) => item.verified && item.active)
     .map((item) => {
       const sponsorship = sponsorships.get(item.id);
