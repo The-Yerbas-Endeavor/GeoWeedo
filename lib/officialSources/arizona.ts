@@ -1,81 +1,53 @@
-export type ArizonaCandidate = {
-  name: string;
-  streetAddress?: string;
-  city?: string;
-  region: string;
-  country: string;
-  latitude?: number;
-  longitude?: number;
-  licenseNumber?: string;
-  dataSource: string;
-  sourceUrl: string;
-  sourceLicense: string;
-  imageryStatus: 'unchecked' | 'missing_coordinates';
-};
+import 'server-only';
+import { PDFParse } from 'pdf-parse';
 
-const SOURCE_URL = 'https://hsapps.azdhs.gov/ls/sod/Provider.aspx?ProviderName=';
+export type ArizonaCandidate={name:string;streetAddress?:string;city?:string;region:string;country:string;latitude?:number;longitude?:number;licenseNumber?:string;dataSource:string;sourceUrl:string;sourceLicense:string;imageryStatus:'unchecked'|'missing_coordinates'};
 
-function decode(value: string) {
-  return value
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&#39;|&#x27;/gi, "'")
-    .replace(/&quot;/gi, '"')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const SOURCE_URL='https://www.azdhs.gov/documents/licensing/medical-marijuana/applications/licensed-marijuana-establishments.pdf';
 
-function parseCityState(value: string) {
-  const match = value.match(/^(.+?)\s+AZ\s+\d{5}(?:-\d{4})?$/i);
-  return match ? match[1].trim() : value.replace(/\s+AZ(?:\s+\d{5}(?:-\d{4})?)?$/i, '').trim();
-}
+function clean(value:string){return value.replace(/\s+/g,' ').trim();}
+function isStreet(value:string){return /^\d{1,6}\s+.+\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|hwy|highway|ln|lane|way|pkwy|parkway|pl|place|ct|court|trl|trail|cir|circle)\b/i.test(value);}
 
-export async function fetchArizonaCandidates(): Promise<ArizonaCandidate[]> {
-  const response = await fetch(SOURCE_URL, {
-    headers: {
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'GeoWeedo/0.5 (https://geoweedo.com)',
-    },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) throw new Error(`Arizona ADHS provider database returned ${response.status}.`);
-  const html = await response.text();
-  const rows: ArizonaCandidate[] = [];
-  const tr = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = tr.exec(html)) !== null) {
-    const cells: string[] = [];
-    const td = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-    let cell: RegExpExecArray | null;
-    while ((cell = td.exec(match[1])) !== null) cells.push(decode(cell[1]));
-    if (cells.length < 4) continue;
-    const offset = cells.length >= 5 && /^select$/i.test(cells[0]) ? 1 : 0;
-    const name = cells[offset] || '';
-    const streetAddress = cells[offset + 1] || '';
-    const cityState = cells[offset + 2] || '';
-    const type = cells[offset + 3] || '';
-    if (!name || !/marijuana facilities/i.test(type)) continue;
-    const city = parseCityState(cityState);
-    rows.push({
-      name,
-      streetAddress: streetAddress || undefined,
-      city: city || undefined,
-      region: 'Arizona',
-      country: 'USA',
-      dataSource: 'Arizona ADHS Licensing Facilities and Providers',
-      sourceUrl: SOURCE_URL,
-      sourceLicense: 'Official Arizona Department of Health Services public licensing provider database; Marijuana Facilities only.',
-      imageryStatus: 'missing_coordinates',
-    });
+export async function fetchArizonaCandidates():Promise<ArizonaCandidate[]>{
+  const response=await fetch(SOURCE_URL,{headers:{Accept:'application/pdf','User-Agent':'GeoWeedo/0.7 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(45000)});
+  if(!response.ok)throw new Error(`Arizona ADHS licensed-establishments report returned ${response.status}.`);
+  const bytes=new Uint8Array(await response.arrayBuffer());
+  if(bytes.length<4||String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3])!=='%PDF')throw new Error('Arizona ADHS licensed-establishments download was not a PDF; refusing an unverified import.');
+  const parser=new PDFParse({data:bytes});
+  let text='';
+  try{text=(await parser.getText()).text||'';}finally{await parser.destroy();}
+  const normalized=text.replace(/\r/g,'\n').replace(/[ \t]+/g,' ').replace(/\n{2,}/g,'\n');
+  const licenseRe=/\b\d{8}ES[A-Z]{2}\d{8}\b/g;
+  const licenses:Array<{license:string;index:number}>=[];
+  let licenseMatch:RegExpExecArray|null;
+  while((licenseMatch=licenseRe.exec(normalized))!==null)licenses.push({license:licenseMatch[0],index:licenseMatch.index});
+  const rows:ArizonaCandidate[]=[];
+  for(let i=0;i<licenses.length;i++){
+    const current=licenses[i],next=licenses[i+1];
+    const prefix=clean(normalized.slice(Math.max(0,current.index-60),current.index));
+    if(!/\bOpen\b/i.test(prefix)||/Not Operating/i.test(prefix))continue;
+    const end=next?next.index:Math.min(normalized.length,current.index+700);
+    const after=clean(normalized.slice(current.index+current.license.length,end));
+    const zip=after.match(/\b([A-Za-z .'-]{2,40})\s+(85\d{3})\b/);
+    if(!zip)continue;
+    const city=clean(zip[1]);
+    const beforeCity=clean(after.slice(0,zip.index));
+    const streetRe=/\b\d{1,6}\s+[^|]{3,120}/g;
+    const streets:string[]=[];
+    let streetMatch:RegExpExecArray|null;
+    while((streetMatch=streetRe.exec(beforeCity))!==null){const value=clean(streetMatch[0]);if(isStreet(value))streets.push(value);}
+    const streetAddress=streets.length?streets[streets.length-1]:undefined;
+    if(!streetAddress)continue;
+    const cut=beforeCity.lastIndexOf(streetAddress);
+    let name=clean(cut>=0?beforeCity.slice(0,cut):beforeCity);
+    name=name.replace(/^Open\s+/i,'').trim();
+    if(!name||name.length<2)continue;
+    if(name.length>120)name=name.slice(0,120).trim();
+    rows.push({name,streetAddress,city,region:'Arizona',country:'USA',licenseNumber:current.license,dataSource:'Arizona ADHS Licensed Marijuana Establishments',sourceUrl:SOURCE_URL,sourceLicense:'Official Arizona Department of Health Services Adult Use Marijuana Program licensed-establishments report; Open establishments only. This official snapshot is used because the current ADHS public provider search does not expose a complete machine-readable marijuana-only roster.',imageryStatus:'missing_coordinates'});
   }
-  const unique = new Map<string, ArizonaCandidate>();
-  for (const row of rows) {
-    const key = `${row.name}|${row.streetAddress || ''}|${row.city || ''}`.toLowerCase();
-    if (!unique.has(key)) unique.set(key, row);
-  }
-  const result = Array.from(unique.values());
-  if (!result.length) throw new Error('Arizona ADHS returned zero Marijuana Facilities; refusing a silent partial import.');
+  const unique=new Map<string,ArizonaCandidate>();
+  for(const row of rows)if(row.licenseNumber&&!unique.has(row.licenseNumber))unique.set(row.licenseNumber,row);
+  const result=Array.from(unique.values());
+  if(result.length<25)throw new Error(`Arizona ADHS report yielded only ${result.length} recognizable open establishments; refusing a likely partial import.`);
   return result;
 }
