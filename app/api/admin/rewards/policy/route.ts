@@ -12,22 +12,21 @@ function cleanPolicy(body: any): GameRewardPolicy {
   const perGameCapYerb = Number(body?.perGameCapYerb);
   const rewardCooldownMinutes = Number(body?.rewardCooldownMinutes);
   const maxRewardedGamesPerDay = Number(body?.maxRewardedGamesPerDay);
-  if (![yerbPerPoint, dailyCapYerb, perGameCapYerb].every((value) => Number.isFinite(value) && value >= 0)) {
-    throw new Error('Reward rate and caps must be non-negative numbers.');
-  }
+  const huntMaxGuesses = Number(body?.huntMaxGuesses);
+  const huntWinRadiusKm = Number(body?.huntWinRadiusKm);
+  const huntStateClueGuess = Number(body?.huntStateClueGuess);
+  const huntCityClueGuess = Number(body?.huntCityClueGuess);
+  if (![yerbPerPoint, dailyCapYerb, perGameCapYerb].every((value) => Number.isFinite(value) && value >= 0)) throw new Error('Reward rate and caps must be non-negative numbers.');
   if (!Number.isInteger(rewardCooldownMinutes) || rewardCooldownMinutes < 0) throw new Error('Reward cooldown must be a non-negative whole number of minutes.');
   if (!Number.isInteger(maxRewardedGamesPerDay) || maxRewardedGamesPerDay < 0) throw new Error('Daily rewarded-game limit must be a non-negative whole number.');
+  if (!Number.isInteger(huntMaxGuesses) || huntMaxGuesses < 1 || huntMaxGuesses > 25) throw new Error('Hunt maximum guesses must be between 1 and 25.');
+  if (!Number.isFinite(huntWinRadiusKm) || huntWinRadiusKm <= 0 || huntWinRadiusKm > 100) throw new Error('Hunt win radius must be between 0 and 100 km.');
+  if (!Number.isInteger(huntStateClueGuess) || huntStateClueGuess < 1 || huntStateClueGuess > huntMaxGuesses) throw new Error('State clue guess must be within the Hunt guess limit.');
+  if (!Number.isInteger(huntCityClueGuess) || huntCityClueGuess < 1 || huntCityClueGuess > huntMaxGuesses) throw new Error('City clue guess must be within the Hunt guess limit.');
   return {
-    enabled: Boolean(body?.enabled),
-    classicEnabled: body?.classicEnabled !== false,
-    huntEnabled: body?.huntEnabled !== false,
-    dailyEnabled: body?.dailyEnabled !== false,
-    yerbPerPoint,
-    dailyCapYerb,
-    perGameCapYerb,
-    reviewRequired: body?.reviewRequired !== false,
-    rewardCooldownMinutes,
-    maxRewardedGamesPerDay,
+    enabled: Boolean(body?.enabled), classicEnabled: body?.classicEnabled !== false, huntEnabled: body?.huntEnabled !== false, dailyEnabled: body?.dailyEnabled !== false,
+    yerbPerPoint, dailyCapYerb, perGameCapYerb, reviewRequired: body?.reviewRequired !== false,
+    rewardCooldownMinutes, maxRewardedGamesPerDay, huntMaxGuesses, huntWinRadiusKm, huntStateClueGuess, huntCityClueGuess,
   };
 }
 
@@ -43,8 +42,7 @@ export async function PUT(request: NextRequest) {
     const policy = cleanPolicy(await request.json());
     saveGameRewardPolicy(policy, admin.id);
     const db = getDatabase();
-    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at)
-                VALUES (?,?,?,?,?,?,?,?)`)
+    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,?,?,?,?,?,?,?)`)
       .run(`audit-${crypto.randomUUID()}`, 'admin', admin.id, 'update_game_reward_policy', 'app_setting', 'game_reward_policy', JSON.stringify(policy), new Date().toISOString());
     return NextResponse.json({ policy });
   } catch (error) {
