@@ -5,8 +5,9 @@ type GeorgiaCandidate={name:string;city:string;region:string;country:string;lice
 const SOURCE_URL='https://www.gmcc.ga.gov/licensing/verify-a-license';
 
 // Georgia GMCC's Verify a License page publishes the currently active dispensing
-// licenses. The Commission's separate dispensary map says locations are added when
-// a licensed dispensary begins operations. We preserve license number, DBA/name and
+// licenses. The Commission's HTML/text extraction sometimes inserts spaces inside
+// license numbers (for example "DISP000 5" or "DISP00 14"), so parsing must be
+// tolerant of whitespace between digits. We preserve license number, DBA/name and
 // city here; street address and coordinates are completed by Automated Enrichment.
 const LOCATIONS=[
  {licenseNumber:'DISP0001',name:'Trulieve Medical Cannabis Dispensary of Macon',city:'Macon'},
@@ -30,13 +31,25 @@ const LOCATIONS=[
  {licenseNumber:'DISP0021',name:'Trulieve Medical Cannabis Dispensary of Dunwoody',city:'Dunwoody'}
 ] as const;
 
+function activeDispensingLicenses(plain:string){
+ const matches=Array.from(plain.matchAll(/DISP(?:\s*\d){4}/gi));
+ const active=new Set<string>();
+ for(let index=0;index<matches.length;index++){
+  const match=matches[index],start=match.index??0,end=index+1<matches.length?(matches[index+1].index??plain.length):plain.length;
+  const block=plain.slice(start,end);
+  if(!/\bACTIVE\b/i.test(block))continue;
+  const normalized=match[0].replace(/\s+/g,'').toUpperCase();
+  if(/^DISP\d{4}$/.test(normalized))active.add(normalized);
+ }
+ return active;
+}
+
 export async function fetchGeorgiaCandidates():Promise<GeorgiaCandidate[]>{
  const response=await fetch(SOURCE_URL,{headers:{Accept:'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8','User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36','Accept-Language':'en-US,en;q=0.9'},cache:'no-store',signal:AbortSignal.timeout(30000)});
  if(!response.ok)throw new Error(`Georgia GMCC Verify a License source returned ${response.status}.`);
  const html=await response.text();
  const plain=html.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' ');
- const activeLicenses=Array.from(plain.matchAll(/DISP\s*0*(\d{1,4})[\s\S]{0,180}?ACTIVE/gi),m=>`DISP${String(Number(m[1])).padStart(4,'0')}`);
- const unique=new Set(activeLicenses);
+ const unique=activeDispensingLicenses(plain);
  if(unique.size<15)throw new Error(`Georgia GMCC source yielded only ${unique.size} recognizable active dispensing licenses; refusing a likely partial import.`);
  const missing=LOCATIONS.filter(row=>!unique.has(row.licenseNumber));
  if(missing.length>3)throw new Error(`Georgia GMCC source no longer confirms ${missing.length} expected active dispensing licenses; refusing an unverified import.`);
