@@ -39,7 +39,7 @@ function scoreMatch(base:any,p:PlaceLite){
  const distance=hasBase&&hasPlace?distanceMeters(Number(base.latitude),Number(base.longitude),lat,lng):null;
  const proximity=distance==null?0.5:distance<=75?1:distance<=250?.9:distance<=750?.7:distance<=2000?.35:0;
  const score=Math.round(name*50+address*25+proximity*25);
- const confidence=score>=85&&name>=.65&&(distance==null||distance<=750)?'high':score>=65?'medium':'low';
+ const confidence=score>70?'high':score>=50?'medium':'low';
  return{score,confidence,nameSimilarity:name,addressSimilarity:address,distanceMeters:distance};
 }
 
@@ -47,12 +47,12 @@ export async function previewGooglePlacesEnrichment(locationId:string){
  ensureSchema();const base=getLocationBase(locationId);if(!base)throw new Error('Location not found.');
  const candidates=(await search(base)).map(p=>({place:p,match:scoreMatch(base,p)})).sort((a,b)=>b.match.score-a.match.score);const best=candidates[0];
  if(!best?.place?.id)return{source:'google_places',confidence:'low',score:0,reason:'No Google Places match found.',candidates:[]};
- const runnerUp=candidates[1]?.match.score||0;const confidence=best.match.confidence==='high'&&best.match.score-runnerUp>=8?'high':best.match.confidence==='low'?'low':'medium';
+ const runnerUp=candidates[1]?.match.score||0;const confidence=best.match.score>70?'high':best.match.score>=50?'medium':'low';
  const place=await details(best.place.id);return{source:'google_places',placeId:best.place.id,confidence,score:best.match.score,runnerUpScore:runnerUp,match:best.match,name:place.displayName?.text||'',formattedAddress:place.formattedAddress||'',latitude:place.location?.latitude,longitude:place.location?.longitude,phone:place.nationalPhoneNumber||'',website:place.websiteUri||'',hours:hoursMap(place.regularOpeningHours?.weekdayDescriptions||[]),businessStatus:place.businessStatus||'',rating:Number.isFinite(Number(place.rating))?Number(place.rating):null,ratingCount:Number.isFinite(Number(place.userRatingCount))?Number(place.userRatingCount):null};
 }
 
 export async function applyGooglePlacesEnrichment(locationId:string,actorId:string,preview?:any){
- ensureSchema();const result=preview||await previewGooglePlacesEnrichment(locationId);if(result.confidence!=='high')throw new Error('Google Places match is not high confidence; review is required before applying.');
+ ensureSchema();const result=preview||await previewGooglePlacesEnrichment(locationId);if(result.confidence!=='high')throw new Error('Google Places match confidence is 70% or lower; review is required before applying.');
  const base=getLocationBase(locationId);if(!base)throw new Error('Location not found.');const db=getDatabase(),stamp=new Date().toISOString();
  // Preserve licensing/source authority. Google only enriches consumer-facing business details.
  const table=base.kind==='dispensary'?'dispensaries':'dispensary_candidates';
