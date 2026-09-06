@@ -10,15 +10,24 @@ function cleanPolicy(body: any): GameRewardPolicy {
   const yerbPerPoint = Number(body?.yerbPerPoint);
   const dailyCapYerb = Number(body?.dailyCapYerb);
   const perGameCapYerb = Number(body?.perGameCapYerb);
+  const rewardCooldownMinutes = Number(body?.rewardCooldownMinutes);
+  const maxRewardedGamesPerDay = Number(body?.maxRewardedGamesPerDay);
   if (![yerbPerPoint, dailyCapYerb, perGameCapYerb].every((value) => Number.isFinite(value) && value >= 0)) {
     throw new Error('Reward rate and caps must be non-negative numbers.');
   }
+  if (!Number.isInteger(rewardCooldownMinutes) || rewardCooldownMinutes < 0) throw new Error('Reward cooldown must be a non-negative whole number of minutes.');
+  if (!Number.isInteger(maxRewardedGamesPerDay) || maxRewardedGamesPerDay < 0) throw new Error('Daily rewarded-game limit must be a non-negative whole number.');
   return {
     enabled: Boolean(body?.enabled),
+    classicEnabled: body?.classicEnabled !== false,
+    huntEnabled: body?.huntEnabled !== false,
+    dailyEnabled: body?.dailyEnabled !== false,
     yerbPerPoint,
     dailyCapYerb,
     perGameCapYerb,
     reviewRequired: body?.reviewRequired !== false,
+    rewardCooldownMinutes,
+    maxRewardedGamesPerDay,
   };
 }
 
