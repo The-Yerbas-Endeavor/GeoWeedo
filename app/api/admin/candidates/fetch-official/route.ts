@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { fetchAlaskaCandidates } from '@/lib/officialSources/alaska';
+import { fetchArizonaCandidates } from '@/lib/officialSources/arizona';
 import { fetchBritishColumbiaCandidates } from '@/lib/officialSources/britishColumbia';
 import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchConnecticutCandidates } from '@/lib/officialSources/connecticut';
@@ -39,6 +40,7 @@ async function fetchMontana():Promise<CandidateRow[]>{const sourceUrl='https://r
 
 const officialSources=[
  {preset:'alaska-amco',label:'Alaska AMCO',fetcher:fetchAlaskaCandidates},
+ {preset:'arizona-adhs',label:'Arizona ADHS',fetcher:fetchArizonaCandidates},
  {preset:'british-columbia-lcrb',label:'British Columbia LCRB',fetcher:fetchBritishColumbiaCandidates},
  {preset:'california-dcc',label:'California DCC',fetcher:fetchCalifornia},
  {preset:'oregon-olcc',label:'Oregon OLCC',fetcher:fetchOregon},
