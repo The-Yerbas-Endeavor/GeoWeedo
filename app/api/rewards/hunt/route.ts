@@ -17,6 +17,12 @@ function mapStatus(status: string) {
   return status;
 }
 
+function huntScore(distanceKm: number, guesses: number) {
+  const base = Math.max(1000, 4500 - (guesses - 1) * 500);
+  const precision = Math.round(Math.max(0, 500 * (1 - distanceKm / 2)));
+  return Math.min(MAX_HUNT_SCORE, base + precision);
+}
+
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request);
   if (!user || !user.walletId) return NextResponse.json({ error: 'Sign in to earn Weedo Hunt rewards.' }, { status: 401 });
@@ -35,6 +41,7 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(score) || score < 0 || score > MAX_HUNT_SCORE) return NextResponse.json({ error: 'Invalid hunt score.' }, { status: 400 });
   if (!Number.isInteger(guesses) || guesses < 1 || guesses > MAX_GUESSES) return NextResponse.json({ error: 'Invalid guess count.' }, { status: 400 });
   if (!Number.isFinite(distanceKm) || distanceKm < 0 || distanceKm >= 2) return NextResponse.json({ error: 'The hunt was not completed within the 2 km win radius.' }, { status: 400 });
+  if (score !== huntScore(distanceKm, guesses)) return NextResponse.json({ error: 'Hunt score does not match the completed hunt.' }, { status: 400 });
 
   const candidates = await listCandidates();
   const target = candidates.find((item) => item.id === targetId && item.status !== 'rejected' && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
