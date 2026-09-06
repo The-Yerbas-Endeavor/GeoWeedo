@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 type Player = { id: string; handle: string; yerbasAddress: string; walletVerifiedAt?: string; rewardEligible: boolean };
 type Reward = { id: string; playerId: string; amountYerb: number; reason: string; reference?: string; status: string; txid?: string; createdAt: string; paidAt?: string };
-type RewardPolicy = { enabled: boolean; yerbPerPoint: number; dailyCapYerb: number; perGameCapYerb: number; reviewRequired: boolean };
-const DEFAULT_POLICY: RewardPolicy = { enabled: true, yerbPerPoint: 0.0004, dailyCapYerb: 25, perGameCapYerb: 10, reviewRequired: true };
+type RewardPolicy = { enabled: boolean; classicEnabled:boolean; huntEnabled:boolean; dailyEnabled:boolean; yerbPerPoint: number; dailyCapYerb: number; perGameCapYerb: number; reviewRequired: boolean; rewardCooldownMinutes:number; maxRewardedGamesPerDay:number };
+const DEFAULT_POLICY: RewardPolicy = { enabled: true, classicEnabled:true, huntEnabled:true, dailyEnabled:true, yerbPerPoint: 0.0004, dailyCapYerb: 25, perGameCapYerb: 10, reviewRequired: true, rewardCooldownMinutes:0, maxRewardedGamesPerDay:0 };
 
 export default function AdminRewardManager() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -32,7 +32,7 @@ export default function AdminRewardManager() {
     if (!policyResponse.ok) throw new Error(policyData.error || 'Could not load reward policy.');
     setPlayers(data.players || []);
     setRewards((data.rewards || []).slice().reverse());
-    setPolicy(policyData.policy || DEFAULT_POLICY);
+    setPolicy({...DEFAULT_POLICY,...(policyData.policy || {})});
     setPlayerId((current) => current || data.players?.[0]?.id || '');
     setStatus(`Loaded ${data.rewards?.length || 0} reward ledger entries and ${data.players?.length || 0} verified player records.`);
   }
@@ -49,8 +49,8 @@ export default function AdminRewardManager() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not save gameplay reward policy.');
-      setPolicy(data.policy);
-      setStatus(`Gameplay rewards ${data.policy.enabled ? 'enabled' : 'disabled'} · ${data.policy.yerbPerPoint} YERB/point · ${data.policy.dailyCapYerb} YERB daily cap.`);
+      setPolicy({...DEFAULT_POLICY,...data.policy});
+      setStatus(`Gameplay rewards ${data.policy.enabled ? 'enabled' : 'disabled'} · ${data.policy.yerbPerPoint} YERB/point · ${data.policy.rewardCooldownMinutes || 0} min cooldown · ${data.policy.maxRewardedGamesPerDay || 'unlimited'} rewarded games/day.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not save gameplay reward policy.');
     } finally {
@@ -83,16 +83,35 @@ export default function AdminRewardManager() {
 
       <section className="admin-panel" style={{marginBottom:20}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'flex-start',flexWrap:'wrap'}}>
-          <div><span className="eyebrow">GAMEPLAY REWARD POLICY</span><h2 style={{marginTop:6}}>Control what a game can earn</h2><p className="admin-help">Changes are stored in GeoWeedo's shared database, take effect without editing environment files, and are recorded in the audit log.</p></div>
+          <div><span className="eyebrow">GAMEPLAY REWARD POLICY</span><h2 style={{marginTop:6}}>Control rewards and timing</h2><p className="admin-help">Changes apply immediately to server-side reward validation and are recorded in the audit log.</p></div>
           <label style={{display:'flex',gap:10,alignItems:'center',fontWeight:800}}><input type="checkbox" checked={policy.enabled} onChange={(e)=>setPolicy({...policy,enabled:e.target.checked})}/> Gameplay rewards enabled</label>
         </div>
+
         <div className="admin-grid" style={{marginTop:18}}>
-          <div className="admin-form"><label>YERB per point<input type="number" min="0" step="0.00000001" value={policy.yerbPerPoint} onChange={(e)=>setPolicy({...policy,yerbPerPoint:Number(e.target.value)})}/></label><small>Example: 0.0004 × 25,000 points = 10 YERB before caps.</small></div>
-          <div className="admin-form"><label>Daily cap per player<input type="number" min="0" step="0.00000001" value={policy.dailyCapYerb} onChange={(e)=>setPolicy({...policy,dailyCapYerb:Number(e.target.value)})}/></label><small>Maximum YERB a player can earn from gameplay in one day.</small></div>
+          <div className="admin-form"><label>YERB per point<input type="number" min="0" step="0.00000001" value={policy.yerbPerPoint} onChange={(e)=>setPolicy({...policy,yerbPerPoint:Number(e.target.value)})}/></label><small>Base conversion from points to YERB.</small></div>
+          <div className="admin-form"><label>Daily cap per player<input type="number" min="0" step="0.00000001" value={policy.dailyCapYerb} onChange={(e)=>setPolicy({...policy,dailyCapYerb:Number(e.target.value)})}/></label><small>Maximum YERB a player can earn from gameplay per day.</small></div>
           <div className="admin-form"><label>Maximum per game<input type="number" min="0" step="0.00000001" value={policy.perGameCapYerb} onChange={(e)=>setPolicy({...policy,perGameCapYerb:Number(e.target.value)})}/></label><small>Hard cap on a single completed game.</small></div>
-          <div className="admin-form"><label style={{display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={policy.reviewRequired} onChange={(e)=>setPolicy({...policy,reviewRequired:e.target.checked})}/> Require reward review</label><small>Recommended while the economy is being tested. Rewards remain ledger credits, not automatic blockchain sends.</small></div>
+          <div className="admin-form"><label style={{display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={policy.reviewRequired} onChange={(e)=>setPolicy({...policy,reviewRequired:e.target.checked})}/> Require reward review</label><small>Hold gameplay rewards for Admin review instead of immediately posting them.</small></div>
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,marginTop:18,flexWrap:'wrap'}}><div className="source-note"><strong>Perfect 25,000-point game</strong><span>{policy.enabled ? `${perfectGameReward.toFixed(8)} YERB maximum` : 'Rewards disabled'}</span></div><button className="primary" disabled={savingPolicy} onClick={savePolicy}>{savingPolicy?'Saving…':'Save gameplay reward policy'}</button></div>
+
+        <div style={{marginTop:22,borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:20}}>
+          <span className="eyebrow">GAME MODES</span>
+          <div className="admin-grid" style={{marginTop:12}}>
+            <label className="admin-panel" style={{padding:16,display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={policy.classicEnabled} onChange={(e)=>setPolicy({...policy,classicEnabled:e.target.checked})}/><span><strong>🎮 Classic GeoWeedo</strong><small style={{display:'block',marginTop:3}}>Allow Classic games to earn YERB.</small></span></label>
+            <label className="admin-panel" style={{padding:16,display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={policy.huntEnabled} onChange={(e)=>setPolicy({...policy,huntEnabled:e.target.checked})}/><span><strong>🌿 Weedo Hunt</strong><small style={{display:'block',marginTop:3}}>Allow successful Hunts to earn YERB.</small></span></label>
+            <label className="admin-panel" style={{padding:16,display:'flex',gap:10,alignItems:'center'}}><input type="checkbox" checked={policy.dailyEnabled} onChange={(e)=>setPolicy({...policy,dailyEnabled:e.target.checked})}/><span><strong>🌎 Daily Weedo</strong><small style={{display:'block',marginTop:3}}>Allow Daily challenges to earn YERB when reward submission is enabled.</small></span></label>
+          </div>
+        </div>
+
+        <div style={{marginTop:22,borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:20}}>
+          <span className="eyebrow">REWARD TIMING</span>
+          <div className="admin-grid" style={{marginTop:12}}>
+            <div className="admin-form"><label>Cooldown between rewarded games (minutes)<input type="number" min="0" step="1" value={policy.rewardCooldownMinutes} onChange={(e)=>setPolicy({...policy,rewardCooldownMinutes:Math.max(0,Math.floor(Number(e.target.value)||0))})}/></label><small>0 = no cooldown. Example: 30 allows one rewarded completion every 30 minutes.</small></div>
+            <div className="admin-form"><label>Maximum rewarded games per player / day<input type="number" min="0" step="1" value={policy.maxRewardedGamesPerDay} onChange={(e)=>setPolicy({...policy,maxRewardedGamesPerDay:Math.max(0,Math.floor(Number(e.target.value)||0))})}/></label><small>0 = unlimited. This is separate from the YERB daily amount cap.</small></div>
+          </div>
+        </div>
+
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:16,marginTop:18,flexWrap:'wrap'}}><div className="source-note"><strong>Perfect 25,000-point Classic game</strong><span>{policy.enabled && policy.classicEnabled ? `${perfectGameReward.toFixed(8)} YERB maximum` : 'Classic rewards disabled'}</span></div><button className="primary" disabled={savingPolicy} onClick={savePolicy}>{savingPolicy?'Saving…':'Save gameplay reward policy'}</button></div>
       </section>
 
       <section className="admin-grid">
