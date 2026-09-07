@@ -37,4 +37,6 @@
 .map-first-home .map-browser-panel .map-browser-row-copy small{font-size:10px}
 .map-first-home .map-browser-panel .map-browser-row-status{font-size:9px}
 .map-first-home .map-browser-panel-draggable .map-browser-panel-head{cursor:default!important}
+/* The selected dispensary is already represented by the MapLibre symbol/circle layer. Hide the legacy DOM Marker while its detail card is open so one location never shows two competing pins. */
+.guess-map-wrap:has(.map-location-card) .maplibregl-marker{display:none!important}
 @media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}.map-first-home .map-browser-panel{left:12px!important;right:12px!important;top:112px!important;bottom:auto;transform:none!important;width:auto;max-height:52vh;border-radius:16px;background:rgba(6,18,13,.66);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}.map-first-home .map-browser-panel .map-browser-panel-head{padding:13px 14px}.map-first-home .map-browser-panel .map-browser-list{max-height:calc(52vh - 66px)}}
