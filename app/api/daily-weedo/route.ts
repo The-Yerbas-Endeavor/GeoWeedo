@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
-import { ensureFinanceSchema } from '@/lib/financeLedger';
-import { getDatabase } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,7 +22,7 @@ function hashString(input: string) {
   return h >>> 0;
 }
 
-function publicLocation(item: any, sponsored: boolean, sponsorship?: any) {
+function publicLocation(item: any) {
   return {
     id: item.id,
     name: item.name,
@@ -35,59 +33,26 @@ function publicLocation(item: any, sponsored: boolean, sponsorship?: any) {
     country: item.country || 'USA',
     website: item.website || undefined,
     dataSource: item.dataSource || undefined,
-    sponsored,
-    sponsorship: sponsored ? {
-      id: sponsorship?.id,
-      priorityWeight: Number(sponsorship?.priority_weight || 1),
-      endsAt: sponsorship?.ends_at,
-    } : undefined,
+    sponsored: Boolean(item.sponsored),
   };
 }
 
 export async function GET() {
   const today = dateKey();
-  const now = new Date().toISOString();
-  const db = getDatabase();
-  ensureFinanceSchema(db);
-
   const approved = (await readApprovedDispensaries()).filter((item) =>
     item.active && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+
   if (!approved.length) {
     return NextResponse.json({ error: 'No enabled Daily Weedo locations are available.' }, { status: 503 });
   }
 
-  const approvedById = new Map(approved.map((item) => [item.id, item]));
-  const sponsorRows = db.prepare(`
-    SELECT id, dispensary_id, priority_weight, starts_at, ends_at
-    FROM sponsorships
-    WHERE status='active' AND starts_at<=? AND ends_at>=?
-    ORDER BY created_at ASC
-  `).all(now, now) as any[];
-
-  const eligibleSponsors = sponsorRows
-    .map((row) => ({ row, dispensary: approvedById.get(String(row.dispensary_id)) }))
-    .filter((entry) => Boolean(entry.dispensary));
-
-  if (eligibleSponsors.length) {
-    const totalWeight = eligibleSponsors.reduce((sum, entry) => sum + Math.max(1, Number(entry.row.priority_weight || 1)), 0);
-    let cursor = hashString(`geoweedo-daily-sponsor-${today}`) % totalWeight;
-    let selected = eligibleSponsors[0];
-    for (const entry of eligibleSponsors) {
-      const weight = Math.max(1, Number(entry.row.priority_weight || 1));
-      if (cursor < weight) { selected = entry; break; }
-      cursor -= weight;
-    }
-    return NextResponse.json({
-      date: today,
-      source: 'sponsor',
-      location: publicLocation(selected.dispensary, true, selected.row),
-    }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-  }
-
+  // Daily Weedo remains a fair, deterministic daily challenge. Featured status is
+  // presentation/analytics only and never changes a location's selection odds.
   const target = approved[hashString(`geoweedo-daily-enabled-${today}`) % approved.length];
+
   return NextResponse.json({
     date: today,
     source: 'enabled',
-    location: publicLocation(target, false),
+    location: publicLocation(target),
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
 }
