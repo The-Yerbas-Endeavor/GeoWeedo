@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveDispensaryIdentifier } from '@/lib/dispensarySlug';
 import { recordSponsorEvent, type SponsorEventType } from '@/lib/sponsorshipStore';
 
 export const runtime = 'nodejs';
@@ -16,14 +17,16 @@ const ALLOWED = new Set<SponsorEventType>([
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
-  const dispensaryId = String(body?.dispensaryId || '').trim();
+  const rawIdentifier = String(body?.dispensaryId || '').trim();
   const eventType = String(body?.eventType || '') as SponsorEventType;
-  if (!dispensaryId || !ALLOWED.has(eventType)) {
+  if (!rawIdentifier || !ALLOWED.has(eventType)) {
     return NextResponse.json({ error: 'A valid dispensaryId and eventType are required.' }, { status: 400 });
   }
 
+  const resolved = resolveDispensaryIdentifier(rawIdentifier);
+  const dispensaryId = resolved?.locationId || rawIdentifier;
   const rawMetadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata) ? body.metadata : undefined;
   const metadata = rawMetadata ? Object.fromEntries(Object.entries(rawMetadata).slice(0, 12).map(([key, value]) => [String(key).slice(0, 80), String(value).slice(0, 500)])) : undefined;
   const recorded = recordSponsorEvent(dispensaryId, eventType, metadata);
-  return NextResponse.json({ ok: true, recorded });
+  return NextResponse.json({ ok: true, recorded, dispensaryId });
 }
