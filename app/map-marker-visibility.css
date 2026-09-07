@@ -4,9 +4,28 @@
 .home-map-canvas .guess-map-canvas{position:absolute!important;inset:0!important;z-index:1!important}
 .home-map-canvas .maplibregl-map{position:absolute!important;inset:0!important;z-index:1!important}
 .home-map-canvas .maplibregl-canvas-container{position:absolute!important;inset:0!important}
-.home-map-canvas .maplibregl-marker{position:absolute!important;z-index:10!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
-.home-map-canvas .maplibregl-control-container{position:relative;z-index:20}
-.home-map-canvas .map-browser-tools,.home-map-canvas .map-data-status{z-index:31}
-.home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:32}
-.home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:33}
-.home-map-canvas .geoweedo-branded-pin{opacity:1!important;visibility:visible!important;display:block!important;min-width:40px;min-height:40px;pointer-events:auto!important}
+.home-map-canvas .maplibregl-marker{position:absolute!important;z-index:50!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
+.home-map-canvas .maplibregl-control-container{position:relative;z-index:60}
+.home-map-canvas .map-browser-tools,.home-map-canvas .map-data-status{z-index:71}
+.home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
+.home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:73}
+.home-map-canvas img.geoweedo-branded-pin{
+  opacity:1!important;
+  visibility:visible!important;
+  display:block!important;
+  width:44px!important;
+  height:44px!important;
+  min-width:44px!important;
+  min-height:44px!important;
+  max-width:none!important;
+  max-height:none!important;
+  box-sizing:border-box!important;
+  padding:2px!important;
+  object-fit:contain!important;
+  background:rgba(7,17,8,.96)!important;
+  border:2px solid rgba(235,255,238,.98)!important;
+  border-radius:50%!important;
+  box-shadow:0 0 0 3px rgba(69,200,90,.72),0 4px 10px rgba(0,0,0,.62)!important;
+  pointer-events:auto!important;
+}
+.home-map-canvas img.geoweedo-branded-pin[src="/assets/geoweedo/geoweedo-map-marker.png"]{background-color:rgba(7,17,8,.96)!important}
