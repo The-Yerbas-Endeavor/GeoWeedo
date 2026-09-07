@@ -12,8 +12,8 @@ export default function MapLocationCardLogoEnhancer(){
    const locationId=String(card.dataset.locationId||'').trim();
    if(!locationId||card.dataset.logoEnhancerId===locationId)return;
    card.dataset.logoEnhancerId=locationId;
-   let path=cache.get(locationId);
-   if(path===undefined){
+   let path:string|null=cache.get(locationId)??null;
+   if(!cache.has(locationId)){
     try{
      const response=await fetch(`/api/dispensary-logo?locationId=${encodeURIComponent(locationId)}`,{cache:'no-store'});
      const data=response.ok?await response.json():null;
