@@ -24,13 +24,13 @@
   max-width:none!important;
   max-height:none!important;
   box-sizing:border-box!important;
-  padding:2px!important;
+  padding:0!important;
   object-fit:contain!important;
-  background:rgba(7,17,8,.96)!important;
-  border:2px solid rgba(238,255,240,.98)!important;
-  border-radius:50%!important;
-  box-shadow:0 0 0 2px rgba(61,216,91,.88),0 3px 8px rgba(0,0,0,.72)!important;
-  filter:none!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))!important;
   pointer-events:auto!important;
 }
 .home-map-canvas .geoweedo-mapped-pin{
