@@ -25,8 +25,10 @@ export default function AdminSponsorshipManager() {
       fetch('/api/admin/sponsorships', { cache: 'no-store' }),
       fetch('/api/admin/owner-claims?status=pending', { cache: 'no-store' }),
     ]);
-    if (sponsorResponse.status === 401 || sponsorResponse.status === 403 || claimResponse.status === 401 || claimResponse.status === 403) { window.location.href = '/admin/login'; return; }
-    const sponsorData = await sponsorResponse.json(); const claimData = await claimResponse.json();
+    if (sponsorResponse.status === 401 || claimResponse.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
+    const sponsorData = await sponsorResponse.json().catch(() => ({}));
+    const claimData = await claimResponse.json().catch(() => ({}));
+    if (sponsorResponse.status === 403 || claimResponse.status === 403) throw new Error(sponsorData.error || claimData.error || 'Your admin account does not have permission to manage sponsorships.');
     if (!sponsorResponse.ok) throw new Error(sponsorData.error || 'Sponsorship admin access failed.');
     if (!claimResponse.ok) throw new Error(claimData.error || 'Could not load ownership claims.');
     setDispensaries(sponsorData.dispensaries || []); setItems(sponsorData.entitlements || []); setClaims(claimData.claims || []); if (sponsorData.plan) setPlan(sponsorData.plan);
@@ -40,7 +42,8 @@ export default function AdminSponsorshipManager() {
     setBusy(true); setStatus('Saving Featured entitlement…');
     try {
       const response = await fetch('/api/admin/sponsorships', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, startsAt: new Date(form.startsAt).toISOString(), endsAt: new Date(form.endsAt).toISOString() }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not save Featured entitlement.');
+      if (response.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
+      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Could not save Featured entitlement.');
       setStatus(`Featured listing saved for ${names.get(form.dispensaryId)?.name || form.dispensaryId}.`); await load();
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not save Featured entitlement.'); }
     finally { setBusy(false); }
@@ -50,7 +53,8 @@ export default function AdminSponsorshipManager() {
     setBusy(true); setStatus(`${nextStatus === 'approved' ? 'Approving' : 'Rejecting'} ownership claim…`);
     try {
       const response = await fetch('/api/admin/owner-claims', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ claimId, status:nextStatus }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not moderate ownership claim.');
+      if (response.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
+      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Could not moderate ownership claim.');
       setStatus(`Ownership claim ${nextStatus}.`); await load();
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not moderate ownership claim.'); }
     finally { setBusy(false); }
