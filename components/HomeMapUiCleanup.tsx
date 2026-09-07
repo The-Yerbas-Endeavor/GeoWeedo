@@ -16,9 +16,12 @@ function openBrowsePanel(){
       panel.setAttribute('aria-label','Browse dispensaries');
       return;
     }
-    const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
-    const listButton=buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\b/i.test(button.textContent?.trim()||''));
-    if(listButton){listButton.click();window.setTimeout(tryOpen,40);return;}
+    const displaySelect=document.querySelector<HTMLSelectElement>('.map-first-home .map-browser-tools select[aria-label="Dispensary display"]');
+    if(displaySelect){
+      displaySelect.dispatchEvent(new Event('change',{bubbles:true}));
+      window.setTimeout(tryOpen,40);
+      return;
+    }
     attempts+=1;if(attempts<12)window.setTimeout(tryOpen,50);
   };
   tryOpen();
