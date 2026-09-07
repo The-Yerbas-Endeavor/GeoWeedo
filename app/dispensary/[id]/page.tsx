@@ -38,6 +38,7 @@ export default async function DispensaryProfilePage({params}:Props){
  const profile=getCommunityProfile(location.id),logo=getDispensaryLogo(location.id),claimed=isClaimed(location.id),sponsorship=(await activeSponsorshipMap()).get(location.id),sponsored=Boolean(sponsorship),listed=location.kind==='dispensary'&&Boolean(location.active&&location.verified),profileTier=tier({sponsored,claimed,listed});
  const address=[location.streetAddress,location.city,location.region,location.postalCode,location.country].filter(Boolean).join(', '),website=safeWebsite(profile?.website||location.website),phone=profile?.phone||location.phone,hasCoords=Number.isFinite(location.latitude)&&Number.isFinite(location.longitude),mapHref=`/?location=${encodeURIComponent(resolved.slug||location.id)}`;
  return <main className={styles.page}>
+  <style>{`.community-overview{white-space:pre-wrap;overflow-wrap:anywhere}`}</style>
   {hasCoords&&<div className={styles.pageMap} aria-hidden="true"><DispensaryHeroMap latitude={location.latitude} longitude={location.longitude} className={styles.pageMapCanvas}/></div>}
   <div className={styles.pageShade}/>
   <div className={styles.wrap}>
