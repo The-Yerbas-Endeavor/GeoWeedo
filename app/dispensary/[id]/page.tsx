@@ -32,35 +32,31 @@ export async function generateMetadata({params}:Props):Promise<Metadata>{
 }
 export default async function DispensaryProfilePage({params}:Props){
  const {id}=await params,resolved=resolveDispensaryIdentifier(id);
- if(!resolved)return <main className={styles.page}><div className={styles.wrap}><a className={styles.back} href="/">← Back to map</a><section className={styles.hero}><div className={styles.heroContent}><div className={styles.kicker}>GEOWEEDO LOCATION</div><h1>Dispensary not found</h1><p className={styles.address}>This location may have been removed or is no longer public.</p></div></section></div></main>;
+ if(!resolved)return <main className={styles.page}><div className={styles.pageShade}/><div className={styles.wrap}><a className={styles.back} href="/">← Back to map</a><section className={styles.hero}><div className={styles.heroContent}><div className={styles.kicker}>GEOWEEDO LOCATION</div><h1>Dispensary not found</h1><p className={styles.address}>This location may have been removed or is no longer public.</p></div></section></div></main>;
  if(resolved.alias&&resolved.slug&&resolved.slug!==id)redirect(`/dispensary/${resolved.slug}`);
  const location=getLocationBase(resolved.locationId);if(!location)return null;
  const profile=getCommunityProfile(location.id),logo=getDispensaryLogo(location.id),claimed=isClaimed(location.id),sponsorship=(await activeSponsorshipMap()).get(location.id),sponsored=Boolean(sponsorship),listed=location.kind==='dispensary'&&Boolean(location.active&&location.verified),profileTier=tier({sponsored,claimed,listed});
- const address=[location.streetAddress,location.city,location.region,location.postalCode,location.country].filter(Boolean).join(','),website=safeWebsite(profile?.website||location.website),phone=profile?.phone||location.phone,hasCoords=Number.isFinite(location.latitude)&&Number.isFinite(location.longitude),mapHref=`/?location=${encodeURIComponent(resolved.slug||location.id)}`;
- return <main className={styles.page}><div className={styles.wrap}>
-  <a className={styles.back} href="/">← Back to GeoWeedo map</a>
-  <section className={styles.hero}>
-   {hasCoords&&<div className={styles.heroMap} aria-hidden="true"><DispensaryHeroMap latitude={location.latitude} longitude={location.longitude} className={styles.heroMapCanvas}/></div>}
-   <div className={styles.heroContent}>
-    <div className={styles.kicker}>GEOWEEDO DISPENSARY</div>
-    <div className={styles.status}><span className={styles.badge}>{listed?'✓ ENABLED':'● MAPPED'}</span><span className={styles.badge}>{profileTier}</span>{claimed&&<span className={styles.badge}>✓ OWNER VERIFIED</span>}{sponsored&&<span className={`${styles.badge} ${styles.gold}`}>★ FEATURED</span>}</div>
-    <div className={styles.brand}>{logo&&<img className={styles.logo} src={logo.path} alt={`${location.name} logo`}/>}<div><h1>{location.name}</h1><p className={styles.address}>📍 {address||[location.city,location.region].filter(Boolean).join(', ')}</p></div></div>
-    {profile?.overview&&<p className={styles.overview}>{profile.overview}</p>}
-    <div className={styles.actions}><a href={mapHref}>📍 View on GeoWeedo map</a>{website&&<a href={website} target="_blank" rel="noreferrer">↗ Website</a>}{phone&&<a href={`tel:${phone.replace(/[^+\d]/g,'')}`}>☎ Call</a>}{claimed?<a href="/owner">Owner editor</a>:<a href={`/owner?dispensary=${encodeURIComponent(location.id)}`}>Claim this dispensary</a>}</div>
+ const address=[location.streetAddress,location.city,location.region,location.postalCode,location.country].filter(Boolean).join(', '),website=safeWebsite(profile?.website||location.website),phone=profile?.phone||location.phone,hasCoords=Number.isFinite(location.latitude)&&Number.isFinite(location.longitude),mapHref=`/?location=${encodeURIComponent(resolved.slug||location.id)}`;
+ return <main className={styles.page}>
+  {hasCoords&&<div className={styles.pageMap} aria-hidden="true"><DispensaryHeroMap latitude={location.latitude} longitude={location.longitude} className={styles.pageMapCanvas}/></div>}
+  <div className={styles.pageShade}/>
+  <div className={styles.wrap}>
+   <a className={styles.back} href="/">← Back to GeoWeedo map</a>
+   <section className={styles.hero}>
+    <div className={styles.heroContent}>
+     <div className={styles.kicker}>GEOWEEDO DISPENSARY</div>
+     <div className={styles.status}><span className={styles.badge}>{listed?'✓ ENABLED':'● MAPPED'}</span><span className={styles.badge}>{profileTier}</span>{claimed&&<span className={styles.badge}>✓ OWNER VERIFIED</span>}{sponsored&&<span className={`${styles.badge} ${styles.gold}`}>★ FEATURED</span>}</div>
+     <div className={styles.brand}>{logo&&<img className={styles.logo} src={logo.path} alt={`${location.name} logo`}/>}<div><h1>{location.name}</h1><p className={styles.address}>📍 {address||[location.city,location.region].filter(Boolean).join(', ')}</p></div></div>
+     {profile?.overview&&<p className={styles.overview}>{profile.overview}</p>}
+     <div className={styles.actions}><a href={mapHref}>📍 View on GeoWeedo map</a>{website&&<a href={website} target="_blank" rel="noreferrer">↗ Website</a>}{phone&&<a href={`tel:${phone.replace(/[^+\d]/g,'')}`}>☎ Call</a>}{claimed?<a href="/owner">Owner editor</a>:<a href={`/owner?dispensary=${encodeURIComponent(location.id)}`}>Claim this dispensary</a>}</div>
+    </div>
+   </section>
+   <div className={styles.content}>
+    {sponsored&&<aside className={styles.sponsor}><strong>★ Featured GeoWeedo profile</strong><p>This dispensary has active sponsored placement. Sponsorship changes presentation and placement, not reviews, licensing data, or organic search relevance.</p></aside>}
+    <div className={styles.sectionTitle}><div><span>DISPENSARY PROFILE</span><h2>Details & community</h2></div><p>Hours, services, reviews and community information.</p></div>
+    <div className={styles.community}><DispensaryCommunityDetails locationId={location.id}/></div>
+    <div className={styles.admin}><ModeratorDispensaryEditor locationId={location.id}/></div>
    </div>
-  </section>
-  <section className={styles.snapshot} aria-label="Location snapshot">
-   <article><span>GEOWEEDO STATUS</span><strong>{listed?'Enabled location':'Mapped location'}</strong><small>{claimed?'Owner verified':'Community profile'}</small></article>
-   <article><span>LOCATION</span><strong>{[location.city,location.region].filter(Boolean).join(', ')||'Location mapped'}</strong><small>{location.country||'GeoWeedo'}</small></article>
-   <article><span>COORDINATES</span><strong>{hasCoords?`${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`:'Pending'}</strong><small>{hasCoords?'Mapped ✓':'Enrichment needed'}</small></article>
-   <article><span>OFFICIAL DATA</span><strong>{location.licenseNumber||'License not published'}</strong><small>{location.dataSource||'GeoWeedo record'}</small></article>
-  </section>
-  <div className={styles.content}>
-   {sponsored&&<aside className={styles.sponsor}><strong>★ Featured GeoWeedo profile</strong><p>This dispensary has active sponsored placement. Sponsorship changes presentation and placement, not reviews, licensing data, or organic search relevance.</p></aside>}
-   <section className={styles.cta}><div><span>EXPLORE THE LOCATION</span><h3>See where this dispensary lives on GeoWeedo.</h3><p>Jump back to the interactive map, inspect the location and open available street imagery.</p></div><a href={mapHref}>OPEN MAP + STREET VIEW →</a></section>
-   <div className={styles.sectionTitle}><div><span>DISPENSARY PROFILE</span><h2>Details & community</h2></div><p>Hours, services, reviews and official source information.</p></div>
-   <div className={styles.community}><DispensaryCommunityDetails locationId={location.id}/></div>
-   <div className={styles.admin}><ModeratorDispensaryEditor locationId={location.id}/></div>
   </div>
- </div></main>;
+ </main>;
 }
