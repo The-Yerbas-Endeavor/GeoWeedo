@@ -14,24 +14,24 @@
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
 .home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:73}
 .home-map-canvas img.geoweedo-branded-pin{
-  content:url('/assets/geoweedo/geoweedo-icon-96.png')!important;
+  content:normal!important;
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
-  width:42px!important;
-  height:42px!important;
-  min-width:42px!important;
-  min-height:42px!important;
+  width:39px!important;
+  height:50px!important;
+  min-width:39px!important;
+  min-height:50px!important;
   max-width:none!important;
   max-height:none!important;
   box-sizing:border-box!important;
-  padding:2px!important;
+  padding:0!important;
   object-fit:contain!important;
-  background:rgba(7,17,8,.96)!important;
-  border:2px solid rgba(238,255,240,.98)!important;
-  border-radius:50%!important;
-  box-shadow:0 0 0 2px rgba(61,216,91,.88),0 3px 8px rgba(0,0,0,.72)!important;
-  filter:none!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  filter:drop-shadow(0 3px 4px rgba(0,0,0,.58))!important;
   pointer-events:auto!important;
 }
 .home-map-canvas img.geoweedo-branded-pin.geoweedo-sponsored-logo{
