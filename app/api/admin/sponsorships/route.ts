@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
 import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements } from '@/lib/sponsorshipStore';
+import { getDatabase } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
 
@@ -29,11 +30,13 @@ export async function POST(request: NextRequest) {
   if (!(await readApprovedDispensaries()).some((item) => item.id === dispensaryId)) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
   if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt.getTime() <= startsAt.getTime()) return NextResponse.json({ error: 'Valid Featured dates are required.' }, { status: 400 });
 
+  const verifiedOwner = getDatabase().prepare(`SELECT user_id FROM dispensary_user_owner_assignments WHERE location_id=? AND status='verified' ORDER BY verified_at DESC LIMIT 1`).get(dispensaryId) as {user_id:string}|undefined;
+
   try {
     const entitlement = grantFeatured({
       dispensaryId,
       businessId: body?.businessId ? String(body.businessId) : undefined,
-      ownerUserId: body?.ownerUserId ? String(body.ownerUserId) : undefined,
+      ownerUserId: body?.ownerUserId ? String(body.ownerUserId) : verifiedOwner?.user_id,
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
       status,
