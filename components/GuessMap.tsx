@@ -34,11 +34,13 @@ const BASE_MAPS:Record<BaseMap,{source:string;layer:string;tiles:string[];attrib
 const GAME_STYLE:StyleSpecification={version:8,sources:{
  [BASE_MAPS.street.source]:{type:'raster',tiles:BASE_MAPS.street.tiles,tileSize:256,attribution:BASE_MAPS.street.attribution,maxzoom:BASE_MAPS.street.maxzoom},
  [BASE_MAPS.topo.source]:{type:'raster',tiles:BASE_MAPS.topo.tiles,tileSize:256,attribution:BASE_MAPS.topo.attribution,maxzoom:BASE_MAPS.topo.maxzoom},
- [BASE_MAPS.satellite.source]:{type:'raster',tiles:BASE_MAPS.satellite.tiles,tileSize:256,attribution:BASE_MAPS.satellite.attribution,maxzoom:BASE_MAPS.satellite.maxzoom}
+ [BASE_MAPS.satellite.source]:{type:'raster',tiles:BASE_MAPS.satellite.tiles,tileSize:256,attribution:BASE_MAPS.satellite.attribution,maxzoom:BASE_MAPS.satellite.maxzoom},
+ [TEST_SOURCE]:{type:'geojson',data:{type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[-98.5,39]},properties:{kind:'initial-style-render-test'}}]}}
 },layers:[
  {id:BASE_MAPS.street.layer,type:'raster',source:BASE_MAPS.street.source,layout:{visibility:'visible'}},
  {id:BASE_MAPS.topo.layer,type:'raster',source:BASE_MAPS.topo.source,layout:{visibility:'none'}},
- {id:BASE_MAPS.satellite.layer,type:'raster',source:BASE_MAPS.satellite.source,layout:{visibility:'none'}}
+ {id:BASE_MAPS.satellite.layer,type:'raster',source:BASE_MAPS.satellite.source,layout:{visibility:'none'}},
+ {id:TEST_LAYER,type:'circle',source:TEST_SOURCE,paint:{'circle-radius':20,'circle-color':'#ff2bd6','circle-opacity':1,'circle-stroke-color':'#ffffff','circle-stroke-width':4}}
 ]};
 
 const USA_HOME_VIEW={center:[-98.5,39] as [number,number],zoom:3.3};
@@ -100,10 +102,8 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
   const onEnabledClick=(e:any)=>{e.originalEvent?.stopPropagation?.();selectFeature(e.features?.[0] as MapGeoJSONFeature|undefined);};
   const onMappedClick=(e:any)=>{e.originalEvent?.stopPropagation?.();selectFeature(e.features?.[0] as MapGeoJSONFeature|undefined);};
   const cursorOn=()=>{map.getCanvas().style.cursor='pointer';},cursorOff=()=>{map.getCanvas().style.cursor='';};
-  const updateDiagnostic=()=>{try{const testSourceCount=map.querySourceFeatures(TEST_SOURCE).length;const testRenderedCount=map.getLayer(TEST_LAYER)?map.queryRenderedFeatures({layers:[TEST_LAYER]}).length:0;const locationSourceCount=map.getSource(LOCATION_SOURCE)?map.querySourceFeatures(LOCATION_SOURCE).length:0;const locationRenderedCount=map.getLayer(ENABLED_DIAGNOSTIC_LAYER)?map.queryRenderedFeatures({layers:[ENABLED_DIAGNOSTIC_LAYER]}).length:0;setMapDiagnostic(`test ${testSourceCount}/${testRenderedCount} · locations ${locationSourceCount}/${locationRenderedCount}`);}catch(error){setMapDiagnostic(error instanceof Error?`diagnostic: ${error.message}`:'diagnostic failed');}};
+  const updateDiagnostic=()=>{try{const testSourceExists=Boolean(map.getSource(TEST_SOURCE));const testLayerExists=Boolean(map.getLayer(TEST_LAYER));const locationSourceExists=Boolean(map.getSource(LOCATION_SOURCE));const locationLayerExists=Boolean(map.getLayer(ENABLED_DIAGNOSTIC_LAYER));const testSourceCount=testSourceExists?map.querySourceFeatures(TEST_SOURCE).length:0;const testRenderedCount=testLayerExists?map.queryRenderedFeatures({layers:[TEST_LAYER]}).length:0;const locationSourceCount=locationSourceExists?map.querySourceFeatures(LOCATION_SOURCE).length:0;const locationRenderedCount=locationLayerExists?map.queryRenderedFeatures({layers:[ENABLED_DIAGNOSTIC_LAYER]}).length:0;setMapDiagnostic(`test src:${testSourceExists?'yes':'no'} layer:${testLayerExists?'yes':'no'} ${testSourceCount}/${testRenderedCount} · loc src:${locationSourceExists?'yes':'no'} layer:${locationLayerExists?'yes':'no'} ${locationSourceCount}/${locationRenderedCount}`);}catch(error){setMapDiagnostic(error instanceof Error?`diagnostic: ${error.message}`:'diagnostic failed');}};
   const ready=()=>{map.resize();switchBaseMap(map,baseMapRef.current);if(!browseModeRef.current){setMapWarning(null);setMapReady(true);return;}try{
-   if(!map.getSource(TEST_SOURCE))map.addSource(TEST_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[-98.5,39]},properties:{kind:'render-test'}}]}});
-   if(!map.getLayer(TEST_LAYER))map.addLayer({id:TEST_LAYER,type:'circle',source:TEST_SOURCE,paint:{'circle-radius':20,'circle-color':'#ff2bd6','circle-opacity':1,'circle-stroke-color':'#ffffff','circle-stroke-width':4}});
    const initialData=locationData(visibleLocationsRef.current);
    if(!map.getSource(LOCATION_SOURCE))map.addSource(LOCATION_SOURCE,{type:'geojson',data:initialData});else (map.getSource(LOCATION_SOURCE) as GeoJSONSource).setData(initialData);
    if(!map.getLayer(SPONSORED_HALO_LAYER))map.addLayer({id:SPONSORED_HALO_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['all',['==',['get','enabled'],1],['==',['get','sponsored'],1]],paint:{'circle-radius':['interpolate',['linear'],['zoom'],2,8,8,12,14,17],'circle-color':'rgba(245,196,81,.16)','circle-stroke-color':'#f5c451','circle-stroke-width':2.5,'circle-opacity':0.95}});
