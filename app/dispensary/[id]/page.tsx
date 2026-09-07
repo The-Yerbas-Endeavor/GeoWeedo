@@ -48,13 +48,12 @@ export default async function DispensaryProfilePage({params}:Props){
      <div className={styles.kicker}>GEOWEEDO DISPENSARY</div>
      <div className={styles.status}><span className={styles.badge}>{listed?'✓ ENABLED':'● MAPPED'}</span><span className={styles.badge}>{profileTier}</span>{claimed&&<span className={styles.badge}>✓ OWNER VERIFIED</span>}{sponsored&&<span className={`${styles.badge} ${styles.gold}`}>★ FEATURED</span>}</div>
      <div className={styles.brand}>{logo&&<img className={styles.logo} src={logo.path} alt={`${location.name} logo`}/>}<div><h1>{location.name}</h1><p className={styles.address}>📍 {address||[location.city,location.region].filter(Boolean).join(', ')}</p></div></div>
-     {profile?.overview&&<p className={styles.overview}>{profile.overview}</p>}
      <div className={styles.actions}><a href={mapHref}>📍 View on GeoWeedo map</a>{website&&<a href={website} target="_blank" rel="noreferrer">↗ Website</a>}{phone&&<a href={`tel:${phone.replace(/[^+\d]/g,'')}`}>☎ Call</a>}{claimed&&<a href="/owner">Owner editor</a>}</div>
     </div>
    </section>
    <div className={styles.content}>
     {sponsored&&<aside className={styles.sponsor}><strong>★ Featured GeoWeedo profile</strong><p>This dispensary has active sponsored placement. Sponsorship changes presentation and placement, not reviews, licensing data, or organic search relevance.</p></aside>}
-    <div className={styles.sectionTitle}><div><span>DISPENSARY PROFILE</span><h2>Details & community</h2></div><p>Hours, services, reviews and community information.</p></div>
+    <div className={styles.sectionTitle}><div><span>DISPENSARY PROFILE</span><h2>Details & community</h2></div><p>Hours, business information, services, reviews and community details.</p></div>
     <div className={styles.community}><DispensaryCommunityDetails locationId={location.id}/></div>
     <div className={styles.admin}><ModeratorDispensaryEditor locationId={location.id}/></div>
    </div>
