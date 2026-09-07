@@ -14,7 +14,6 @@
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
 .home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:73}
 .home-map-canvas img.geoweedo-branded-pin{
-  content:normal!important;
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
@@ -27,6 +26,7 @@
   box-sizing:border-box!important;
   padding:0!important;
   object-fit:contain!important;
+  object-position:center bottom!important;
   background:transparent!important;
   border:0!important;
   border-radius:0!important;
@@ -35,7 +35,6 @@
   pointer-events:auto!important;
 }
 .home-map-canvas img.geoweedo-branded-pin.geoweedo-sponsored-logo{
-  content:normal!important;
   width:50px!important;
   height:50px!important;
   min-width:50px!important;
