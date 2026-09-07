@@ -4,7 +4,7 @@
 .home-map-canvas .guess-map-canvas{position:absolute!important;inset:0!important;z-index:1!important}
 .home-map-canvas .maplibregl-map{position:absolute!important;inset:0!important;z-index:1!important}
 .home-map-canvas .maplibregl-canvas-container{position:absolute!important;inset:0!important}
-.home-map-canvas .maplibregl-marker{position:absolute!important;z-index:50!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
+.home-map-canvas .maplibregl-marker{position:absolute!important;z-index:5!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
 .home-map-canvas .maplibregl-control-container{position:relative;z-index:60}
 .home-map-canvas .map-browser-tools,.home-map-canvas .map-data-status{z-index:71}
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
@@ -14,6 +14,7 @@
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
+  z-index:20!important;
   width:42px!important;
   height:42px!important;
   min-width:42px!important;
