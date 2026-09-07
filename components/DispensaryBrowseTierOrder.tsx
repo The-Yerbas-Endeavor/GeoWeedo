@@ -49,21 +49,30 @@ export default function DispensaryBrowseTierOrder(){
    document.querySelectorAll<HTMLElement>('.map-browser-row-status').forEach(status=>{
     if(status.textContent?.trim().toUpperCase()==='PLAY')status.textContent='ENABLED';
    });
-   if(!tiers.size)return;
+
+   const allMapped=document.querySelector('.map-browser-panel-head span')?.textContent?.toUpperCase().includes('ALL MAPPED')??false;
    document.querySelectorAll<HTMLElement>('.map-browser-state').forEach(section=>{
     const state=section.querySelector('.map-browser-state-head strong')?.textContent?.trim()||'';
-    const rows=Array.from(section.querySelectorAll<HTMLElement>(':scope > .map-browser-row'));
-    if(!rows.length)return;
-    const ranked=rows.map((row,index)=>{
+    const list=section.querySelector<HTMLElement>('.map-browser-state-list');
+    if(!list)return;
+    const wrappers=Array.from(list.children).filter((node):node is HTMLElement=>node instanceof HTMLElement&&Boolean(node.querySelector('.map-browser-row')));
+    if(!wrappers.length)return;
+
+    const ranked=wrappers.map((wrapper,index)=>{
+     const row=wrapper.querySelector<HTMLElement>('.map-browser-row');
+     if(!row)return{wrapper,index,enabled:0,rank:0};
      const name=row.querySelector('.map-browser-row-copy strong')?.textContent?.trim()||'';
      const city=row.querySelector('.map-browser-row-copy small')?.textContent?.trim()||'';
+     const status=row.querySelector('.map-browser-row-status')?.textContent?.trim().toUpperCase()||'';
+     const enabled=status.includes('ENABLED')?1:0;
      const k=key(name,city,state),rank=tiers.get(k)??0,label=labels.get(k)||'Mapped';
      row.dataset.profileTier=String(rank);
      let badge=row.querySelector<HTMLElement>('.map-profile-tier-badge');
      if(rank>0){if(!badge){badge=document.createElement('span');badge.className='map-profile-tier-badge';row.querySelector('.map-browser-row-copy')?.appendChild(badge);}badge.textContent=label;badge.dataset.tier=String(rank);}else badge?.remove();
-     return{row,index,rank};
-    }).sort((a,b)=>b.rank-a.rank||a.index-b.index);
-    const current=rows;if(ranked.some((x,i)=>current[i]!==x.row))ranked.forEach(x=>section.appendChild(x.row));
+     return{wrapper,index,enabled,rank};
+    }).sort((a,b)=>(allMapped?b.enabled-a.enabled:0)||b.rank-a.rank||a.index-b.index);
+
+    if(ranked.some((x,i)=>wrappers[i]!==x.wrapper))ranked.forEach(x=>list.appendChild(x.wrapper));
    });
   };
 
