@@ -1,8 +1,12 @@
 .home-map-stage::after{display:none!important}
-.home-map-canvas .guess-map-wrap::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(6,9,7,.72) 0%,rgba(6,9,7,.24) 38%,rgba(6,9,7,.06) 65%,rgba(6,9,7,.22) 100%);z-index:2}
-.home-map-canvas .maplibregl-marker{z-index:6!important;opacity:1!important;visibility:visible!important;display:block!important}
-.home-map-canvas .maplibregl-control-container{position:relative;z-index:7}
+.home-map-canvas .guess-map-wrap::after{display:none!important;content:none!important}
+.home-map-canvas .guess-map-wrap{isolation:isolate}
+.home-map-canvas .guess-map-canvas{position:absolute!important;inset:0!important;z-index:1!important}
+.home-map-canvas .maplibregl-map{position:absolute!important;inset:0!important;z-index:1!important}
+.home-map-canvas .maplibregl-canvas-container{position:absolute!important;inset:0!important}
+.home-map-canvas .maplibregl-marker{position:absolute!important;z-index:10!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
+.home-map-canvas .maplibregl-control-container{position:relative;z-index:20}
 .home-map-canvas .map-browser-tools,.home-map-canvas .map-data-status{z-index:31}
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:32}
 .home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:33}
-.home-map-canvas .geoweedo-branded-pin{opacity:1!important;visibility:visible!important;display:block!important;min-width:40px;min-height:40px}
+.home-map-canvas .geoweedo-branded-pin{opacity:1!important;visibility:visible!important;display:block!important;min-width:40px;min-height:40px;pointer-events:auto!important}
