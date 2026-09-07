@@ -13,19 +13,15 @@
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
-  width:44px!important;
-  height:44px!important;
-  min-width:44px!important;
-  min-height:44px!important;
   max-width:none!important;
   max-height:none!important;
-  box-sizing:border-box!important;
-  padding:2px!important;
+  box-sizing:content-box!important;
+  padding:0!important;
   object-fit:contain!important;
-  background:rgba(7,17,8,.96)!important;
-  border:2px solid rgba(235,255,238,.98)!important;
-  border-radius:50%!important;
-  box-shadow:0 0 0 3px rgba(69,200,90,.72),0 4px 10px rgba(0,0,0,.62)!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.7))!important;
   pointer-events:auto!important;
 }
-.home-map-canvas img.geoweedo-branded-pin[src="/assets/geoweedo/geoweedo-map-marker.png"]{background-color:rgba(7,17,8,.96)!important}
