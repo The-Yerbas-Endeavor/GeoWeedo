@@ -11,9 +11,10 @@ Use these files for the website until the remaining derivative package assets ar
 - `geoweedo-icon-master.png` — clean mascot/app icon master with green thumbs-up.
 - `geoweedo-logo-horizontal-dark.png` — primary horizontal GeoWeedo wordmark with cannabis leaf inside the final `o`.
 - `geoweedo-logo-horizontal-light.png` — light-background horizontal version.
+- `geoweedo-map-marker.png` — dedicated compact mascot artwork for enabled GeoWeedo map markers.
 - `site.webmanifest` — installable app metadata.
 
-The website header, mobile Search/Play splash, desktop game intro, app/browser icon metadata and social metadata should reference only the clean master assets above.
+The website header, mobile Search/Play splash, desktop game intro, app/browser icon metadata and social metadata should reference only the clean master assets above. Map markers should use the dedicated `geoweedo-map-marker.png` asset rather than shrinking the full mascot master into a marker.
 
 ## Important
 
