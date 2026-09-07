@@ -5,6 +5,9 @@
 .home-map-canvas .maplibregl-map{position:absolute!important;inset:0!important;z-index:1!important}
 .home-map-canvas .maplibregl-canvas-container{position:absolute!important;inset:0!important}
 .home-map-canvas .maplibregl-marker{position:absolute!important;z-index:5!important;opacity:1!important;visibility:visible!important;display:block!important;pointer-events:auto!important}
+.home-map-canvas .maplibregl-marker.geoweedo-mapped-marker{z-index:4!important}
+.home-map-canvas .maplibregl-marker.geoweedo-enabled-marker{z-index:20!important}
+.home-map-canvas .maplibregl-marker.geoweedo-selected-marker{z-index:30!important}
 .home-map-canvas .maplibregl-control-container{position:relative;z-index:60}
 .home-map-canvas .map-browser-tools,.home-map-canvas .map-data-status{z-index:71}
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
@@ -14,7 +17,6 @@
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
-  z-index:20!important;
   width:42px!important;
   height:42px!important;
   min-width:42px!important;
@@ -30,4 +32,9 @@
   box-shadow:0 0 0 2px rgba(61,216,91,.88),0 3px 8px rgba(0,0,0,.72)!important;
   filter:none!important;
   pointer-events:auto!important;
+}
+.home-map-canvas .geoweedo-mapped-pin{
+  opacity:.72!important;
+  visibility:visible!important;
+  display:block!important;
 }
