@@ -58,7 +58,7 @@ async function buildPointyPinImage(map:LibreMap){
  ctx.beginPath();ctx.moveTo(48,119);ctx.bezierCurveTo(42,107,21,79,17,58);ctx.bezierCurveTo(12,34,27,13,48,13);ctx.bezierCurveTo(69,13,84,34,79,58);ctx.bezierCurveTo(75,79,54,107,48,119);ctx.closePath();ctx.lineWidth=4;ctx.strokeStyle='#07140a';ctx.stroke();
  ctx.save();ctx.beginPath();ctx.arc(48,47,28,0,Math.PI*2);ctx.clip();ctx.fillStyle='#0b0e0c';ctx.fillRect(20,19,56,56);ctx.drawImage(badge.data as unknown as CanvasImageSource,20,19,56,56);ctx.restore();
  ctx.beginPath();ctx.arc(48,47,29,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle='rgba(245,248,245,.96)';ctx.stroke();
- return ctx.getImageData(0,0,96,128);
+ return await createImageBitmap(canvas);
 }
 
 export default function GuessMap({guess,actual=null,revealed=false,onGuess,locations=[],browseMode=false,mappedTotal,countriesTotal,enabledTotal,showAllMappedPins=false}:Props){
