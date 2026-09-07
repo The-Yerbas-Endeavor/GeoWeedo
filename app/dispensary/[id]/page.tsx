@@ -22,7 +22,12 @@ function tier(input:{sponsored:boolean;claimed:boolean;listed:boolean}){
  if(input.listed)return 'Listed';
  return 'Mapped';
 }
-function safeWebsite(value?:string){if(!value)return null;return /^https?:\/\//i.test(value)?value:`https://${value}`;}
+function safeWebsite(value?:string|null){if(!value)return null;return /^https?:\/\//i.test(value)?value:`https://${value}`;}
+function mapEmbed(latitude:number,longitude:number){
+ const dx=.032,dy=.019;
+ const bbox=[longitude-dx,latitude-dy,longitude+dx,latitude+dy].map(v=>v.toFixed(6)).join(',');
+ return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
+}
 export async function generateMetadata({params}:Props):Promise<Metadata>{
  const {id}=await params,resolved=resolveDispensaryIdentifier(id),location=resolved?getLocationBase(resolved.locationId):null;
  if(!location)return {title:'Dispensary not found · GeoWeedo'};
@@ -35,10 +40,11 @@ export default async function DispensaryProfilePage({params}:Props){
  if(resolved.alias&&resolved.slug&&resolved.slug!==id)redirect(`/dispensary/${resolved.slug}`);
  const location=getLocationBase(resolved.locationId);if(!location)return null;
  const profile=getCommunityProfile(location.id),logo=getDispensaryLogo(location.id),claimed=isClaimed(location.id),sponsorship=(await activeSponsorshipMap()).get(location.id),sponsored=Boolean(sponsorship),listed=location.kind==='dispensary'&&Boolean(location.active&&location.verified),profileTier=tier({sponsored,claimed,listed});
- const address=[location.streetAddress,location.city,location.region,location.postalCode,location.country].filter(Boolean).join(', '),website=safeWebsite(profile?.website||location.website),phone=profile?.phone||location.phone,hasCoords=Number.isFinite(location.latitude)&&Number.isFinite(location.longitude),mapHref=`/?location=${encodeURIComponent(resolved.slug||location.id)}`;
+ const address=[location.streetAddress,location.city,location.region,location.postalCode,location.country].filter(Boolean).join(', '),website=safeWebsite(profile?.website||location.website),phone=profile?.phone||location.phone,hasCoords=Number.isFinite(location.latitude)&&Number.isFinite(location.longitude),mapHref=`/?location=${encodeURIComponent(resolved.slug||location.id)}`,mapBackground=hasCoords?mapEmbed(location.latitude,location.longitude):null;
  return <main className={styles.page}><div className={styles.wrap}>
   <a className={styles.back} href="/">← Back to GeoWeedo map</a>
   <section className={styles.hero}>
+   {mapBackground&&<div className={styles.heroMap} aria-hidden="true"><iframe src={mapBackground} title="" loading="lazy" tabIndex={-1}/></div>}
    <div className={styles.heroContent}>
     <div className={styles.kicker}>GEOWEEDO DISPENSARY</div>
     <div className={styles.status}><span className={styles.badge}>{listed?'✓ ENABLED':'● MAPPED'}</span><span className={styles.badge}>{profileTier}</span>{claimed&&<span className={styles.badge}>✓ OWNER VERIFIED</span>}{sponsored&&<span className={`${styles.badge} ${styles.gold}`}>★ FEATURED</span>}</div>
