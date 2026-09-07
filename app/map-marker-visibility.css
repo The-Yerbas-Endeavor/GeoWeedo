@@ -14,7 +14,7 @@
 .home-map-canvas .map-browser-panel,.home-map-canvas .map-location-card{z-index:72}
 .home-map-canvas .map-streetview-panel,.home-map-canvas .map-layers-panel{z-index:73}
 .home-map-canvas img.geoweedo-branded-pin{
-  content:normal!important;
+  content:url('/assets/geoweedo/geoweedo-map-marker.png')!important;
   opacity:1!important;
   visibility:visible!important;
   display:block!important;
@@ -22,8 +22,8 @@
   height:50px!important;
   min-width:39px!important;
   min-height:50px!important;
-  max-width:none!important;
-  max-height:none!important;
+  max-width:39px!important;
+  max-height:50px!important;
   box-sizing:border-box!important;
   padding:0!important;
   object-fit:contain!important;
@@ -40,6 +40,8 @@
   height:50px!important;
   min-width:50px!important;
   min-height:50px!important;
+  max-width:50px!important;
+  max-height:50px!important;
   padding:4px!important;
   object-fit:contain!important;
   background:rgba(255,255,255,.96)!important;
