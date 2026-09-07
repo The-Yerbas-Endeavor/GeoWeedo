@@ -28,7 +28,7 @@ export default function MapLocationCardLogoEnhancer(){
    logo.className='map-location-logo';
    logo.src=path;
    logo.alt=`${card.querySelector('h3')?.textContent?.trim()||'Dispensary'} logo`;
-   Object.assign(logo.style,{display:'block',width:'76px',height:'76px',objectFit:'contain',margin:'10px 0 12px',padding:'7px',borderRadius:'14px',background:'rgba(255,255,255,.96)',border:'1px solid rgba(103,214,110,.30)',boxShadow:'0 8px 24px rgba(0,0,0,.24)'});
+   Object.assign(logo.style,{display:'block',width:'76px',height:'76px',objectFit:'contain',margin:'10px 0 12px',padding:'7px',borderRadius:'14px',border:'1px solid rgba(103,214,110,.30)',boxShadow:'0 8px 24px rgba(0,0,0,.24)'});
    const title=card.querySelector('h3');
    if(title)title.insertAdjacentElement('beforebegin',logo);
    else card.prepend(logo);
