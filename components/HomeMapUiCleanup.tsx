@@ -16,9 +16,10 @@ function openBrowsePanel(){
       panel.setAttribute('aria-label','Browse dispensaries');
       return;
     }
-    const displaySelect=document.querySelector<HTMLSelectElement>('.map-first-home .map-browser-tools select[aria-label="Dispensary display"]');
-    if(displaySelect){
-      displaySelect.dispatchEvent(new Event('change',{bubbles:true}));
+    const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
+    const browseButton=buttons.find(button=>/^Browse list\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''));
+    if(browseButton){
+      browseButton.click();
       window.setTimeout(tryOpen,40);
       return;
     }
