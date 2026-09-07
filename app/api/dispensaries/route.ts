@@ -19,13 +19,12 @@ export async function GET() {
         ...item,
         slug:getOrCreateDispensarySlug(item.id),
         claimed:isClaimed,
-        sponsored: Boolean(sponsorship),
-        sponsorPriority: sponsorship?.priorityWeight ?? 0,
-        sponsorshipEndsAt: sponsorship?.endsAt,
+        sponsored:Boolean(sponsorship),
+        sponsorshipEndsAt:sponsorship?.ends_at,
         profileTier:sponsorship&&isClaimed?'sponsored_claimed':isClaimed?'claimed_listed':'listed',
       };
     })
-    .sort((a, b) => Number(b.sponsored)-Number(a.sponsored) || Number(b.claimed)-Number(a.claimed) || b.sponsorPriority-a.sponsorPriority || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(b.sponsored)-Number(a.sponsored) || Number(b.claimed)-Number(a.claimed) || a.name.localeCompare(b.name));
 
   return NextResponse.json({ dispensaries }, {headers: { 'Cache-Control': 'no-store' }});
 }
