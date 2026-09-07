@@ -3,6 +3,7 @@ import 'server-only';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getDatabase } from '@/lib/sqlite';
+import { activeFeaturedMap } from '@/lib/sponsorshipStore';
 
 export type ImageryProvider = 'google' | 'kartaview' | 'geoweedo';
 
@@ -33,6 +34,7 @@ export type ApprovedDispensary = {
   imageryUrl: string;
   priorityWeight?: number;
   sponsoredUntil?: string;
+  sponsored?: boolean;
   verified: true;
   active: boolean;
   createdAt: string;
@@ -166,7 +168,11 @@ async function migrateLegacyJsonOnce() {
 export async function readApprovedDispensaries(): Promise<ApprovedDispensary[]> {
   await migrateLegacyJsonOnce();
   const rows = getDatabase().prepare('SELECT * FROM dispensaries ORDER BY active DESC, region ASC, city ASC, name ASC').all() as Record<string, unknown>[];
-  return rows.map(rowToDispensary);
+  const featured = activeFeaturedMap();
+  return rows.map((row) => {
+    const dispensary = rowToDispensary(row);
+    return { ...dispensary, sponsored: featured.has(dispensary.id) };
+  });
 }
 
 export async function saveApprovedDispensary(input: Omit<ApprovedDispensary, 'id' | 'verified' | 'createdAt' | 'updatedAt'>) {

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityProfile, listUserOwnedLocations, upsertCommunityProfile, userOwnerCanEdit } from '@/lib/dispensaryCommunity';
+import { sponsorshipSummaryForOwner } from '@/lib/sponsorshipStore';
 import { getUserFromRequest } from '@/lib/userAuth';
 
 export const runtime='nodejs';
 
 export async function GET(request:NextRequest){
  const user=getUserFromRequest(request);if(!user)return NextResponse.json({error:'Sign in required.'},{status:401});
- return NextResponse.json({owner:user,dispensaries:listUserOwnedLocations(user.id)},{headers:{'Cache-Control':'no-store'}});
+ const dispensaries=listUserOwnedLocations(user.id).map(item=>({...item,sponsorship:sponsorshipSummaryForOwner(user.id,item.locationId)}));
+ return NextResponse.json({owner:user,dispensaries},{headers:{'Cache-Control':'no-store'}});
 }
 
 export async function PATCH(request:NextRequest){
