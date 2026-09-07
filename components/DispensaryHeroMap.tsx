@@ -39,7 +39,7 @@ export default function DispensaryHeroMap({latitude,longitude,className}:Props){
    container:nodeRef.current,
    style:STYLE,
    center:[longitude,latitude],
-   zoom:11.7,
+   zoom:10.25,
    interactive:false,
    attributionControl:false,
    fadeDuration:0
