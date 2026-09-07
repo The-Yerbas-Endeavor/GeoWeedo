@@ -32,7 +32,7 @@ export async function generateMetadata({params}:Props):Promise<Metadata>{
 }
 export default async function DispensaryProfilePage({params}:Props){
  const {id}=await params,resolved=resolveDispensaryIdentifier(id);
- if(!resolved)return <main className={styles.page}><div className={styles.pageShade}/><div className={styles.wrap}><a className={styles.back} href="/">← Back to map</a><section className={styles.hero}><div className={styles.heroContent}><div className={styles.kicker}>GEOWEEDO LOCATION</div><h1>Dispensary not found</h1><p className={styles.address}>This location may have been removed or is no longer public.</p></div></section></div></main>;
+ if(!resolved)return <main className={styles.page}><div className={styles.pageShade}/><div className={styles.wrap}><a className={styles.back} href="/">← Back to map</a><section className={styles.hero}><img className={styles.heroBackdrop} src="/assets/geoweedo/geoweedo-profile-hero.png" alt="" aria-hidden="true"/><div className={styles.heroContent}><div className={styles.kicker}>GEOWEEDO LOCATION</div><h1>Dispensary not found</h1><p className={styles.address}>This location may have been removed or is no longer public.</p></div></section></div></main>;
  if(resolved.alias&&resolved.slug&&resolved.slug!==id)redirect(`/dispensary/${resolved.slug}`);
  const location=getLocationBase(resolved.locationId);if(!location)return null;
  const profile=getCommunityProfile(location.id),logo=getDispensaryLogo(location.id),claimed=isClaimed(location.id),sponsorship=(await activeSponsorshipMap()).get(location.id),sponsored=Boolean(sponsorship),listed=location.kind==='dispensary'&&Boolean(location.active&&location.verified),profileTier=tier({sponsored,claimed,listed});
@@ -43,6 +43,7 @@ export default async function DispensaryProfilePage({params}:Props){
   <div className={styles.wrap}>
    <a className={styles.back} href="/">← Back to GeoWeedo map</a>
    <section className={styles.hero}>
+    <img className={styles.heroBackdrop} src="/assets/geoweedo/geoweedo-profile-hero.png" alt="" aria-hidden="true"/>
     <div className={styles.heroContent}>
      <div className={styles.kicker}>GEOWEEDO DISPENSARY</div>
      <div className={styles.status}><span className={styles.badge}>{listed?'✓ ENABLED':'● MAPPED'}</span><span className={styles.badge}>{profileTier}</span>{claimed&&<span className={styles.badge}>✓ OWNER VERIFIED</span>}{sponsored&&<span className={`${styles.badge} ${styles.gold}`}>★ FEATURED</span>}</div>
