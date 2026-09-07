@@ -36,6 +36,7 @@ import AdminAmenitiesCheckboxes from '@/components/AdminAmenitiesCheckboxes';
 import PendingGameRewardClaim from '@/components/PendingGameRewardClaim';
 import HomeMapUiCleanup from '@/components/HomeMapUiCleanup';
 import MapBrowserPanelDraggable from '@/components/MapBrowserPanelDraggable';
+import SponsoredMapLogoEnhancer from '@/components/SponsoredMapLogoEnhancer';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -69,7 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-icon-96.png" as="image" type="image/png" />
       </head>
-      <body>{children}<MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body>{children}<SponsoredMapLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
