@@ -8,6 +8,7 @@ import { fetchBritishColumbiaCandidates } from '@/lib/officialSources/britishCol
 import { fetchColoradoCandidates } from '@/lib/officialSources/colorado';
 import { fetchConnecticutCandidates } from '@/lib/officialSources/connecticut';
 import { fetchDelawareCandidates } from '@/lib/officialSources/delaware';
+import { fetchDistrictOfColumbiaCandidates } from '@/lib/officialSources/districtOfColumbia';
 import { fetchFloridaCandidates } from '@/lib/officialSources/florida';
 import { fetchGeorgiaCandidates } from '@/lib/officialSources/georgia';
 import { fetchHawaiiCandidates } from '@/lib/officialSources/hawaii';
@@ -78,6 +79,7 @@ const officialSources=[
  {preset:'nevada-ccb',label:'Nevada CCB',fetcher:fetchNevada},
  {preset:'washington-lcb',label:'Washington LCB',fetcher:fetchWashington},
  {preset:'connecticut-dcp',label:'Connecticut DCP',fetcher:fetchConnecticutCandidates},
+ {preset:'district-of-columbia-abca',label:'District of Columbia ABCA',fetcher:fetchDistrictOfColumbiaCandidates},
  {preset:'new-hampshire-dhhs',label:'New Hampshire DHHS',fetcher:fetchNewHampshireCandidates},
  {preset:'new-york-ocm',label:'New York OCM',fetcher:fetchNewYork},
  {preset:'new-mexico-ccd',label:'New Mexico CCD',fetcher:fetchNewMexicoCandidates},
