@@ -18,16 +18,16 @@
 .map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}
 .map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}
 .map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
-.map-first-home .map-browser-panel{left:auto;right:18px;top:72px;transform:none;width:min(390px,calc(100vw - 36px));max-height:min(58vh,560px);border-radius:18px;background:rgba(7,12,9,.12);border:1px solid rgba(126,217,87,.2);box-shadow:0 10px 30px rgba(0,0,0,.14);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);overflow:hidden}
-.map-first-home .map-browser-panel .map-browser-panel-head{padding:14px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(7,12,9,.10)}
-.map-first-home .map-browser-panel .map-browser-panel-head span{font-size:10px;letter-spacing:.14em}
+.map-first-home .map-browser-panel{left:22px;right:auto;top:86px;transform:none;width:min(410px,calc(100vw - 44px));max-height:min(76vh,700px);border-radius:18px;background:linear-gradient(180deg,rgba(7,12,9,.56),rgba(7,12,9,.42));border:1px solid rgba(126,217,87,.32);box-shadow:0 14px 40px rgba(0,0,0,.22);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);overflow:hidden}
+.map-first-home .map-browser-panel .map-browser-panel-head{padding:16px 18px 13px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(7,12,9,.22)}
+.map-first-home .map-browser-panel .map-browser-panel-head span{font-size:11px;letter-spacing:.14em}
 .map-first-home .map-browser-panel .map-browser-panel-head strong{font-size:14px}
-.map-first-home .map-browser-panel .map-browser-list{max-height:calc(min(58vh,560px) - 72px);background:rgba(0,0,0,.015)}
-.map-first-home .map-browser-panel .map-browser-state-head{padding:11px 14px;background:rgba(255,255,255,.018)}
+.map-first-home .map-browser-panel .map-browser-list{max-height:calc(min(76vh,700px) - 78px);background:rgba(0,0,0,.02)}
+.map-first-home .map-browser-panel .map-browser-state-head{padding:11px 14px;background:rgba(255,255,255,.035)}
 .map-first-home .map-browser-panel .map-browser-state-head strong{font-size:13px}
 .map-first-home .map-browser-panel .map-browser-state-head small{font-size:10px}
-.map-first-home .map-browser-panel .map-browser-row{padding:10px 13px;background:rgba(7,12,9,.035)}
-.map-first-home .map-browser-panel .map-browser-row:hover{background:rgba(126,217,87,.08)}
+.map-first-home .map-browser-panel .map-browser-row{padding:10px 13px;background:rgba(7,12,9,.08)}
+.map-first-home .map-browser-panel .map-browser-row:hover{background:rgba(126,217,87,.10)}
 .map-first-home .map-browser-panel .map-browser-row-copy strong{font-size:13px}
 .map-first-home .map-browser-panel .map-browser-row-copy small{font-size:10px}
-@media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}.map-first-home .map-browser-panel{left:12px;right:12px;top:112px;bottom:auto;transform:none;width:auto;max-height:52vh;border-radius:16px}.map-first-home .map-browser-panel .map-browser-panel-head{padding:13px 14px}.map-first-home .map-browser-panel .map-browser-list{max-height:calc(52vh - 66px)}}
+@media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}.map-first-home .map-browser-panel{left:12px;right:12px;top:112px;bottom:auto;transform:none;width:auto;max-height:52vh;border-radius:16px;background:rgba(7,12,9,.52);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}.map-first-home .map-browser-panel .map-browser-panel-head{padding:13px 14px}.map-first-home .map-browser-panel .map-browser-list{max-height:calc(52vh - 66px)}}
