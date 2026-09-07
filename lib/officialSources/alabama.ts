@@ -24,7 +24,7 @@ export async function fetchAlabamaCandidates():Promise<AlabamaCandidate[]>{
    if(!name||!streetAddress||!city)continue;
    rows.push({name,streetAddress,city,region:'Alabama',country:'USA',dataSource:'Alabama AMCC Dispensary Opening Announcements',sourceUrl:SOURCE_URL,sourceLicense:'Official Alabama Medical Cannabis Commission operational dispensary opening announcements; only locations with a published opening date and street address are imported.',imageryStatus:'missing_coordinates'});
  }
- const unique=[...new Map(rows.map(row=>[`${row.name.toLowerCase()}|${row.streetAddress?.toLowerCase()}`,row])).values()];
+ const unique=Array.from(new Map(rows.map(row=>[`${row.name.toLowerCase()}|${row.streetAddress?.toLowerCase()}`,row])).values());
  if(!unique.length)throw new Error('Alabama AMCC page returned no operational dispensary opening records; refusing to import proposed or merely licensed future sites.');
  return unique;
 }
