@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
+import { fetchAlabamaCandidates } from '@/lib/officialSources/alabama';
 import { fetchAlaskaCandidates } from '@/lib/officialSources/alaska';
 import { fetchArizonaCandidates } from '@/lib/officialSources/arizona';
 import { fetchArkansasCandidates } from '@/lib/officialSources/arkansas';
@@ -59,6 +60,7 @@ async function fetchNewYork():Promise<CandidateRow[]>{const sourceUrl='https://d
 async function fetchMontana():Promise<CandidateRow[]>{const sourceUrl='https://revenue.mt.gov/card/cannabis/cannabis-licenses/lists/dispensary-locations',html=await getHtml(sourceUrl,'Montana DOR'),rows:CandidateRow[]=[];const tr=/<tr[^>]*>([\s\S]*?)<\/tr>/gi;let m:RegExpExecArray|null;while((m=tr.exec(html))!==null){const cells:string[]=[];const td=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;let c:RegExpExecArray|null;while((c=td.exec(m[1]))!==null)cells.push(c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());if(cells.length>=3&&!/licensee.?s name/i.test(cells[0]))rows.push({name:cells[2]||cells[0],city:cells[1],region:'Montana',country:'USA',dataSource:'Montana DOR Licensed Dispensary Locations',sourceUrl,sourceLicense:'Official Montana Department of Revenue licensed dispensary list.',imageryStatus:'missing_coordinates'});}return rows;}
 
 const officialSources=[
+ {preset:'alabama-amcc',label:'Alabama AMCC',fetcher:fetchAlabamaCandidates},
  {preset:'alaska-amco',label:'Alaska AMCO',fetcher:fetchAlaskaCandidates},
  {preset:'arizona-adhs',label:'Arizona ADHS',fetcher:fetchArizonaCandidates},
  {preset:'arkansas-mmc',label:'Arkansas MMC',fetcher:fetchArkansasCandidates},
