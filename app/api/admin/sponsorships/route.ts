@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminFromRequest } from '@/lib/adminAuth';
+import { adminHasPermission, getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
 import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements } from '@/lib/sponsorshipStore';
 import { getDatabase } from '@/lib/sqlite';
@@ -8,7 +8,8 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const admin = getAdminFromRequest(request);
-  if (!admin || admin.role !== 'admin') return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+  if (!admin) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  if (!adminHasPermission(admin, 'sponsorships.manage')) return NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 });
   ensureSponsorshipSchema();
   return NextResponse.json({
     plan: { code: 'featured', name: 'GeoWeedo Featured', currency: 'USD', monthlyPriceCents: 3900, annualPriceCents: 39000 },
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const admin = getAdminFromRequest(request);
-  if (!admin || admin.role !== 'admin') return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+  if (!admin) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
+  if (!adminHasPermission(admin, 'sponsorships.manage')) return NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 });
   const body = await request.json().catch(() => null);
   const dispensaryId = String(body?.dispensaryId || '');
   const startsAt = new Date(body?.startsAt || Date.now());
