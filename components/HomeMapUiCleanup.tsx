@@ -18,12 +18,8 @@ function openBrowsePanel(){
     }
     const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
     const browseButton=buttons.find(button=>/^Browse list\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''));
-    if(browseButton){
-      browseButton.click();
-      window.setTimeout(tryOpen,40);
-      return;
-    }
-    attempts+=1;if(attempts<12)window.setTimeout(tryOpen,50);
+    if(browseButton){browseButton.click();window.setTimeout(tryOpen,40);return;}
+    attempts+=1;if(attempts<20)window.setTimeout(tryOpen,50);
   };
   tryOpen();
 }
@@ -94,7 +90,19 @@ function bindPromoDrag(card:HTMLElement){
 export default function HomeMapUiCleanup(){
   useLayoutEffect(()=>{
     let browseInitialized=false,promoInitialized=false;
-    const initializeBrowsePanel=()=>{if(browseInitialized)return;const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');if(!panel)return;panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();browseInitialized=true;document.body.classList.add('geoweedo-home-browse-ready');};
+    const initializeBrowsePanel=()=>{
+      if(browseInitialized)return;
+      const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
+      if(!panel)return;
+      browseInitialized=true;
+      document.body.classList.add('geoweedo-home-browse-ready');
+      if(document.body.classList.contains(FINDO_ACTIVE_CLASS)){
+        panel.classList.remove('map-browser-panel-search-minimized');
+        panel.setAttribute('aria-label','Browse dispensaries');
+        return;
+      }
+      panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();
+    };
     const initializePromo=()=>{if(promoInitialized)return;const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();};
     const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
     const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo Weedo on the dispensary map"]'))window.setTimeout(activateFindo,0);};
