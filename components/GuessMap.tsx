@@ -22,6 +22,8 @@ const SPONSORED_HALO_LAYER='geoweedo-sponsored-halo-layer';
 const MAPPED_LAYER='geoweedo-mapped-dot-layer';
 const PIN_IMAGE='geoweedo-pointy-pin';
 const PIN_BADGE_URL='/assets/geoweedo/mascot-head.webp?v=20260907b';
+const PIN_RENDER_SCALE=4;
+const PIN_PIXEL_RATIO=8;
 
 const BASE_MAPS:Record<BaseMap,{source:string;layer:string;tiles:string[];attribution:string;maxzoom:number}>={
  street:{source:'geoweedo-base-street-source',layer:'geoweedo-base-street-layer',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],attribution:'© OpenStreetMap contributors',maxzoom:19},
@@ -50,8 +52,9 @@ function randomGameplayViewport(){const regions=[{west:-124.5,east:-116,south:42
 function raiseMarker(marker:Marker,z='20'){const el=marker.getElement();el.style.zIndex=z;el.style.pointerEvents='auto';return el;}
 async function buildPointyPinImage(map:LibreMap){
  const badge=await map.loadImage(PIN_BADGE_URL);
- const canvas=document.createElement('canvas');canvas.width=96;canvas.height=128;
+ const canvas=document.createElement('canvas');canvas.width=96*PIN_RENDER_SCALE;canvas.height=128*PIN_RENDER_SCALE;
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create pointy pin canvas.');
+ ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);
  ctx.clearRect(0,0,96,128);
  ctx.save();ctx.shadowColor='rgba(0,0,0,.48)';ctx.shadowBlur=8;ctx.shadowOffsetY=5;
  ctx.beginPath();ctx.moveTo(48,124);ctx.bezierCurveTo(42,111,18,82,13,59);ctx.bezierCurveTo(7,31,24,8,48,8);ctx.bezierCurveTo(72,8,89,31,83,59);ctx.bezierCurveTo(78,82,54,111,48,124);ctx.closePath();ctx.fillStyle='#67d66e';ctx.fill();ctx.restore();
@@ -104,7 +107,7 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
    if(!map.getLayer(MAPPED_LAYER))map.addLayer({id:MAPPED_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['==',['get','enabled'],0],paint:{'circle-radius':['interpolate',['linear'],['zoom'],2,2.5,8,4,14,6],'circle-color':'#7f8a82','circle-opacity':0.72,'circle-stroke-color':'rgba(245,248,245,.9)','circle-stroke-width':1.25}});
    map.on('click',MAPPED_LAYER,onMappedClick);map.on('mouseenter',MAPPED_LAYER,cursorOn);map.on('mouseleave',MAPPED_LAYER,cursorOff);
    setMapWarning(null);setMapReady(true);map.triggerRepaint();
-   void (async()=>{try{if(!map.hasImage(PIN_IMAGE)){const image=await buildPointyPinImage(map);if(cancelled)return;if(!map.hasImage(PIN_IMAGE))map.addImage(PIN_IMAGE,image,{pixelRatio:2});}if(cancelled)return;if(!map.getLayer(ENABLED_LAYER))map.addLayer({id:ENABLED_LAYER,type:'symbol',source:LOCATION_SOURCE,filter:['==',['get','enabled'],1],layout:{'icon-image':PIN_IMAGE,'icon-size':['interpolate',['linear'],['zoom'],2,['case',['==',['get','sponsored'],1],0.48,0.42],5,['case',['==',['get','sponsored'],1],0.58,0.52],8,['case',['==',['get','sponsored'],1],0.78,0.70],12,['case',['==',['get','sponsored'],1],1.00,0.92],16,['case',['==',['get','sponsored'],1],1.12,1.02]],'icon-anchor':'bottom','icon-allow-overlap':true,'icon-ignore-placement':true}});map.on('click',ENABLED_LAYER,onEnabledClick);map.on('mouseenter',ENABLED_LAYER,cursorOn);map.on('mouseleave',ENABLED_LAYER,cursorOff);map.triggerRepaint();}catch(error){console.error('GeoWeedo pointy pin sprite failed:',error);setMapWarning(error instanceof Error?`Pointy pin sprite: ${error.message}`:'Pointy pin sprite failed.');}})();
+   void (async()=>{try{if(!map.hasImage(PIN_IMAGE)){const image=await buildPointyPinImage(map);if(cancelled)return;if(!map.hasImage(PIN_IMAGE))map.addImage(PIN_IMAGE,image,{pixelRatio:PIN_PIXEL_RATIO});}if(cancelled)return;if(!map.getLayer(ENABLED_LAYER))map.addLayer({id:ENABLED_LAYER,type:'symbol',source:LOCATION_SOURCE,filter:['==',['get','enabled'],1],layout:{'icon-image':PIN_IMAGE,'icon-size':['interpolate',['linear'],['zoom'],2,['case',['==',['get','sponsored'],1],0.48,0.42],5,['case',['==',['get','sponsored'],1],0.58,0.52],8,['case',['==',['get','sponsored'],1],0.78,0.70],12,['case',['==',['get','sponsored'],1],1.00,0.92],16,['case',['==',['get','sponsored'],1],1.12,1.02]],'icon-anchor':'bottom','icon-allow-overlap':true,'icon-ignore-placement':true}});map.on('click',ENABLED_LAYER,onEnabledClick);map.on('mouseenter',ENABLED_LAYER,cursorOn);map.on('mouseleave',ENABLED_LAYER,cursorOff);map.triggerRepaint();}catch(error){console.error('GeoWeedo pointy pin sprite failed:',error);setMapWarning(error instanceof Error?`Pointy pin sprite: ${error.message}`:'Pointy pin sprite failed.');}})();
   }catch(error){initialized=false;console.error('GeoWeedo location layers failed:',error);setMapWarning(error instanceof Error?`Location layers: ${error.message}`:'Location layers failed to load.');setMapReady(true);}};
   const kick=()=>ready();
   map.on('style.load',kick);map.on('load',kick);map.on('styledata',kick);map.on('click',e=>{if(browseModeRef.current||revealedRef.current)return;onGuessRef.current({lat:e.lngLat.lat,lng:e.lngLat.lng});});map.on('error',e=>{const msg=e.error?.message||'Map resource failed to load.';console.warn('GeoWeedo map resource warning:',msg);if(!/tile/i.test(msg))setMapWarning(msg);});
