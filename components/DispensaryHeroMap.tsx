@@ -19,6 +19,16 @@ const STYLE:StyleSpecification={
  layers:[{id:'osm',type:'raster',source:'osm'}]
 };
 
+function brandedPin(){
+ const el=document.createElement('div');
+ el.style.width='48px';
+ el.style.height='58px';
+ el.style.position='relative';
+ el.style.filter='drop-shadow(0 4px 6px rgba(0,0,0,.55))';
+ el.innerHTML=`<div style="width:46px;height:46px;border-radius:50% 50% 50% 8px;transform:rotate(-45deg);background:#42cf59;border:2px solid rgba(238,255,240,.95);display:grid;place-items:center;box-shadow:0 0 0 3px rgba(7,17,8,.35)"><div style="width:35px;height:35px;border-radius:50%;overflow:hidden;background:#071108;display:grid;place-items:center"><img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" style="width:34px;height:34px;object-fit:contain;transform:rotate(45deg)" /></div></div>`;
+ return el;
+}
+
 export default function DispensaryHeroMap({latitude,longitude,className}:Props){
  const nodeRef=useRef<HTMLDivElement|null>(null);
  useEffect(()=>{
@@ -33,7 +43,7 @@ export default function DispensaryHeroMap({latitude,longitude,className}:Props){
    fadeDuration:0
   });
   map.once('load',()=>{
-   new Marker({color:'#67d66e',scale:.72}).setLngLat([longitude,latitude]).addTo(map);
+   new Marker({element:brandedPin(),anchor:'bottom'}).setLngLat([longitude,latitude]).addTo(map);
    map.resize();
   });
   return()=>map.remove();
