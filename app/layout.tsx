@@ -66,6 +66,9 @@ export const viewport = { width: 'device-width', initialScale: 1, viewportFit: '
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preload" href="/assets/geoweedo/geoweedo-icon-96.png" as="image" type="image/png" />
+      </head>
       <body>{children}<MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
