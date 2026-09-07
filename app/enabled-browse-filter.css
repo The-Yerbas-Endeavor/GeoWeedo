@@ -18,16 +18,23 @@
 .map-profile-tier-badge{display:inline-flex;margin:4px 0 0 0;padding:2px 6px;border:1px solid rgba(103,214,110,.3);border-radius:999px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.07em;width:max-content}
 .map-profile-tier-badge[data-tier="3"]{color:#9be6a0;background:rgba(103,214,110,.08)}
 .map-profile-tier-badge[data-tier="4"]{color:#f5c451;border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.07)}
-.map-first-home .map-browser-panel{left:22px;right:auto;top:86px;transform:none;width:min(410px,calc(100vw - 44px));max-height:min(76vh,700px);border-radius:18px;background:linear-gradient(180deg,rgba(7,12,9,.56),rgba(7,12,9,.42));border:1px solid rgba(126,217,87,.32);box-shadow:0 14px 40px rgba(0,0,0,.22);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);overflow:hidden}
-.map-first-home .map-browser-panel .map-browser-panel-head{padding:16px 18px 13px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(7,12,9,.22)}
-.map-first-home .map-browser-panel .map-browser-panel-head span{font-size:11px;letter-spacing:.14em}
-.map-first-home .map-browser-panel .map-browser-panel-head strong{font-size:14px}
-.map-first-home .map-browser-panel .map-browser-list{max-height:calc(min(76vh,700px) - 78px);background:rgba(0,0,0,.02)}
-.map-first-home .map-browser-panel .map-browser-state-head{padding:11px 14px;background:rgba(255,255,255,.035)}
-.map-first-home .map-browser-panel .map-browser-state-head strong{font-size:13px}
+.map-first-home .map-browser-panel{left:22px!important;right:auto!important;top:86px!important;transform:none!important;width:min(520px,calc(100vw - 44px));max-height:min(82vh,710px);border-radius:20px;background:linear-gradient(180deg,rgba(6,18,13,.68),rgba(5,17,12,.58));border:1px solid rgba(103,214,110,.56);box-shadow:0 18px 44px rgba(0,0,0,.25);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);overflow:hidden}
+.map-first-home .map-browser-panel .map-browser-panel-head{padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(7,18,13,.36)}
+.map-first-home .map-browser-panel .map-browser-panel-head span{font-size:12px;letter-spacing:.14em}
+.map-first-home .map-browser-panel .map-browser-panel-head strong{font-size:14px;line-height:1.35}
+.map-first-home .map-browser-panel .map-browser-list{max-height:calc(min(82vh,710px) - 82px);background:rgba(0,0,0,.035)}
+.map-first-home .map-browser-country-heading{background:rgba(6,18,13,.72)!important;border-top-color:rgba(255,255,255,.08)!important;padding:10px 16px 8px!important}
+.map-first-home .map-browser-state{border-bottom:1px solid rgba(255,255,255,.075)}
+.map-first-home .map-browser-panel .map-browser-state-head{padding:12px 16px;background:rgba(255,255,255,.045)}
+.map-first-home .map-browser-panel .map-browser-state-head:hover{background:rgba(103,214,110,.10)}
+.map-first-home .map-browser-panel .map-browser-state-head strong{font-size:14px}
 .map-first-home .map-browser-panel .map-browser-state-head small{font-size:10px}
-.map-first-home .map-browser-panel .map-browser-row{padding:10px 13px;background:rgba(7,12,9,.08)}
-.map-first-home .map-browser-panel .map-browser-row:hover{background:rgba(126,217,87,.10)}
+.map-first-home .map-browser-panel .map-browser-state-head b{width:24px;height:24px;font-size:16px;background:rgba(103,214,110,.13)}
+.map-first-home .map-browser-panel .map-browser-state-list{background:rgba(0,0,0,.10)}
+.map-first-home .map-browser-panel .map-browser-row{padding:10px 16px;background:rgba(4,14,10,.16);border-bottom-color:rgba(255,255,255,.055)}
+.map-first-home .map-browser-panel .map-browser-row:hover{background:rgba(103,214,110,.11)}
 .map-first-home .map-browser-panel .map-browser-row-copy strong{font-size:13px}
 .map-first-home .map-browser-panel .map-browser-row-copy small{font-size:10px}
-@media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}.map-first-home .map-browser-panel{left:12px;right:12px;top:112px;bottom:auto;transform:none;width:auto;max-height:52vh;border-radius:16px;background:rgba(7,12,9,.52);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}.map-first-home .map-browser-panel .map-browser-panel-head{padding:13px 14px}.map-first-home .map-browser-panel .map-browser-list{max-height:calc(52vh - 66px)}}
+.map-first-home .map-browser-panel .map-browser-row-status{font-size:9px}
+.map-first-home .map-browser-panel-draggable .map-browser-panel-head{cursor:default!important}
+@media(max-width:760px){.map-browser-theme-chooser{padding:12px}.map-browser-theme-logo{max-width:240px}.map-browser-theme-actions button{min-height:42px}.map-browser-tier-heading{padding:7px 12px 6px}.map-browser-tier-heading small{font-size:8px}.map-profile-tier-badge{font-size:7px}.map-first-home .map-browser-panel{left:12px!important;right:12px!important;top:112px!important;bottom:auto;transform:none!important;width:auto;max-height:52vh;border-radius:16px;background:rgba(6,18,13,.66);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}.map-first-home .map-browser-panel .map-browser-panel-head{padding:13px 14px}.map-first-home .map-browser-panel .map-browser-list{max-height:calc(52vh - 66px)}}
