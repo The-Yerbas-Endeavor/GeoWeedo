@@ -40,6 +40,8 @@ import HomeMapUiCleanup from '@/components/HomeMapUiCleanup';
 import MapBrowserPanelDraggable from '@/components/MapBrowserPanelDraggable';
 import MapLocationCardLogoEnhancer from '@/components/MapLocationCardLogoEnhancer';
 import MapLibreWorkerProvider from '@/components/MapLibreWorkerProvider';
+import MapOpenNowFilter from '@/components/MapOpenNowFilter';
+import DailyWeedoEnhancer from '@/components/DailyWeedoEnhancer';
 
 export const metadata = {
   title: 'GeoWeedo',
@@ -73,7 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-map-marker.png" as="image" type="image/png" />
       </head>
-      <body><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
