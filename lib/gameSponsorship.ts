@@ -6,6 +6,7 @@ export type GameCampaignType='classic'|'daily'|'hunt';
 export type CampaignGeographyType='all'|'country'|'region'|'city'|'radius';
 export type GameCampaignStatus='active'|'paused'|'expired'|'cancelled';
 export type GameCampaignSource='admin_comp'|'manual_invoice'|'subscription';
+export type GameCampaignEventType='game_impression'|'game_completed'|'listing_view'|'website_click';
 
 export type GameCampaign={
  id:string;
@@ -122,7 +123,7 @@ export function getGameCampaign(campaignId:string){
  return row?mapCampaign(row):null;
 }
 
-export function recordGameCampaignEvent(campaignId:string,eventType:'game_impression'|'game_completed',metadata?:Record<string,unknown>){
+export function recordGameCampaignEvent(campaignId:string,eventType:GameCampaignEventType,metadata?:Record<string,unknown>){
  const campaign=getGameCampaign(campaignId);
  if(!campaign)return false;
  const now=new Date().toISOString();
