@@ -81,7 +81,8 @@ async function buildFeaturedPinImage(map:LibreMap,logoUrl?:string){
  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,112,146);
  ctx.save();ctx.shadowColor='rgba(0,0,0,.58)';ctx.shadowBlur=11;ctx.shadowOffsetY=6;ctx.beginPath();ctx.moveTo(56,142);ctx.bezierCurveTo(49,126,19,94,13,66);ctx.bezierCurveTo(7,34,27,7,56,7);ctx.bezierCurveTo(85,7,105,34,99,66);ctx.bezierCurveTo(93,94,63,126,56,142);ctx.closePath();ctx.fillStyle='#f5c451';ctx.fill();ctx.restore();
  ctx.beginPath();ctx.moveTo(56,136);ctx.bezierCurveTo(49,121,23,91,18,64);ctx.bezierCurveTo(13,37,31,13,56,13);ctx.bezierCurveTo(81,13,99,37,94,64);ctx.bezierCurveTo(89,91,63,121,56,136);ctx.closePath();ctx.fillStyle='#151209';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#ffe59b';ctx.stroke();
- ctx.save();ctx.beginPath();ctx.arc(56,52,33,0,Math.PI*2);ctx.clip();ctx.fillStyle='#fff';ctx.fillRect(23,19,66,66);ctx.drawImage(badge.data as unknown as CanvasImageSource,27,23,58,58);ctx.restore();
+ ctx.save();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(56,52,32,0,Math.PI*2);ctx.fill();ctx.restore();
+ ctx.save();ctx.beginPath();ctx.arc(56,52,32,0,Math.PI*2);ctx.clip();ctx.drawImage(badge.data as unknown as CanvasImageSource,27,23,58,58);ctx.restore();
  ctx.beginPath();ctx.arc(56,52,34,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#f5c451';ctx.stroke();ctx.beginPath();ctx.arc(56,52,38,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,229,155,.75)';ctx.stroke();
  ctx.font='900 15px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f5c451';ctx.fillText('★',56,97);
  return await createImageBitmap(canvas);
