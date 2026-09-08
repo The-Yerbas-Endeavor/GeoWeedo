@@ -103,7 +103,49 @@ export async function PATCH(request: NextRequest) {
 
   try {
     if (kind === 'campaign') {
-      const campaign = updateGameCampaignStatus(id, 'cancelled');
+      if (body?.action !== 'edit') {
+        const campaign = updateGameCampaignStatus(id, 'cancelled');
+        return NextResponse.json({ campaign }, { status: 200 });
+      }
+
+      const gameType = String(body?.gameType || '') as GameCampaignType;
+      const geographyType = String(body?.geographyType || 'all') as CampaignGeographyType;
+      const campaignStatus = body?.status === 'paused' ? 'paused' : body?.status === 'expired' ? 'expired' : body?.status === 'cancelled' ? 'cancelled' : 'active';
+      const source = body?.source === 'manual_invoice' ? 'manual_invoice' : body?.source === 'subscription' ? 'subscription' : 'admin_comp';
+      if (!['classic','daily','hunt'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, or Weedo Hunt.' }, { status: 400 });
+      if (!['all','country','region','city','radius'].includes(geographyType)) return NextResponse.json({ error: 'Choose a valid campaign geography.' }, { status: 400 });
+
+      const startsAt = new Date(String(body?.startsAt || ''));
+      const endsAt = new Date(String(body?.endsAt || ''));
+      if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt.getTime() <= startsAt.getTime()) return NextResponse.json({ error: 'Campaign end must be after its start.' }, { status: 400 });
+      const radiusValue = body?.radiusKm === '' || body?.radiusKm == null ? null : Number(body.radiusKm);
+      if (geographyType === 'radius' && (!Number.isFinite(radiusValue as number) || Number(radiusValue) <= 0)) return NextResponse.json({ error: 'Radius campaigns require a positive radius.' }, { status: 400 });
+      const amountCents = body?.amountCents === '' || body?.amountCents == null ? null : Number(body.amountCents);
+      if (amountCents != null && (!Number.isFinite(amountCents) || amountCents < 0)) return NextResponse.json({ error: 'Amount must be zero or greater.' }, { status: 400 });
+
+      const db = getDatabase();
+      const existing = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id=? LIMIT 1`).get(id) as {id:string}|undefined;
+      if (!existing) return NextResponse.json({ error: 'Game sponsorship not found.' }, { status: 404 });
+      if (gameType === 'daily' && campaignStatus === 'active') {
+        const overlap = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id<>? AND game_type='daily' AND status='active' AND starts_at<? AND ends_at>? LIMIT 1`).get(id, endsAt.toISOString(), startsAt.toISOString()) as {id:string}|undefined;
+        if (overlap) return NextResponse.json({ error: 'Daily Weedo already has another active sponsor during this period.' }, { status: 400 });
+      }
+      const now = new Date().toISOString();
+      db.prepare(`UPDATE sponsor_game_campaigns SET game_type=?,placement='presented_by',geography_type=?,geography_value=?,radius_km=?,starts_at=?,ends_at=?,status=?,source=?,amount_cents=?,title=?,updated_at=? WHERE id=?`).run(
+        gameType,
+        geographyType,
+        geographyType === 'all' || geographyType === 'radius' ? null : (body?.geographyValue ? String(body.geographyValue).trim() || null : null),
+        geographyType === 'radius' ? radiusValue : null,
+        startsAt.toISOString(),
+        endsAt.toISOString(),
+        campaignStatus,
+        source,
+        amountCents,
+        body?.title ? String(body.title).trim() || null : null,
+        now,
+        id,
+      );
+      const campaign = listGameCampaigns().find((item) => item.id === id) || null;
       return NextResponse.json({ campaign }, { status: 200 });
     }
     if (kind === 'featured') {
@@ -117,6 +159,6 @@ export async function PATCH(request: NextRequest) {
     }
     return NextResponse.json({ error: 'Choose a Featured or game sponsorship.' }, { status: 400 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not stop sponsorship.' }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not update sponsorship.' }, { status: 400 });
   }
 }
