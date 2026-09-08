@@ -2,15 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminHasPermission, getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
 import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements } from '@/lib/sponsorshipStore';
-import { grantGameCampaign, listGameCampaigns, type CampaignGeographyType, type GameCampaignStatus, type GameCampaignType } from '@/lib/gameSponsorship';
+import { grantGameCampaign, listGameCampaigns, updateGameCampaignStatus, type CampaignGeographyType, type GameCampaignStatus, type GameCampaignType } from '@/lib/gameSponsorship';
 import { getDatabase } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest) {
+function requireSponsorAdmin(request: NextRequest) {
   const admin = getAdminFromRequest(request);
-  if (!admin) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
-  if (!adminHasPermission(admin, 'sponsorships.manage')) return NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 });
+  if (!admin) return { error: NextResponse.json({ error: 'Sign in required.' }, { status: 401 }) };
+  if (!adminHasPermission(admin, 'sponsorships.manage')) return { error: NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 }) };
+  return { admin };
+}
+
+export async function GET(request: NextRequest) {
+  const auth = requireSponsorAdmin(request);
+  if ('error' in auth) return auth.error;
   ensureSponsorshipSchema();
   return NextResponse.json({
     plan: { code: 'featured', name: 'GeoWeedo Featured', currency: 'USD', monthlyPriceCents: 3900, annualPriceCents: 39000 },
@@ -26,9 +32,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const admin = getAdminFromRequest(request);
-  if (!admin) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
-  if (!adminHasPermission(admin, 'sponsorships.manage')) return NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 });
+  const auth = requireSponsorAdmin(request);
+  if ('error' in auth) return auth.error;
+  const admin = auth.admin;
   const body = await request.json().catch(() => null);
   const dispensaryId = String(body?.dispensaryId || '');
   const approved = await readApprovedDispensaries();
@@ -84,5 +90,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ entitlement }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not save Featured entitlement.' }, { status: 400 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = requireSponsorAdmin(request);
+  if ('error' in auth) return auth.error;
+  const body = await request.json().catch(() => null);
+  const kind = String(body?.kind || '');
+  const id = String(body?.id || '');
+  if (!id) return NextResponse.json({ error: 'Sponsorship id is required.' }, { status: 400 });
+
+  try {
+    if (kind === 'campaign') {
+      const campaign = updateGameCampaignStatus(id, 'cancelled');
+      return NextResponse.json({ campaign }, { status: 200 });
+    }
+    if (kind === 'featured') {
+      ensureSponsorshipSchema();
+      const db = getDatabase();
+      const existing = db.prepare(`SELECT id FROM sponsor_entitlements WHERE id=? AND entitlement_type='featured_listing' LIMIT 1`).get(id) as {id:string}|undefined;
+      if (!existing) return NextResponse.json({ error: 'Featured sponsorship not found.' }, { status: 404 });
+      const now = new Date().toISOString();
+      db.prepare(`UPDATE sponsor_entitlements SET status='cancelled', ends_at=?, updated_at=? WHERE id=?`).run(now, now, id);
+      return NextResponse.json({ entitlement: listFeaturedEntitlements().find((item) => item.id === id) || null }, { status: 200 });
+    }
+    return NextResponse.json({ error: 'Choose a Featured or game sponsorship.' }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not stop sponsorship.' }, { status: 400 });
   }
 }
