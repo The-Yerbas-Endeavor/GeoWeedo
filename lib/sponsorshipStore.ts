@@ -169,8 +169,6 @@ export function activeFeaturedMap() {
   return map;
 }
 
-// Backward-compatible name for callers that only need to know whether a location is featured.
-// Featured status never carries a gameplay selection weight.
 export async function activeSponsorshipMap() {
   return activeFeaturedMap();
 }
@@ -214,16 +212,26 @@ export function sponsorshipSummaryForOwner(userId: string, dispensaryId: string)
   ensureSponsorshipSchema();
   const business = businessForVerifiedOwner(userId, dispensaryId);
   if (!business) return null;
-  const now = new Date().toISOString();
-  const featured = getDatabase().prepare(`SELECT * FROM sponsor_entitlements WHERE business_id=? AND dispensary_id=? AND entitlement_type='featured_listing' ORDER BY created_at DESC LIMIT 1`).get(business.id, dispensaryId) as any;
-  const since = new Date(Date.now() - 30 * 86400000).toISOString();
-  const rows = getDatabase().prepare(`SELECT event_type,COUNT(*) count FROM sponsor_events WHERE dispensary_id=? AND created_at>=? GROUP BY event_type`).all(dispensaryId, since) as any[];
+  const db=getDatabase();
+  const featured = db.prepare(`SELECT * FROM sponsor_entitlements WHERE business_id=? AND dispensary_id=? AND entitlement_type='featured_listing' ORDER BY created_at DESC LIMIT 1`).get(business.id, dispensaryId) as any;
+  const sinceDate=new Date();sinceDate.setUTCHours(0,0,0,0);sinceDate.setUTCDate(sinceDate.getUTCDate()-29);
+  const since=sinceDate.toISOString();
+  const rows = db.prepare(`SELECT event_type,COUNT(*) count FROM sponsor_events WHERE dispensary_id=? AND created_at>=? GROUP BY event_type`).all(dispensaryId, since) as any[];
   const metrics: Record<string, number> = { pin_impression:0,pin_click:0,listing_view:0,website_click:0,menu_click:0,directions_click:0,game_impression:0,game_completed:0 };
   for (const row of rows) metrics[String(row.event_type)] = Number(row.count || 0);
+  const trendRows=db.prepare(`SELECT substr(created_at,1,10) day,event_type,COUNT(*) count FROM sponsor_events WHERE dispensary_id=? AND created_at>=? GROUP BY day,event_type ORDER BY day`).all(dispensaryId,since) as any[];
+  const byDay=new Map<string,Record<string,number>>();
+  for(let offset=0;offset<30;offset++){
+    const day=new Date(sinceDate.getTime()+offset*86400000).toISOString().slice(0,10);
+    byDay.set(day,{pin_impression:0,pin_click:0,listing_view:0,website_click:0,menu_click:0,directions_click:0,game_impression:0,game_completed:0});
+  }
+  for(const row of trendRows){const bucket=byDay.get(String(row.day));if(bucket)bucket[String(row.event_type)]=Number(row.count||0);}
+  const dailyTrend=Array.from(byDay.entries()).map(([date,counts])=>({date,...counts,total:Object.values(counts).reduce((sum,value)=>sum+Number(value||0),0)}));
   return {
     business: { id: business.id, name: business.name },
     featured: featured ? { status: featured.status, startsAt: featured.starts_at, endsAt: featured.ends_at, source: featured.source, planCode: featured.plan_code, currency: 'USD' } : null,
     plan: { code:'featured', name:'GeoWeedo Featured', currency:'USD', monthlyPriceCents:3900, annualPriceCents:39000 },
     metrics,
+    dailyTrend,
   };
 }
