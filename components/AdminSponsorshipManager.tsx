@@ -6,9 +6,20 @@ type Dispensary = { id: string; name: string; city: string; region: string; acti
 type Entitlement = { id: string; dispensaryId: string; businessId: string; status: string; startsAt: string; endsAt: string; source: string; planCode: string; currency: 'USD' };
 type Claim = { id: string; location_id: string; claimant_name: string; business_email?: string; business_phone?: string; role_title?: string; status: string; created_at: string; location?: { name?: string; city?: string; region?: string } };
 type Plan = { code: string; name: string; currency: 'USD'; monthlyPriceCents: number; annualPriceCents: number };
+type DurationPreset = 'day'|'week'|'month'|'year';
 
 function localInput(date: Date) { const copy = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return copy.toISOString().slice(0, 16); }
 function money(cents: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cents / 100); }
+function addDuration(startValue:string,preset:DurationPreset){
+  const start=new Date(startValue);
+  if(!Number.isFinite(start.getTime()))return startValue;
+  const end=new Date(start);
+  if(preset==='day')end.setDate(end.getDate()+1);
+  if(preset==='week')end.setDate(end.getDate()+7);
+  if(preset==='month')end.setMonth(end.getMonth()+1);
+  if(preset==='year')end.setFullYear(end.getFullYear()+1);
+  return localInput(end);
+}
 
 export default function AdminSponsorshipManager() {
   const [dispensaries, setDispensaries] = useState<Dispensary[]>([]);
@@ -16,9 +27,15 @@ export default function AdminSponsorshipManager() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [plan, setPlan] = useState<Plan>({ code:'featured', name:'GeoWeedo Featured', currency:'USD', monthlyPriceCents:3900, annualPriceCents:39000 });
   const [form, setForm] = useState({ dispensaryId: '', source: 'admin_comp', status: 'active', startsAt: localInput(new Date()), endsAt: localInput(new Date(Date.now() + 30 * 86400000)) });
+  const [dispensarySearch,setDispensarySearch]=useState('');
   const [status, setStatus] = useState('Loading business sponsorship workspace…');
   const [busy, setBusy] = useState(false);
   const names = useMemo(() => new Map(dispensaries.map((item) => [item.id, item])), [dispensaries]);
+  const filteredDispensaries=useMemo(()=>{
+    const q=dispensarySearch.trim().toLowerCase();
+    if(!q)return dispensaries;
+    return dispensaries.filter((item)=>`${item.name} ${item.city} ${item.region}`.toLowerCase().includes(q));
+  },[dispensaries,dispensarySearch]);
 
   async function load() {
     const [sponsorResponse, claimResponse] = await Promise.all([
@@ -37,6 +54,10 @@ export default function AdminSponsorshipManager() {
   }
 
   useEffect(() => { load().catch((error) => setStatus(error.message)); }, []);
+
+  function applyDuration(preset:DurationPreset){
+    setForm((current)=>({...current,endsAt:addDuration(current.startsAt,preset)}));
+  }
 
   async function saveFeatured() {
     setBusy(true); setStatus('Saving Featured entitlement…');
@@ -72,8 +93,10 @@ export default function AdminSponsorshipManager() {
           <h2>Grant GeoWeedo Featured</h2>
           <div className="source-note"><strong>{plan.name}</strong><span>{money(plan.monthlyPriceCents)}/month or {money(plan.annualPriceCents)}/year. Billing is denominated in USD. During rollout, Admin can grant or invoice Featured access without a payment processor.</span></div>
           <div className="admin-form">
-            <label><span>Dispensary</span><select value={form.dispensaryId} onChange={(e) => setForm({...form, dispensaryId:e.target.value})}>{dispensaries.map((item) => <option value={item.id} key={item.id}>{item.name} — {item.city}, {item.region}</option>)}</select></label>
+            <label><span>Search dispensaries</span><input type="search" value={dispensarySearch} onChange={(e)=>setDispensarySearch(e.target.value)} placeholder="Search by name, city or state…" /></label>
+            <label><span>Dispensary</span><select value={form.dispensaryId} onChange={(e) => setForm({...form, dispensaryId:e.target.value})}>{filteredDispensaries.length===0?<option value="">No matching dispensaries</option>:filteredDispensaries.map((item) => <option value={item.id} key={item.id}>{item.name} — {item.city}, {item.region}</option>)}</select></label>
             <div className="field-row"><label><span>Starts</span><input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({...form, startsAt:e.target.value})} /></label><label><span>Ends</span><input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({...form, endsAt:e.target.value})} /></label></div>
+            <div className="source-note"><strong>Quick duration</strong><span style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>{([['day','1 day'],['week','1 week'],['month','1 month'],['year','1 year']] as Array<[DurationPreset,string]>).map(([preset,label])=><button key={preset} type="button" className="ghost" onClick={()=>applyDuration(preset)}>{label}</button>)}</span></div>
             <div className="field-row"><label><span>Source</span><select value={form.source} onChange={(e) => setForm({...form, source:e.target.value})}><option value="admin_comp">Admin comp / beta</option><option value="manual_invoice">Manual USD invoice</option><option value="subscription">USD subscription</option></select></label><label><span>Status</span><select value={form.status} onChange={(e) => setForm({...form, status:e.target.value})}><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label></div>
             <button className="primary" disabled={busy || !form.dispensaryId} onClick={saveFeatured}>Save Featured listing</button>
           </div>
