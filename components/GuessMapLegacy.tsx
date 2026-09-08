@@ -46,42 +46,18 @@ function isPlayable(i:MapLocation){return Boolean(i.approved&&i.imageryReady);}
 function switchBaseMap(map:LibreMap,base:BaseMap){for(const [name,c] of Object.entries(BASE_MAPS) as [BaseMap,(typeof BASE_MAPS)[BaseMap]][]){if(map.getLayer(c.layer))map.setLayoutProperty(c.layer,'visibility',name===base?'visible':'none');}map.triggerRepaint();}
 function randomGameplayViewport(){const regions=[{west:-124.5,east:-116,south:42,north:49},{west:-122,east:-108,south:32,north:41},{west:-113,east:-101,south:37,north:47},{west:-103,east:-86,south:36,north:48},{west:-100,east:-81,south:29,north:37},{west:-83,east:-69,south:39,north:47},{west:-90,east:-76,south:25,north:35}],r=regions[Math.floor(Math.random()*regions.length)];return{center:[r.west+Math.random()*(r.east-r.west),r.south+Math.random()*(r.north-r.south)] as [number,number],zoom:3.2+Math.random()*1.15};}
 function raiseMarker(marker:Marker,z='20'){const el=marker.getElement();el.style.zIndex=z;el.style.pointerEvents='auto';return el;}
+const MDI_CANNABIS_PATH='M11.5,22V17.35C11,18.13 10,19.09 8.03,19.81C8.03,19.81 8.53,18.1 9.94,16.95C8.64,17.23 6.68,17.19 4,16C4,16 6.47,14.59 9.28,14.97C7.69,14 5.7,12.08 4.17,8.11C4.17,8.11 8.67,9.34 10.91,13.14C8.88,8.24 12,2 12,2C14.43,7.47 13.91,11.1 13.12,13.1C15.37,9.33 19.83,8.11 19.83,8.11C18.3,12.08 16.31,14 14.72,14.97C17.53,14.59 20,16 20,16C17.32,17.19 15.36,17.23 14.06,16.95C15.47,18.1 15.97,19.81 15.97,19.81C14,19.09 13,18.13 12.5,17.35V22H11.5Z';
 function drawCannabisLeaf(ctx:CanvasRenderingContext2D,x:number,y:number,scale=1,alpha=1){
- ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle=`rgba(255,255,255,${alpha})`;
- ctx.beginPath();
- ctx.moveTo(0,12);
- ctx.lineTo(-2,5);
- ctx.lineTo(-7,8);
- ctx.lineTo(-5,2);
- ctx.lineTo(-15,6);
- ctx.lineTo(-11,-1);
- ctx.lineTo(-22,0);
- ctx.lineTo(-14,-7);
- ctx.lineTo(-24,-10);
- ctx.lineTo(-13,-12);
- ctx.lineTo(-19,-20);
- ctx.lineTo(-8,-15);
- ctx.lineTo(-11,-27);
- ctx.lineTo(-3,-18);
- ctx.lineTo(0,-31);
- ctx.lineTo(3,-18);
- ctx.lineTo(11,-27);
- ctx.lineTo(8,-15);
- ctx.lineTo(19,-20);
- ctx.lineTo(13,-12);
- ctx.lineTo(24,-10);
- ctx.lineTo(14,-7);
- ctx.lineTo(22,0);
- ctx.lineTo(11,-1);
- ctx.lineTo(15,6);
- ctx.lineTo(5,2);
- ctx.lineTo(7,8);
- ctx.lineTo(2,5);
- ctx.closePath();
- ctx.fill();
+ const path=new Path2D(MDI_CANNABIS_PATH);
+ ctx.save();
+ ctx.translate(x,y);
+ ctx.scale(scale*2.08,scale*1.78);
+ ctx.translate(-12,-12);
+ ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+ ctx.fill(path);
  ctx.restore();
 }
-async function buildMapPinImage(fill:string,leafAlpha=1){const canvas=document.createElement('canvas');canvas.width=72*PIN_RENDER_SCALE;canvas.height=92*PIN_RENDER_SCALE;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create map pin canvas.');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,72,92);ctx.save();ctx.shadowColor='rgba(0,0,0,.26)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.restore();ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();drawCannabisLeaf(ctx,36,40,.92,leafAlpha);return await createImageBitmap(canvas);}
+async function buildMapPinImage(fill:string,leafAlpha=1){const canvas=document.createElement('canvas');canvas.width=72*PIN_RENDER_SCALE;canvas.height=92*PIN_RENDER_SCALE;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create map pin canvas.');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,72,92);ctx.save();ctx.shadowColor='rgba(0,0,0,.26)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.restore();ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();drawCannabisLeaf(ctx,36,39,1,leafAlpha);return await createImageBitmap(canvas);}
 async function buildPointyPinImage(){return buildMapPinImage('#2f9d78');}
 async function buildFeaturedPinImage(){return buildMapPinImage('#e58b00');}
 async function buildMappedPinImage(){return buildMapPinImage('#788883',.84);}
