@@ -6,6 +6,8 @@ export const dynamic='force-dynamic';
 const ATOMIC=100_000_000;
 type BoardKey='classic'|'hunt'|'daily';
 
+type Row={id:string;user_id:string;total_score:number;reward_atomic:number;reward_status:string;completed_at:string;player:string;earned_atomic:number};
+
 function dateKey(){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 
 function board(mode:string,key:BoardKey,today:string,limit:number){
@@ -20,8 +22,7 @@ function board(mode:string,key:BoardKey,today:string,limit:number){
   WHERE g.mode=? AND g.status='completed'${dailyFilter}
   ORDER BY g.total_score DESC,earned_atomic DESC,g.completed_at ASC
   LIMIT ?`;
- const params:keyof any=undefined as never;
- const rows=(key==='daily'?db.prepare(sql).all(mode,`daily-${today}-%`,limit):db.prepare(sql).all(mode,limit)) as Array<{id:string;user_id:string;total_score:number;reward_atomic:number;reward_status:string;completed_at:string;player:string;earned_atomic:number}>;
+ const rows=(key==='daily'?db.prepare(sql).all(mode,`daily-${today}-%`,limit):db.prepare(sql).all(mode,limit)) as Row[];
  return rows.map((row,index)=>({rank:index+1,gameId:row.id,player:row.player,score:Number(row.total_score||0),earnedYerb:Number(row.earned_atomic||0)/ATOMIC,rewardStatus:String(row.reward_status||''),completedAt:row.completed_at}));
 }
 
