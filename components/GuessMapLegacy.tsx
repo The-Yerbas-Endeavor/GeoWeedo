@@ -61,8 +61,22 @@ function isPlayable(i:MapLocation){return Boolean(i.approved&&i.imageryReady);}
 function switchBaseMap(map:LibreMap,base:BaseMap){for(const [name,c] of Object.entries(BASE_MAPS) as [BaseMap,(typeof BASE_MAPS)[BaseMap]][]){if(map.getLayer(c.layer))map.setLayoutProperty(c.layer,'visibility',name===base?'visible':'none');}map.triggerRepaint();}
 function randomGameplayViewport(){const regions=[{west:-124.5,east:-116,south:42,north:49},{west:-122,east:-108,south:32,north:41},{west:-113,east:-101,south:37,north:47},{west:-103,east:-86,south:36,north:48},{west:-100,east:-81,south:29,north:37},{west:-83,east:-69,south:39,north:47},{west:-90,east:-76,south:25,north:35}],r=regions[Math.floor(Math.random()*regions.length)];return{center:[r.west+Math.random()*(r.east-r.west),r.south+Math.random()*(r.north-r.south)] as [number,number],zoom:3.2+Math.random()*1.15};}
 function raiseMarker(marker:Marker,z='20'){const el=marker.getElement();el.style.zIndex=z;el.style.pointerEvents='auto';return el;}
+function removeEdgeBackground(source:CanvasImageSource,width:number,height:number){
+ const w=Math.max(1,Math.round(width)),h=Math.max(1,Math.round(height));
+ const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return source;
+ ctx.drawImage(source,0,0,w,h);
+ const image=ctx.getImageData(0,0,w,h),data=image.data,seen=new Uint8Array(w*h),queue:number[]=[];
+ const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]].map(([x,y])=>{const o=(y*w+x)*4;return[data[o],data[o+1],data[o+2],data[o+3]];}).filter(c=>c[3]>0);
+ const matchesBackground=(p:number)=>{const o=p*4,a=data[o+3];if(a===0)return false;const r=data[o],g=data[o+1],b=data[o+2];return corners.some(c=>Math.abs(r-c[0])+Math.abs(g-c[1])+Math.abs(b-c[2])<=72);};
+ const push=(p:number)=>{if(p<0||p>=w*h||seen[p]||!matchesBackground(p))return;seen[p]=1;queue.push(p);};
+ for(let x=0;x<w;x++){push(x);push((h-1)*w+x);}for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}
+ for(let q=0;q<queue.length;q++){const p=queue[q],x=p%w,y=Math.floor(p/w),o=p*4;data[o+3]=0;if(x>0)push(p-1);if(x+1<w)push(p+1);if(y>0)push(p-w);if(y+1<h)push(p+w);}
+ ctx.clearRect(0,0,w,h);ctx.putImageData(image,0,0);return canvas;
+}
 async function buildPointyPinImage(map:LibreMap){
- const badge=await map.loadImage(PIN_BADGE_URL);
+ const badge=await map.loadImage(PIN_BADGE_URL),rawBadge=badge.data as unknown as CanvasImageSource;
+ const badgeSource=removeEdgeBackground(rawBadge,Number((badge.data as any)?.width||128),Number((badge.data as any)?.height||128));
  const canvas=document.createElement('canvas');canvas.width=96*PIN_RENDER_SCALE;canvas.height=128*PIN_RENDER_SCALE;
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create pointy pin canvas.');
  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);
@@ -70,27 +84,14 @@ async function buildPointyPinImage(map:LibreMap){
  ctx.save();ctx.shadowColor='rgba(0,0,0,.48)';ctx.shadowBlur=8;ctx.shadowOffsetY=5;
  ctx.beginPath();ctx.moveTo(48,124);ctx.bezierCurveTo(42,111,18,82,13,59);ctx.bezierCurveTo(7,31,24,8,48,8);ctx.bezierCurveTo(72,8,89,31,83,59);ctx.bezierCurveTo(78,82,54,111,48,124);ctx.closePath();ctx.fillStyle='#67d66e';ctx.fill();ctx.restore();
  ctx.beginPath();ctx.moveTo(48,119);ctx.bezierCurveTo(42,107,21,79,17,58);ctx.bezierCurveTo(12,34,27,13,48,13);ctx.bezierCurveTo(69,13,84,34,79,58);ctx.bezierCurveTo(75,79,54,107,48,119);ctx.closePath();ctx.lineWidth=4;ctx.strokeStyle='#07140a';ctx.stroke();
- ctx.save();ctx.beginPath();ctx.arc(48,47,28,0,Math.PI*2);ctx.clip();ctx.fillStyle='#0b0e0c';ctx.fillRect(20,19,56,56);ctx.drawImage(badge.data as unknown as CanvasImageSource,20,19,56,56);ctx.restore();
+ ctx.save();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(48,47,28,0,Math.PI*2);ctx.fill();ctx.restore();
+ ctx.save();ctx.beginPath();ctx.arc(48,47,28,0,Math.PI*2);ctx.clip();ctx.drawImage(badgeSource,20,19,56,56);ctx.restore();
  ctx.beginPath();ctx.arc(48,47,29,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle='rgba(245,248,245,.96)';ctx.stroke();
  return await createImageBitmap(canvas);
 }
-function removeConnectedWhiteBackground(source:CanvasImageSource,width:number,height:number){
- const w=Math.max(1,Math.round(width)),h=Math.max(1,Math.round(height));
- const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
- const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return source;
- ctx.drawImage(source,0,0,w,h);
- const image=ctx.getImageData(0,0,w,h),data=image.data,seen=new Uint8Array(w*h),queue:number[]=[];
- const isBackground=(p:number)=>{const o=p*4,r=data[o],g=data[o+1],b=data[o+2],a=data[o+3];return a>0&&r>=232&&g>=232&&b>=232&&Math.max(r,g,b)-Math.min(r,g,b)<=22;};
- const push=(p:number)=>{if(p<0||p>=w*h||seen[p]||!isBackground(p))return;seen[p]=1;queue.push(p);};
- for(let x=0;x<w;x++){push(x);push((h-1)*w+x);}for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}
- for(let q=0;q<queue.length;q++){const p=queue[q],x=p%w,y=Math.floor(p/w),o=p*4;data[o+3]=0;if(x>0)push(p-1);if(x+1<w)push(p+1);if(y>0)push(p-w);if(y+1<h)push(p+w);}
- ctx.clearRect(0,0,w,h);ctx.putImageData(image,0,0);return canvas;
-}
 async function buildFeaturedPinImage(map:LibreMap,logoUrl?:string){
- const badge=await map.loadImage(logoUrl||PIN_BADGE_URL);
- const rawBadge=badge.data as unknown as CanvasImageSource;
- const badgeWidth=Number((badge.data as any)?.width||128),badgeHeight=Number((badge.data as any)?.height||128);
- const badgeSource=logoUrl?removeConnectedWhiteBackground(rawBadge,badgeWidth,badgeHeight):rawBadge;
+ const badge=await map.loadImage(logoUrl||PIN_BADGE_URL),rawBadge=badge.data as unknown as CanvasImageSource;
+ const badgeSource=removeEdgeBackground(rawBadge,Number((badge.data as any)?.width||128),Number((badge.data as any)?.height||128));
  const canvas=document.createElement('canvas');canvas.width=112*PIN_RENDER_SCALE;canvas.height=146*PIN_RENDER_SCALE;
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create Featured pin canvas.');
  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,112,146);
@@ -148,7 +149,7 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
    if(!map.getLayer(REGION_OUTLINE_LAYER))map.addLayer({id:REGION_OUTLINE_LAYER,type:'line',source:REGION_BOUNDARY_SOURCE,paint:{'line-color':'#46ee73','line-width':['interpolate',['linear'],['zoom'],2,2.5,5,3.5,9,5],'line-opacity':0.98}});
    const initialData=locationData(visibleLocationsRef.current,featuredImagesRef.current);
    if(!map.getSource(LOCATION_SOURCE))map.addSource(LOCATION_SOURCE,{type:'geojson',data:initialData});else (map.getSource(LOCATION_SOURCE) as GeoJSONSource).setData(initialData);
-   if(!map.getLayer(SPONSORED_HALO_LAYER))map.addLayer({id:SPONSORED_HALO_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['all',['==',['get','enabled'],1],['==',['get','sponsored'],1]],paint:{'circle-radius':['interpolate',['linear'],['zoom'],2,7,5,10,8,14,12,21,16,27],'circle-color':'rgba(245,196,81,.18)','circle-stroke-color':'#f5c451','circle-stroke-width':['interpolate',['linear'],['zoom'],2,1.5,8,2.5,14,4],'circle-opacity':0.96,'circle-blur':0.15}});
+   if(!map.getLayer(SPONSORED_HALO_LAYER))map.addLayer({id:SPONSORED_HALO_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['all',['==',['get','enabled'],1],['==',['get','sponsored'],1]],paint:{'circle-radius':['interpolate',['linear'],['zoom'],2,7,5,10,8,14,12,21,16,27],'circle-color':'rgba(0,0,0,0)','circle-stroke-color':'#f5c451','circle-stroke-width':['interpolate',['linear'],['zoom'],2,1.5,8,2.5,14,4],'circle-opacity':0.96,'circle-blur':0}});
    if(!map.getLayer(MAPPED_LAYER))map.addLayer({id:MAPPED_LAYER,type:'circle',source:LOCATION_SOURCE,filter:['==',['get','enabled'],0],paint:{'circle-radius':['interpolate',['linear'],['zoom'],2,2.5,8,4,14,6],'circle-color':'#7f8a82','circle-opacity':0.72,'circle-stroke-color':'rgba(245,248,245,.9)','circle-stroke-width':1.25}});
    map.on('click',MAPPED_LAYER,onMappedClick);map.on('mouseenter',MAPPED_LAYER,cursorOn);map.on('mouseleave',MAPPED_LAYER,cursorOff);
    setMapWarning(null);setMapReady(true);map.triggerRepaint();
