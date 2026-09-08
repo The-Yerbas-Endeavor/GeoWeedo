@@ -9,30 +9,15 @@ import { getUserFromRequest } from '@/lib/userAuth';
 export const runtime = 'nodejs';
 const ATOMIC = 100_000_000;
 
-function dateKey() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
+function dateKey() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
 function hashString(input: string) { let h = 2166136261; for (let i = 0; i < input.length; i++) { h ^= input.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function distanceKm(a:{lat:number;lng:number},b:{lat:number;lng:number}) { const r=6371.0088,rad=(v:number)=>(v*Math.PI)/180,dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng),lat1=rad(a.lat),lat2=rad(b.lat),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2; return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); }
 function scoreFromDistance(km:number) { return Math.max(0,Math.min(5000,Math.round(5000*Math.exp(-km/500)))); }
 function mapStatus(status:string) { if (status==='posted') return 'earned'; if (status==='held'||status==='pending') return 'pending_review'; return status; }
 
 async function resolveDailyTarget(today:string) {
-  const now = new Date().toISOString();
-  const db = getDatabase();
-  ensureFinanceSchema(db);
   const approved = (await readApprovedDispensaries()).filter((item)=>item.active && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
   if (!approved.length) return null;
-  const byId = new Map(approved.map((item)=>[item.id,item]));
-  const rows = db.prepare(`SELECT id,dispensary_id,priority_weight FROM sponsorships WHERE status='active' AND starts_at<=? AND ends_at>=? ORDER BY created_at ASC`).all(now,now) as any[];
-  const eligible = rows.map((row)=>({row,dispensary:byId.get(String(row.dispensary_id))})).filter((x)=>Boolean(x.dispensary));
-  if (eligible.length) {
-    const total = eligible.reduce((sum,x)=>sum+Math.max(1,Number(x.row.priority_weight||1)),0);
-    let cursor = hashString(`geoweedo-daily-sponsor-${today}`)%total;
-    let selected=eligible[0];
-    for (const entry of eligible) { const weight=Math.max(1,Number(entry.row.priority_weight||1)); if(cursor<weight){selected=entry;break;} cursor-=weight; }
-    return { location:selected.dispensary!, sponsored:true, sponsorshipId:String(selected.row.id) };
-  }
   return { location:approved[hashString(`geoweedo-daily-enabled-${today}`)%approved.length], sponsored:false, sponsorshipId:null };
 }
 
@@ -76,7 +61,7 @@ export async function POST(request:NextRequest) {
     db.prepare(`INSERT INTO games (id,user_id,mode,status,total_score,reward_atomic,reward_status,started_at,completed_at,client_version) VALUES (?,?,'daily','completed',?,?,?,?,?,?)`).run(gameId,user.id,score,amountAtomic,rewardStatus,now,now,'web');
     if(amountAtomic>0){
       const ledgerId=`ledger-${crypto.randomUUID()}`;
-      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'Daily Weedo reward',?,?,?)`).run(ledgerId,user.walletId,ledgerStatus==='posted'?'reward_credit':'reward_pending',amountAtomic,ledgerStatus,gameId,JSON.stringify({mode:'daily',date:today,targetId:daily.location.id,targetName:daily.location.name,sponsored:daily.sponsored,sponsorshipId:daily.sponsorshipId,score,distanceKm:km,perfectRewardYerb:policy.dailyPerfectRewardYerb,reviewRequired:policy.reviewRequired}),now,ledgerStatus==='posted'?now:null);
+      db.prepare(`INSERT INTO wallet_ledger (id,wallet_id,entry_type,amount_atomic,status,reference_type,reference_id,memo,metadata_json,created_at,posted_at) VALUES (?,?,?,?,?,'game_reward',?,'Daily Weedo reward',?,?,?)`).run(ledgerId,user.walletId,ledgerStatus==='posted'?'reward_credit':'reward_pending',amountAtomic,ledgerStatus,gameId,JSON.stringify({mode:'daily',date:today,targetId:daily.location.id,targetName:daily.location.name,sponsored:false,sponsorshipId:null,score,distanceKm:km,perfectRewardYerb:policy.dailyPerfectRewardYerb,reviewRequired:policy.reviewRequired}),now,ledgerStatus==='posted'?now:null);
       db.prepare(`INSERT INTO reward_claims (id,user_id,game_id,wallet_id,amount_atomic,status,ledger_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(`claim-${crypto.randomUUID()}`,user.id,gameId,user.walletId,amountAtomic,ledgerStatus,ledgerId,now,now);
       if(ledgerStatus==='posted') postSystemLedgerEntry({accountCode:'rewards_pool',entryType:'reward_expense',amountAtomic:-amountAtomic,referenceType:'game_reward',referenceId:gameId,memo:'Daily Weedo reward',metadata:{userId:user.id,mode:'daily',date:today,targetId:daily.location.id,score,distanceKm:km}},db);
     }
