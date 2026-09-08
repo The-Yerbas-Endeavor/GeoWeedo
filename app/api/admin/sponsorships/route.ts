@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminHasPermission, getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
 import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements } from '@/lib/sponsorshipStore';
+import { grantGameCampaign, listGameCampaigns, type CampaignGeographyType, type GameCampaignStatus, type GameCampaignType } from '@/lib/gameSponsorship';
 import { getDatabase } from '@/lib/sqlite';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,13 @@ export async function GET(request: NextRequest) {
   ensureSponsorshipSchema();
   return NextResponse.json({
     plan: { code: 'featured', name: 'GeoWeedo Featured', currency: 'USD', monthlyPriceCents: 3900, annualPriceCents: 39000 },
+    gameProducts: {
+      classic: { name: 'Classic Sponsor', dayPriceCents: 1000, weekPriceCents: 4900, monthPriceCents: 14900 },
+      daily: { name: 'Daily Weedo Sponsor', dayPriceCents: 1500, weekPriceCents: 7900, monthPriceCents: 24900 },
+      hunt: { name: 'Sponsored Weedo Hunt', weekPriceCents: 9900, monthPriceCents: 29900 },
+    },
     entitlements: listFeaturedEntitlements(),
+    campaigns: listGameCampaigns(),
     dispensaries: await readApprovedDispensaries(),
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
@@ -24,16 +31,45 @@ export async function POST(request: NextRequest) {
   if (!adminHasPermission(admin, 'sponsorships.manage')) return NextResponse.json({ error: 'You do not have permission to manage sponsorships.' }, { status: 403 });
   const body = await request.json().catch(() => null);
   const dispensaryId = String(body?.dispensaryId || '');
+  const approved = await readApprovedDispensaries();
+  if (!approved.some((item) => item.id === dispensaryId)) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
+
+  if (body?.kind === 'campaign') {
+    const gameType = String(body?.gameType || '') as GameCampaignType;
+    const geographyType = String(body?.geographyType || 'all') as CampaignGeographyType;
+    const campaignStatus = body?.status === 'paused' ? 'paused' : body?.status === 'expired' ? 'expired' : body?.status === 'cancelled' ? 'cancelled' : 'active';
+    const source = body?.source === 'manual_invoice' ? 'manual_invoice' : body?.source === 'subscription' ? 'subscription' : 'admin_comp';
+    if (!['classic','daily','hunt'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, or Weedo Hunt.' }, { status: 400 });
+    if (!['all','country','region','city','radius'].includes(geographyType)) return NextResponse.json({ error: 'Choose a valid campaign geography.' }, { status: 400 });
+    try {
+      const campaign = grantGameCampaign({
+        dispensaryId,
+        gameType,
+        startsAt: String(body?.startsAt || ''),
+        endsAt: String(body?.endsAt || ''),
+        placement: 'presented_by',
+        geographyType,
+        geographyValue: body?.geographyValue ? String(body.geographyValue) : null,
+        radiusKm: body?.radiusKm === '' || body?.radiusKm == null ? null : Number(body.radiusKm),
+        status: campaignStatus as GameCampaignStatus,
+        source,
+        amountCents: body?.amountCents === '' || body?.amountCents == null ? null : Number(body.amountCents),
+        title: body?.title ? String(body.title) : null,
+        grantedByAdminId: admin.id,
+      });
+      return NextResponse.json({ campaign }, { status: 200 });
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not save game campaign.' }, { status: 400 });
+    }
+  }
+
   const startsAt = new Date(body?.startsAt || Date.now());
   const endsAt = new Date(body?.endsAt || Date.now());
   const status = body?.status === 'expired' ? 'expired' : body?.status === 'cancelled' ? 'cancelled' : 'active';
   const source = body?.source === 'manual_invoice' ? 'manual_invoice' : body?.source === 'subscription' ? 'subscription' : 'admin_comp';
-
-  if (!(await readApprovedDispensaries()).some((item) => item.id === dispensaryId)) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
   if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt.getTime() <= startsAt.getTime()) return NextResponse.json({ error: 'Valid Featured dates are required.' }, { status: 400 });
 
   const verifiedOwner = getDatabase().prepare(`SELECT user_id FROM dispensary_user_owner_assignments WHERE location_id=? AND status='verified' ORDER BY verified_at DESC LIMIT 1`).get(dispensaryId) as {user_id:string}|undefined;
-
   try {
     const entitlement = grantFeatured({
       dispensaryId,

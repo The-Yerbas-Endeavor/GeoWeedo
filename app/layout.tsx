@@ -25,6 +25,7 @@ import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer'
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import ProductAnalyticsEvents from '@/components/ProductAnalyticsEvents';
 import SponsorAnalyticsTracker from '@/components/SponsorAnalyticsTracker';
+import GameSponsorPlacement from '@/components/GameSponsorPlacement';
 import DispensaryCardEnhancer from '@/components/DispensaryCardEnhancer';
 import HomeMapLocationDeepLink from '@/components/HomeMapLocationDeepLink';
 import HomeLocationSelectionCardMinimizer from '@/components/HomeLocationSelectionCardMinimizer';
@@ -72,7 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-map-marker.png" as="image" type="image/png" />
       </head>
-      <body><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
