@@ -47,14 +47,43 @@ function switchBaseMap(map:LibreMap,base:BaseMap){for(const [name,c] of Object.e
 function randomGameplayViewport(){const regions=[{west:-124.5,east:-116,south:42,north:49},{west:-122,east:-108,south:32,north:41},{west:-113,east:-101,south:37,north:47},{west:-103,east:-86,south:36,north:48},{west:-100,east:-81,south:29,north:37},{west:-83,east:-69,south:39,north:47},{west:-90,east:-76,south:25,north:35}],r=regions[Math.floor(Math.random()*regions.length)];return{center:[r.west+Math.random()*(r.east-r.west),r.south+Math.random()*(r.north-r.south)] as [number,number],zoom:3.2+Math.random()*1.15};}
 function raiseMarker(marker:Marker,z='20'){const el=marker.getElement();el.style.zIndex=z;el.style.pointerEvents='auto';return el;}
 function drawCannabisLeaf(ctx:CanvasRenderingContext2D,x:number,y:number,scale=1,alpha=1){
- ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle=`rgba(255,255,255,${alpha})`;ctx.strokeStyle=`rgba(255,255,255,${alpha})`;ctx.lineCap='round';ctx.lineJoin='round';
- const blade=(angle:number,length:number,width:number,baseY=3)=>{ctx.save();ctx.rotate(angle);ctx.beginPath();ctx.moveTo(-1.4,baseY);ctx.bezierCurveTo(-width*.85,-length*.20,-width*.82,-length*.60,0,-length);ctx.bezierCurveTo(width*.82,-length*.60,width*.85,-length*.20,1.4,baseY);ctx.closePath();ctx.fill();ctx.restore();};
- blade(0,27,6.8);blade(-.48,23.5,6.4);blade(.48,23.5,6.4);blade(-.88,19,5.8);blade(.88,19,5.8);blade(-1.20,13.5,4.7);blade(1.20,13.5,4.7);
- ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,14);ctx.lineWidth=3.1;ctx.stroke();ctx.restore();
+ ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+ ctx.beginPath();
+ ctx.moveTo(0,12);
+ ctx.lineTo(-2,5);
+ ctx.lineTo(-7,8);
+ ctx.lineTo(-5,2);
+ ctx.lineTo(-15,6);
+ ctx.lineTo(-11,-1);
+ ctx.lineTo(-22,0);
+ ctx.lineTo(-14,-7);
+ ctx.lineTo(-24,-10);
+ ctx.lineTo(-13,-12);
+ ctx.lineTo(-19,-20);
+ ctx.lineTo(-8,-15);
+ ctx.lineTo(-11,-27);
+ ctx.lineTo(-3,-18);
+ ctx.lineTo(0,-31);
+ ctx.lineTo(3,-18);
+ ctx.lineTo(11,-27);
+ ctx.lineTo(8,-15);
+ ctx.lineTo(19,-20);
+ ctx.lineTo(13,-12);
+ ctx.lineTo(24,-10);
+ ctx.lineTo(14,-7);
+ ctx.lineTo(22,0);
+ ctx.lineTo(11,-1);
+ ctx.lineTo(15,6);
+ ctx.lineTo(5,2);
+ ctx.lineTo(7,8);
+ ctx.lineTo(2,5);
+ ctx.closePath();
+ ctx.fill();
+ ctx.restore();
 }
-async function buildMapPinImage(fill:string,leafAlpha=1){const canvas=document.createElement('canvas');canvas.width=72*PIN_RENDER_SCALE;canvas.height=92*PIN_RENDER_SCALE;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create map pin canvas.');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,72,92);ctx.save();ctx.shadowColor='rgba(0,0,0,.30)';ctx.shadowBlur=5;ctx.shadowOffsetY=3;ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.restore();ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.95)';ctx.stroke();drawCannabisLeaf(ctx,36,42,1.03,leafAlpha);return await createImageBitmap(canvas);}
+async function buildMapPinImage(fill:string,leafAlpha=1){const canvas=document.createElement('canvas');canvas.width=72*PIN_RENDER_SCALE;canvas.height=92*PIN_RENDER_SCALE;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create map pin canvas.');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,72,92);ctx.save();ctx.shadowColor='rgba(0,0,0,.26)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.restore();ctx.beginPath();ctx.moveTo(36,88);ctx.bezierCurveTo(31,78,12,57,10,38);ctx.bezierCurveTo(8,19,20,6,36,6);ctx.bezierCurveTo(52,6,64,19,62,38);ctx.bezierCurveTo(60,57,41,78,36,88);ctx.closePath();ctx.fillStyle=fill;ctx.fill();drawCannabisLeaf(ctx,36,40,.92,leafAlpha);return await createImageBitmap(canvas);}
 async function buildPointyPinImage(){return buildMapPinImage('#2f9d78');}
-async function buildFeaturedPinImage(){return buildMapPinImage('#dfa032');}
+async function buildFeaturedPinImage(){return buildMapPinImage('#e58b00');}
 async function buildMappedPinImage(){return buildMapPinImage('#788883',.84);}
 
 export default function GuessMap({guess,actual=null,revealed=false,onGuess,locations=[],browseMode=false,mappedTotal,countriesTotal,enabledTotal,showAllMappedPins=false}:Props){
