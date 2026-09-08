@@ -15,11 +15,26 @@ function gameForPath(pathname:string):Game|null{
 function gameName(game:Game){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily Weedo':'Weedo Hunt';}
 
 export default function GameSponsorPlacement(){
- const pathname=usePathname(),game=useMemo(()=>gameForPath(pathname),[pathname]);
+ const pathname=usePathname(),routeGame=useMemo(()=>gameForPath(pathname),[pathname]);
+ const[classicActive,setClassicActive]=useState(false);
+ const game=routeGame==='classic'?(classicActive?'classic':null):routeGame;
  const[data,setData]=useState<CampaignPayload|null>(null),[hidden,setHidden]=useState(false),[completed,setCompleted]=useState(false);
+
+ useEffect(()=>{
+  if(pathname!=='/'){
+   setClassicActive(false);
+   return;
+  }
+  const detect=()=>setClassicActive(!document.querySelector('.map-first-home'));
+  const observer=new MutationObserver(detect);
+  observer.observe(document.body,{childList:true,subtree:true});
+  detect();
+  return()=>observer.disconnect();
+ },[pathname]);
+
  useEffect(()=>{setHidden(false);setCompleted(false);setData(null);if(!game)return;let alive=true;fetch(`/api/sponsorship/campaign?game=${game}`,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(payload=>{if(alive)setData(payload?.campaign||null);}).catch(()=>{});return()=>{alive=false;};},[game]);
  useEffect(()=>{
-  if(!data?.campaign?.id)return;
+  if(!game||!data?.campaign?.id)return;
   const campaignId=data.campaign.id,impressionKey=`geoweedo-game-campaign-impression:${campaignId}`;
   if(!sessionStorage.getItem(impressionKey)){
    sessionStorage.setItem(impressionKey,'1');
@@ -35,7 +50,7 @@ export default function GameSponsorPlacement(){
    void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId,eventType:'game_completed',metadata:{surface:'game',path:pathname}})}).catch(()=>{});
   };
   const observer=new MutationObserver(detect);observer.observe(document.body,{childList:true,subtree:true,characterData:true});detect();return()=>observer.disconnect();
- },[data,pathname]);
+ },[game,data,pathname]);
  if(!game||!data||hidden)return null;
  const {campaign,sponsor}=data,geo=campaign.geographyType==='all'?'All players':campaign.geographyType==='radius'?`${campaign.radiusKm||''} km radius`:campaign.geographyValue||campaign.geographyType;
  const event=(eventType:'listing_view'|'website_click')=>{void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:campaign.id,eventType,metadata:{surface:'presented_by',path:pathname}})}).catch(()=>{});};
