@@ -1,118 +1,84 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {useEffect,useMemo,useState} from 'react';
 
-type Dispensary = { id: string; name: string; city: string; region: string; active: boolean };
-type Entitlement = { id: string; dispensaryId: string; businessId: string; status: string; startsAt: string; endsAt: string; source: string; planCode: string; currency: 'USD' };
-type Claim = { id: string; location_id: string; claimant_name: string; business_email?: string; business_phone?: string; role_title?: string; status: string; created_at: string; location?: { name?: string; city?: string; region?: string } };
-type Plan = { code: string; name: string; currency: 'USD'; monthlyPriceCents: number; annualPriceCents: number };
-type DurationPreset = 'day'|'week'|'month'|'year';
+type Dispensary={id:string;name:string;city:string;region:string;active:boolean};
+type Entitlement={id:string;dispensaryId:string;businessId:string;status:string;startsAt:string;endsAt:string;source:string;planCode:string;currency:'USD'};
+type Claim={id:string;location_id:string;claimant_name:string;business_email?:string;business_phone?:string;role_title?:string;status:string;created_at:string;location?:{name?:string;city?:string;region?:string}};
+type Plan={code:string;name:string;currency:'USD';monthlyPriceCents:number;annualPriceCents:number};
+type DurationPreset='day'|'week'|'month'|'year';
+type GameType='classic'|'daily'|'hunt';
+type Campaign={id:string;dispensaryId:string;businessId:string;gameType:GameType;placement:string;geographyType:string;geographyValue:string|null;radiusKm:number|null;startsAt:string;endsAt:string;status:string;source:string;amountCents:number|null;currency:'USD';title:string|null};
+type GameProducts=Record<GameType,{name:string;dayPriceCents?:number;weekPriceCents?:number;monthPriceCents?:number}>;
 
-function localInput(date: Date) { const copy = new Date(date.getTime() - date.getTimezoneOffset() * 60000); return copy.toISOString().slice(0, 16); }
-function money(cents: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cents / 100); }
-function addDuration(startValue:string,preset:DurationPreset){
-  const start=new Date(startValue);
-  if(!Number.isFinite(start.getTime()))return startValue;
-  const end=new Date(start);
-  if(preset==='day')end.setDate(end.getDate()+1);
-  if(preset==='week')end.setDate(end.getDate()+7);
-  if(preset==='month')end.setMonth(end.getMonth()+1);
-  if(preset==='year')end.setFullYear(end.getFullYear()+1);
-  return localInput(end);
-}
+function localInput(date:Date){const copy=new Date(date.getTime()-date.getTimezoneOffset()*60000);return copy.toISOString().slice(0,16);}
+function money(cents:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(cents/100);}
+function addDuration(startValue:string,preset:DurationPreset){const start=new Date(startValue);if(!Number.isFinite(start.getTime()))return startValue;const end=new Date(start);if(preset==='day')end.setDate(end.getDate()+1);if(preset==='week')end.setDate(end.getDate()+7);if(preset==='month')end.setMonth(end.getMonth()+1);if(preset==='year')end.setFullYear(end.getFullYear()+1);return localInput(end);}
+function gameLabel(game:GameType){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily Weedo':'Weedo Hunt';}
+const DEFAULT_PRODUCTS:GameProducts={classic:{name:'Classic Sponsor',dayPriceCents:1000,weekPriceCents:4900,monthPriceCents:14900},daily:{name:'Daily Weedo Sponsor',dayPriceCents:1500,weekPriceCents:7900,monthPriceCents:24900},hunt:{name:'Sponsored Weedo Hunt',weekPriceCents:9900,monthPriceCents:29900}};
 
-export default function AdminSponsorshipManager() {
-  const [dispensaries, setDispensaries] = useState<Dispensary[]>([]);
-  const [items, setItems] = useState<Entitlement[]>([]);
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [plan, setPlan] = useState<Plan>({ code:'featured', name:'GeoWeedo Featured', currency:'USD', monthlyPriceCents:3900, annualPriceCents:39000 });
-  const [form, setForm] = useState({ dispensaryId: '', source: 'admin_comp', status: 'active', startsAt: localInput(new Date()), endsAt: localInput(new Date(Date.now() + 30 * 86400000)) });
-  const [dispensarySearch,setDispensarySearch]=useState('');
-  const [status, setStatus] = useState('Loading business sponsorship workspace…');
-  const [busy, setBusy] = useState(false);
-  const names = useMemo(() => new Map(dispensaries.map((item) => [item.id, item])), [dispensaries]);
-  const filteredDispensaries=useMemo(()=>{
-    const q=dispensarySearch.trim().toLowerCase();
-    if(!q)return dispensaries;
-    return dispensaries.filter((item)=>`${item.name} ${item.city} ${item.region}`.toLowerCase().includes(q));
-  },[dispensaries,dispensarySearch]);
+export default function AdminSponsorshipManager(){
+ const[dispensaries,setDispensaries]=useState<Dispensary[]>([]),[items,setItems]=useState<Entitlement[]>([]),[campaigns,setCampaigns]=useState<Campaign[]>([]),[claims,setClaims]=useState<Claim[]>([]);
+ const[plan,setPlan]=useState<Plan>({code:'featured',name:'GeoWeedo Featured',currency:'USD',monthlyPriceCents:3900,annualPriceCents:39000}),[products,setProducts]=useState<GameProducts>(DEFAULT_PRODUCTS);
+ const now=()=>localInput(new Date());
+ const[form,setForm]=useState({dispensaryId:'',source:'admin_comp',status:'active',startsAt:now(),endsAt:localInput(new Date(Date.now()+30*86400000))});
+ const[campaignForm,setCampaignForm]=useState({dispensaryId:'',gameType:'classic' as GameType,title:'',geographyType:'all',geographyValue:'',radiusKm:'25',source:'admin_comp',status:'active',startsAt:now(),endsAt:localInput(new Date(Date.now()+86400000)),amountUsd:''});
+ const[dispensarySearch,setDispensarySearch]=useState(''),[campaignSearch,setCampaignSearch]=useState(''),[status,setStatus]=useState('Loading business sponsorship workspace…'),[busy,setBusy]=useState(false);
+ const names=useMemo(()=>new Map(dispensaries.map(item=>[item.id,item])),[dispensaries]);
+ const filter=(search:string)=>{const q=search.trim().toLowerCase();return q?dispensaries.filter(item=>`${item.name} ${item.city} ${item.region}`.toLowerCase().includes(q)):dispensaries;};
+ const featuredChoices=useMemo(()=>filter(dispensarySearch),[dispensaries,dispensarySearch]);
+ const campaignChoices=useMemo(()=>filter(campaignSearch),[dispensaries,campaignSearch]);
 
-  async function load() {
-    const [sponsorResponse, claimResponse] = await Promise.all([
-      fetch('/api/admin/sponsorships', { cache: 'no-store' }),
-      fetch('/api/admin/owner-claims?status=pending', { cache: 'no-store' }),
-    ]);
-    if (sponsorResponse.status === 401 || claimResponse.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
-    const sponsorData = await sponsorResponse.json().catch(() => ({}));
-    const claimData = await claimResponse.json().catch(() => ({}));
-    if (sponsorResponse.status === 403 || claimResponse.status === 403) throw new Error(sponsorData.error || claimData.error || 'Your admin account does not have permission to manage sponsorships.');
-    if (!sponsorResponse.ok) throw new Error(sponsorData.error || 'Sponsorship admin access failed.');
-    if (!claimResponse.ok) throw new Error(claimData.error || 'Could not load ownership claims.');
-    setDispensaries(sponsorData.dispensaries || []); setItems(sponsorData.entitlements || []); setClaims(claimData.claims || []); if (sponsorData.plan) setPlan(sponsorData.plan);
-    setForm((current) => ({ ...current, dispensaryId: current.dispensaryId || sponsorData.dispensaries?.[0]?.id || '' }));
-    setStatus('Business sponsorship workspace ready. Featured listings affect visibility only; gameplay odds remain unchanged.');
-  }
+ async function load(){
+  const[sponsorResponse,claimResponse]=await Promise.all([fetch('/api/admin/sponsorships',{cache:'no-store'}),fetch('/api/admin/owner-claims?status=pending',{cache:'no-store'})]);
+  if(sponsorResponse.status===401||claimResponse.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}
+  const sponsorData=await sponsorResponse.json().catch(()=>({})),claimData=await claimResponse.json().catch(()=>({}));
+  if(sponsorResponse.status===403||claimResponse.status===403)throw new Error(sponsorData.error||claimData.error||'Your admin account does not have permission to manage sponsorships.');
+  if(!sponsorResponse.ok)throw new Error(sponsorData.error||'Sponsorship admin access failed.');if(!claimResponse.ok)throw new Error(claimData.error||'Could not load ownership claims.');
+  const ds=sponsorData.dispensaries||[];setDispensaries(ds);setItems(sponsorData.entitlements||[]);setCampaigns(sponsorData.campaigns||[]);setClaims(claimData.claims||[]);if(sponsorData.plan)setPlan(sponsorData.plan);if(sponsorData.gameProducts)setProducts(sponsorData.gameProducts);
+  const first=ds[0]?.id||'';setForm(current=>({...current,dispensaryId:current.dispensaryId||first}));setCampaignForm(current=>({...current,dispensaryId:current.dispensaryId||first}));
+  setStatus('Sponsorship workspace ready. Featured and game campaigns affect presentation only; normal gameplay odds remain unchanged.');
+ }
+ useEffect(()=>{load().catch(error=>setStatus(error.message));},[]);
+ function quickButtons(onPick:(p:DurationPreset)=>void){return <div className="source-note"><strong>Quick duration</strong><span style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>{([['day','1 day'],['week','1 week'],['month','1 month'],['year','1 year']] as Array<[DurationPreset,string]>).map(([p,label])=><button key={p} type="button" className="ghost" onClick={()=>onPick(p)}>{label}</button>)}</span></div>;}
+ async function saveFeatured(){setBusy(true);setStatus('Saving Featured entitlement…');try{const response=await fetch('/api/admin/sponsorships',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,startsAt:new Date(form.startsAt).toISOString(),endsAt:new Date(form.endsAt).toISOString()})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not save Featured entitlement.');setStatus(`Featured listing saved for ${names.get(form.dispensaryId)?.name||form.dispensaryId}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not save Featured entitlement.');}finally{setBusy(false);}}
+ async function saveCampaign(){setBusy(true);setStatus(`Saving ${gameLabel(campaignForm.gameType)} campaign…`);try{const response=await fetch('/api/admin/sponsorships',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'campaign',...campaignForm,startsAt:new Date(campaignForm.startsAt).toISOString(),endsAt:new Date(campaignForm.endsAt).toISOString(),amountCents:campaignForm.amountUsd===''?null:Math.round(Number(campaignForm.amountUsd)*100)})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not save game campaign.');setStatus(`${gameLabel(campaignForm.gameType)} campaign activated for ${names.get(campaignForm.dispensaryId)?.name||campaignForm.dispensaryId}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not save game campaign.');}finally{setBusy(false);}}
+ async function moderateClaim(claimId:string,nextStatus:'approved'|'rejected'){setBusy(true);setStatus(`${nextStatus==='approved'?'Approving':'Rejecting'} ownership claim…`);try{const response=await fetch('/api/admin/owner-claims',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({claimId,status:nextStatus})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not moderate ownership claim.');setStatus(`Ownership claim ${nextStatus}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not moderate ownership claim.');}finally{setBusy(false);}}
+ async function logout(){await fetch('/api/admin/auth/logout',{method:'POST'});window.location.href='/admin/login';}
+ const product=products[campaignForm.gameType]||DEFAULT_PRODUCTS[campaignForm.gameType];
+ const priceLine=[product.dayPriceCents&&`${money(product.dayPriceCents)}/day`,product.weekPriceCents&&`${money(product.weekPriceCents)}/week`,product.monthPriceCents&&`${money(product.monthPriceCents)}/month`].filter(Boolean).join(' · ');
 
-  useEffect(() => { load().catch((error) => setStatus(error.message)); }, []);
+ return <main className="admin-shell">
+  <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Businesses & Sponsorships</h1></div><div className="admin-links"><a href="/admin/data">Data import</a><a href="/admin/dispensaries">Dispensaries</a><a href="/admin/rewards">Rewards</a><a href="/">Game</a><button className="ghost" onClick={logout}>Log out</button></div></header>
+  <div className="admin-status">{status}</div>
 
-  function applyDuration(preset:DurationPreset){
-    setForm((current)=>({...current,endsAt:addDuration(current.startsAt,preset)}));
-  }
+  <section className="admin-grid">
+   <div className="admin-panel"><h2>Grant GeoWeedo Featured</h2><div className="source-note"><strong>{plan.name}</strong><span>{money(plan.monthlyPriceCents)}/month or {money(plan.annualPriceCents)}/year. Enhanced map/profile visibility; never changes game selection odds.</span></div><div className="admin-form">
+    <label><span>Search dispensaries</span><input type="search" value={dispensarySearch} onChange={e=>setDispensarySearch(e.target.value)} placeholder="Search by name, city or state…"/></label>
+    <label><span>Dispensary</span><select value={form.dispensaryId} onChange={e=>setForm({...form,dispensaryId:e.target.value})}>{featuredChoices.length===0?<option value="">No matching dispensaries</option>:featuredChoices.map(item=><option value={item.id} key={item.id}>{item.name} — {item.city}, {item.region}</option>)}</select></label>
+    <div className="field-row"><label><span>Starts</span><input type="datetime-local" value={form.startsAt} onChange={e=>setForm({...form,startsAt:e.target.value})}/></label><label><span>Ends</span><input type="datetime-local" value={form.endsAt} onChange={e=>setForm({...form,endsAt:e.target.value})}/></label></div>
+    {quickButtons(p=>setForm(current=>({...current,endsAt:addDuration(current.startsAt,p)})))}
+    <div className="field-row"><label><span>Source</span><select value={form.source} onChange={e=>setForm({...form,source:e.target.value})}><option value="admin_comp">Admin comp / beta</option><option value="manual_invoice">Manual USD invoice</option><option value="subscription">USD subscription</option></select></label><label><span>Status</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label></div>
+    <button className="primary" disabled={busy||!form.dispensaryId} onClick={saveFeatured}>Save Featured listing</button>
+   </div></div>
 
-  async function saveFeatured() {
-    setBusy(true); setStatus('Saving Featured entitlement…');
-    try {
-      const response = await fetch('/api/admin/sponsorships', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, startsAt: new Date(form.startsAt).toISOString(), endsAt: new Date(form.endsAt).toISOString() }) });
-      if (response.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Could not save Featured entitlement.');
-      setStatus(`Featured listing saved for ${names.get(form.dispensaryId)?.name || form.dispensaryId}.`); await load();
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not save Featured entitlement.'); }
-    finally { setBusy(false); }
-  }
+   <div className="admin-panel"><h2>Game sponsorship policy</h2><div className="source-note"><strong>Classic GeoWeedo</strong><span>Presented-by and reveal exposure. Sponsor never influences mystery rounds.</span></div><div className="source-note"><strong>Daily Weedo</strong><span>One active presented-by sponsor can occupy the Daily placement while the deterministic Daily location remains unchanged.</span></div><div className="source-note"><strong>Weedo Hunt</strong><span>Clearly labeled Sponsored Hunt presentation. Normal Hunt target selection remains random and independent.</span></div><div className="source-note"><strong>Geographic targeting</strong><span>Campaigns store all-player, country, region, city, or radius targeting so placements can become increasingly local as traffic grows.</span></div></div>
+  </section>
 
-  async function moderateClaim(claimId: string, nextStatus: 'approved'|'rejected') {
-    setBusy(true); setStatus(`${nextStatus === 'approved' ? 'Approving' : 'Rejecting'} ownership claim…`);
-    try {
-      const response = await fetch('/api/admin/owner-claims', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ claimId, status:nextStatus }) });
-      if (response.status === 401) { window.location.href = '/admin/login?next=/admin/sponsorships'; return; }
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Could not moderate ownership claim.');
-      setStatus(`Ownership claim ${nextStatus}.`); await load();
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not moderate ownership claim.'); }
-    finally { setBusy(false); }
-  }
+  <section className="admin-panel" style={{marginTop:16}}><h2>Game Campaigns</h2><div className="source-note"><strong>{product.name}</strong><span>{priceLine}. Introductory pricing is editable operationally; manual comp/invoice campaigns can be tested now.</span></div><div className="admin-form">
+   <div className="field-row"><label><span>Game</span><select value={campaignForm.gameType} onChange={e=>setCampaignForm({...campaignForm,gameType:e.target.value as GameType})}><option value="classic">Classic GeoWeedo</option><option value="daily">Daily Weedo</option><option value="hunt">Weedo Hunt</option></select></label><label><span>Campaign title (optional)</span><input value={campaignForm.title} onChange={e=>setCampaignForm({...campaignForm,title:e.target.value})} placeholder="e.g. Green Gold California Hunt"/></label></div>
+   <label><span>Search sponsor dispensary</span><input type="search" value={campaignSearch} onChange={e=>setCampaignSearch(e.target.value)} placeholder="Search by name, city or state…"/></label>
+   <label><span>Sponsor dispensary</span><select value={campaignForm.dispensaryId} onChange={e=>setCampaignForm({...campaignForm,dispensaryId:e.target.value})}>{campaignChoices.length===0?<option value="">No matching dispensaries</option>:campaignChoices.map(item=><option value={item.id} key={item.id}>{item.name} — {item.city}, {item.region}</option>)}</select></label>
+   <div className="field-row"><label><span>Geography</span><select value={campaignForm.geographyType} onChange={e=>setCampaignForm({...campaignForm,geographyType:e.target.value})}><option value="all">All players</option><option value="country">Country</option><option value="region">State / Province</option><option value="city">City / Region</option><option value="radius">Radius around sponsor</option></select></label>{campaignForm.geographyType!=='all'&&campaignForm.geographyType!=='radius'?<label><span>Target value</span><input value={campaignForm.geographyValue} onChange={e=>setCampaignForm({...campaignForm,geographyValue:e.target.value})} placeholder={campaignForm.geographyType==='country'?'USA':campaignForm.geographyType==='region'?'California':'San Andreas'}/></label>:campaignForm.geographyType==='radius'?<label><span>Radius (km)</span><input type="number" min="1" step="1" value={campaignForm.radiusKm} onChange={e=>setCampaignForm({...campaignForm,radiusKm:e.target.value})}/></label>:<label><span>Target</span><input value="All GeoWeedo players" disabled/></label>}</div>
+   <div className="field-row"><label><span>Starts</span><input type="datetime-local" value={campaignForm.startsAt} onChange={e=>setCampaignForm({...campaignForm,startsAt:e.target.value})}/></label><label><span>Ends</span><input type="datetime-local" value={campaignForm.endsAt} onChange={e=>setCampaignForm({...campaignForm,endsAt:e.target.value})}/></label></div>
+   {quickButtons(p=>setCampaignForm(current=>({...current,endsAt:addDuration(current.startsAt,p)})))}
+   <div className="field-row"><label><span>Source</span><select value={campaignForm.source} onChange={e=>setCampaignForm({...campaignForm,source:e.target.value})}><option value="admin_comp">Admin comp / beta</option><option value="manual_invoice">Manual USD invoice</option><option value="subscription">USD subscription</option></select></label><label><span>Campaign amount USD (optional)</span><input type="number" min="0" step="1" value={campaignForm.amountUsd} onChange={e=>setCampaignForm({...campaignForm,amountUsd:e.target.value})} placeholder="0"/></label></div>
+   <div className="field-row"><label><span>Status</span><select value={campaignForm.status} onChange={e=>setCampaignForm({...campaignForm,status:e.target.value})}><option value="active">Active</option><option value="paused">Paused</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label><label><span>Placement</span><input value="Presented by" disabled/></label></div>
+   <button className="primary" disabled={busy||!campaignForm.dispensaryId} onClick={saveCampaign}>Save {gameLabel(campaignForm.gameType)} campaign</button>
+  </div></section>
 
-  async function logout() { await fetch('/api/admin/auth/logout', { method: 'POST' }); window.location.href = '/admin/login'; }
-
-  return (
-    <main className="admin-shell">
-      <header className="admin-header"><div><span className="eyebrow">GEOWEEDO ADMIN</span><h1>Businesses & Featured</h1></div><div className="admin-links"><a href="/admin/data">Data import</a><a href="/admin/dispensaries">Dispensaries</a><a href="/admin/rewards">Rewards</a><a href="/">Game</a><button className="ghost" onClick={logout}>Log out</button></div></header>
-      <div className="admin-status">{status}</div>
-
-      <section className="admin-grid">
-        <div className="admin-panel">
-          <h2>Grant GeoWeedo Featured</h2>
-          <div className="source-note"><strong>{plan.name}</strong><span>{money(plan.monthlyPriceCents)}/month or {money(plan.annualPriceCents)}/year. Billing is denominated in USD. During rollout, Admin can grant or invoice Featured access without a payment processor.</span></div>
-          <div className="admin-form">
-            <label><span>Search dispensaries</span><input type="search" value={dispensarySearch} onChange={(e)=>setDispensarySearch(e.target.value)} placeholder="Search by name, city or state…" /></label>
-            <label><span>Dispensary</span><select value={form.dispensaryId} onChange={(e) => setForm({...form, dispensaryId:e.target.value})}>{filteredDispensaries.length===0?<option value="">No matching dispensaries</option>:filteredDispensaries.map((item) => <option value={item.id} key={item.id}>{item.name} — {item.city}, {item.region}</option>)}</select></label>
-            <div className="field-row"><label><span>Starts</span><input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({...form, startsAt:e.target.value})} /></label><label><span>Ends</span><input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({...form, endsAt:e.target.value})} /></label></div>
-            <div className="source-note"><strong>Quick duration</strong><span style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}}>{([['day','1 day'],['week','1 week'],['month','1 month'],['year','1 year']] as Array<[DurationPreset,string]>).map(([preset,label])=><button key={preset} type="button" className="ghost" onClick={()=>applyDuration(preset)}>{label}</button>)}</span></div>
-            <div className="field-row"><label><span>Source</span><select value={form.source} onChange={(e) => setForm({...form, source:e.target.value})}><option value="admin_comp">Admin comp / beta</option><option value="manual_invoice">Manual USD invoice</option><option value="subscription">USD subscription</option></select></label><label><span>Status</span><select value={form.status} onChange={(e) => setForm({...form, status:e.target.value})}><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></label></div>
-            <button className="primary" disabled={busy || !form.dispensaryId} onClick={saveFeatured}>Save Featured listing</button>
-          </div>
-        </div>
-
-        <div className="admin-panel">
-          <h2>Featured policy</h2>
-          <div className="source-note"><strong>One map renderer</strong><span>Featured status is carried by the normal MapLibre dispensary source. No separate DOM sponsor marker path is required.</span></div>
-          <div className="source-note"><strong>Visibility, not pay-to-win</strong><span>Featured changes map/discovery presentation and enables sponsor analytics. It does not alter Classic, Daily Weedo, or Weedo Hunt selection odds.</span></div>
-          <div className="source-note"><strong>USD commercial billing</strong><span>Sponsorship subscriptions and payments are kept separate from player rewards and wallet accounting.</span></div>
-        </div>
-      </section>
-
-      <section className="admin-panel approved-list"><h2>Pending business claims</h2>{claims.length === 0 ? <p>No pending ownership claims.</p> : claims.map((claim) => <div className="candidate-row" key={claim.id}><div><strong>{claim.location?.name || claim.location_id}</strong><span>{claim.claimant_name}{claim.role_title ? ` · ${claim.role_title}` : ''}</span><small>{claim.business_email || claim.business_phone || 'No contact shown'} · submitted {new Date(claim.created_at).toLocaleDateString()}</small></div><div className="candidate-actions"><button disabled={busy} onClick={() => moderateClaim(claim.id,'approved')}>Approve claim</button><button disabled={busy} onClick={() => moderateClaim(claim.id,'rejected')}>Reject</button></div></div>)}</section>
-
-      <section className="admin-panel approved-list"><h2>Featured listings</h2>{items.length === 0 ? <p>No Featured listings yet.</p> : items.map((item) => { const d = names.get(item.dispensaryId); return <div className="candidate-row" key={item.id}><div><strong>{d?.name || item.dispensaryId}</strong><span>{plan.name} · USD · {new Date(item.startsAt).toLocaleDateString()} → {new Date(item.endsAt).toLocaleDateString()}</span><small>{item.source.replaceAll('_',' ')} · business {item.businessId}</small></div><div className="candidate-actions"><span className={`status-pill ${item.status}`}>{item.status}</span></div></div>; })}</section>
-    </main>
-  );
+  <section className="admin-panel approved-list"><h2>Active & scheduled game campaigns</h2>{campaigns.length===0?<p>No game campaigns yet. Create a 1-day Admin comp campaign above to test a placement immediately.</p>:campaigns.map(item=>{const d=names.get(item.dispensaryId);const geo=item.geographyType==='all'?'all players':item.geographyType==='radius'?`${item.radiusKm} km radius`:`${item.geographyType}: ${item.geographyValue||'—'}`;return <div className="candidate-row" key={item.id}><div><strong>{gameLabel(item.gameType)} · {item.title||d?.name||item.dispensaryId}</strong><span>{d?.name||item.dispensaryId} · {new Date(item.startsAt).toLocaleString()} → {new Date(item.endsAt).toLocaleString()}</span><small>{geo} · {item.source.replaceAll('_',' ')}{item.amountCents!=null?` · ${money(item.amountCents)}`:''}</small></div><div className="candidate-actions"><span className={`status-pill ${item.status}`}>{item.status}</span></div></div>;})}</section>
+  <section className="admin-panel approved-list"><h2>Pending business claims</h2>{claims.length===0?<p>No pending ownership claims.</p>:claims.map(claim=><div className="candidate-row" key={claim.id}><div><strong>{claim.location?.name||claim.location_id}</strong><span>{claim.claimant_name}{claim.role_title?` · ${claim.role_title}`:''}</span><small>{claim.business_email||claim.business_phone||'No contact shown'} · submitted {new Date(claim.created_at).toLocaleDateString()}</small></div><div className="candidate-actions"><button disabled={busy} onClick={()=>moderateClaim(claim.id,'approved')}>Approve claim</button><button disabled={busy} onClick={()=>moderateClaim(claim.id,'rejected')}>Reject</button></div></div>)}</section>
+  <section className="admin-panel approved-list"><h2>Featured listings</h2>{items.length===0?<p>No Featured listings yet.</p>:items.map(item=>{const d=names.get(item.dispensaryId);return <div className="candidate-row" key={item.id}><div><strong>{d?.name||item.dispensaryId}</strong><span>{plan.name} · USD · {new Date(item.startsAt).toLocaleDateString()} → {new Date(item.endsAt).toLocaleDateString()}</span><small>{item.source.replaceAll('_',' ')} · business {item.businessId}</small></div><div className="candidate-actions"><span className={`status-pill ${item.status}`}>{item.status}</span></div></div>;})}</section>
+ </main>;
 }
