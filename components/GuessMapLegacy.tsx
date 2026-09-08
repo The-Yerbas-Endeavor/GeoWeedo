@@ -74,15 +74,30 @@ async function buildPointyPinImage(map:LibreMap){
  ctx.beginPath();ctx.arc(48,47,29,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle='rgba(245,248,245,.96)';ctx.stroke();
  return await createImageBitmap(canvas);
 }
+function removeConnectedWhiteBackground(source:CanvasImageSource,width:number,height:number){
+ const w=Math.max(1,Math.round(width)),h=Math.max(1,Math.round(height));
+ const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return source;
+ ctx.drawImage(source,0,0,w,h);
+ const image=ctx.getImageData(0,0,w,h),data=image.data,seen=new Uint8Array(w*h),queue:number[]=[];
+ const isBackground=(p:number)=>{const o=p*4,r=data[o],g=data[o+1],b=data[o+2],a=data[o+3];return a>0&&r>=232&&g>=232&&b>=232&&Math.max(r,g,b)-Math.min(r,g,b)<=22;};
+ const push=(p:number)=>{if(p<0||p>=w*h||seen[p]||!isBackground(p))return;seen[p]=1;queue.push(p);};
+ for(let x=0;x<w;x++){push(x);push((h-1)*w+x);}for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}
+ for(let q=0;q<queue.length;q++){const p=queue[q],x=p%w,y=Math.floor(p/w),o=p*4;data[o+3]=0;if(x>0)push(p-1);if(x+1<w)push(p+1);if(y>0)push(p-w);if(y+1<h)push(p+w);}
+ ctx.clearRect(0,0,w,h);ctx.putImageData(image,0,0);return canvas;
+}
 async function buildFeaturedPinImage(map:LibreMap,logoUrl?:string){
  const badge=await map.loadImage(logoUrl||PIN_BADGE_URL);
+ const rawBadge=badge.data as unknown as CanvasImageSource;
+ const badgeWidth=Number((badge.data as any)?.width||128),badgeHeight=Number((badge.data as any)?.height||128);
+ const badgeSource=logoUrl?removeConnectedWhiteBackground(rawBadge,badgeWidth,badgeHeight):rawBadge;
  const canvas=document.createElement('canvas');canvas.width=112*PIN_RENDER_SCALE;canvas.height=146*PIN_RENDER_SCALE;
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Could not create Featured pin canvas.');
  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.scale(PIN_RENDER_SCALE,PIN_RENDER_SCALE);ctx.clearRect(0,0,112,146);
  ctx.save();ctx.shadowColor='rgba(0,0,0,.58)';ctx.shadowBlur=11;ctx.shadowOffsetY=6;ctx.beginPath();ctx.moveTo(56,142);ctx.bezierCurveTo(49,126,19,94,13,66);ctx.bezierCurveTo(7,34,27,7,56,7);ctx.bezierCurveTo(85,7,105,34,99,66);ctx.bezierCurveTo(93,94,63,126,56,142);ctx.closePath();ctx.fillStyle='#f5c451';ctx.fill();ctx.restore();
  ctx.beginPath();ctx.moveTo(56,136);ctx.bezierCurveTo(49,121,23,91,18,64);ctx.bezierCurveTo(13,37,31,13,56,13);ctx.bezierCurveTo(81,13,99,37,94,64);ctx.bezierCurveTo(89,91,63,121,56,136);ctx.closePath();ctx.fillStyle='#151209';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#ffe59b';ctx.stroke();
  ctx.save();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(56,52,32,0,Math.PI*2);ctx.fill();ctx.restore();
- ctx.save();ctx.beginPath();ctx.arc(56,52,32,0,Math.PI*2);ctx.clip();ctx.drawImage(badge.data as unknown as CanvasImageSource,27,23,58,58);ctx.restore();
+ ctx.save();ctx.beginPath();ctx.arc(56,52,32,0,Math.PI*2);ctx.clip();ctx.drawImage(badgeSource,27,23,58,58);ctx.restore();
  ctx.beginPath();ctx.arc(56,52,34,0,Math.PI*2);ctx.lineWidth=4;ctx.strokeStyle='#f5c451';ctx.stroke();ctx.beginPath();ctx.arc(56,52,38,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,229,155,.75)';ctx.stroke();
  ctx.font='900 15px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f5c451';ctx.fillText('★',56,97);
  return await createImageBitmap(canvas);
