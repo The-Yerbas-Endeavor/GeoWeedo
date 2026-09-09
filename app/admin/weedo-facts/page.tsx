@@ -157,7 +157,7 @@ export default function WeedoFactsAdminPage() {
           <dt>Analytes loaded</dt><dd>{retrievedAnalytes}</dd>
         </dl>
         <div className={styles.retrieveLinks}>
-          {retrievedRecord.productId ? <a href={`/product/${encodeURIComponent(retrievedRecord.productId)}${retrievedRecord.batchId ? `?batch=${encodeURIComponent(retrievedRecord.batchId)}` : ''}`} target="_blank" rel="noreferrer">Open Nutritional Facts listing →</a> : null}
+          {retrievedRecord.productId ? <a href={`/product-chemistry?product=${encodeURIComponent(retrievedRecord.productId)}${retrievedRecord.batchId ? `&batch=${encodeURIComponent(retrievedRecord.batchId)}` : ''}`} target="_blank" rel="noreferrer">Open Product Chemistry listing →</a> : null}
           {(retrievedRecord.coaUrl || retrievedRecord.source?.url) ? <a href={retrievedRecord.coaUrl || retrievedRecord.source.url} target="_blank" rel="noreferrer">Open lab source ↗</a> : null}
         </div>
       </div> : null}
