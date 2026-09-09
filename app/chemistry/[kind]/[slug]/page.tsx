@@ -96,7 +96,7 @@ export default async function ChemistryPage({ params }: Props) {
                 {listings.map(listing => (
                   <div className="weedoFactsRow" key={`${listing.productId}-${listing.batchId}`}>
                     <span>
-                      <a className="weedoFactsChemistryLink" href={`/nutritional-facts?product=${encodeURIComponent(listing.productId)}&batch=${encodeURIComponent(listing.batchId)}`}>
+                      <a className="weedoFactsChemistryLink" href={`/product-chemistry?product=${encodeURIComponent(listing.productId)}&batch=${encodeURIComponent(listing.batchId)}`}>
                         {[listing.brandName, listing.productName].filter(Boolean).join(' — ')}
                       </a>
                       <small>{` · ${listing.batchNumber || listing.coaNumber || 'verified batch'} · ${formatDate(listing.testedAt)}`}</small>
@@ -106,12 +106,12 @@ export default async function ChemistryPage({ params }: Props) {
                 ))}
               </div>
             ) : (
-              <p>No verified GeoWeedo Nutritional Facts listing currently reports this analyte.</p>
+              <p>No verified GeoWeedo Product Chemistry listing currently reports this analyte.</p>
             )}
           </section>
         </article>
 
-        <p><a className="weedoFactsCoaLink" href="/nutritional-facts">← All Nutritional Facts listings</a></p>
+        <p><a className="weedoFactsCoaLink" href="/product-chemistry">← All Product Chemistry listings</a></p>
       </div>
     </main>
   );
