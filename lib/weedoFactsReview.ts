@@ -21,9 +21,7 @@ function ensureIdentifier(db: any, input: { batchId: string; type: string; value
   if (!value) return;
   const conflict = db.prepare(`SELECT batch_id FROM cannabis_batch_identifiers WHERE identifier_type=? AND identifier_value=? LIMIT 1`)
     .get(input.type, value) as any;
-  if (conflict && conflict.batch_id !== input.batchId) {
-    throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another batch.`);
-  }
+  if (conflict && conflict.batch_id !== input.batchId) throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another batch.`);
   if (conflict) {
     db.prepare(`UPDATE cannabis_batch_identifiers SET verified=1 WHERE identifier_type=? AND identifier_value=? AND batch_id=?`)
       .run(input.type, value, input.batchId);
@@ -39,9 +37,7 @@ function ensureProductIdentifier(db: any, input: { productId: string; type: stri
   if (!value) return;
   const conflict = db.prepare(`SELECT product_id FROM cannabis_product_identifiers WHERE identifier_type=? AND identifier_value=? LIMIT 1`)
     .get(input.type, value) as any;
-  if (conflict && conflict.product_id !== input.productId) {
-    throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another product.`);
-  }
+  if (conflict && conflict.product_id !== input.productId) throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another product.`);
   if (conflict) {
     db.prepare(`UPDATE cannabis_product_identifiers SET verified=1, source='admin_coa_review' WHERE identifier_type=? AND identifier_value=? AND product_id=?`)
       .run(input.type, value, input.productId);
@@ -166,12 +162,11 @@ export function approveExactBatchFromCoa(input: { submissionId: string; adminId:
     }
 
     ensureIdentifier(db, { batchId, type: 'uid', value: uid, now });
-    ensureIdentifier(db, { batchId, type: 'batch', value: batchNumber, now });
     ensureIdentifier(db, { batchId, type: 'coa', value: sampleId, now });
 
     if (submission.identifier_type === 'upc') {
       ensureProductIdentifier(db, { productId, type: 'upc', value: submission.identifier_value, now });
-    } else if (['qr','uid','batch','coa'].includes(submission.identifier_type)) {
+    } else if (['qr','uid','coa'].includes(submission.identifier_type)) {
       ensureIdentifier(db, { batchId, type: submission.identifier_type, value: submission.identifier_value, now });
     }
 
@@ -180,12 +175,12 @@ export function approveExactBatchFromCoa(input: { submissionId: string; adminId:
       const groupName = String(analyte?.groupName || '').trim();
       const analyteName = String(analyte?.analyteName || '').trim();
       if (!groupName || !analyteName) continue;
+      const rawValue = analyte?.value;
+      const value = rawValue !== null && rawValue !== undefined && rawValue !== '' && Number.isFinite(Number(rawValue)) ? Number(rawValue) : null;
       db.prepare(`DELETE FROM cannabis_analytes WHERE batch_id=? AND group_name=? AND analyte_name=?`).run(batchId, groupName, analyteName);
       db.prepare(`INSERT INTO cannabis_analytes (id,batch_id,group_name,analyte_name,value,unit,status,created_at)
                   VALUES (?,?,?,?,?,?,?,?)`)
-        .run(`ca-${randomUUID()}`, batchId, groupName, analyteName,
-          Number.isFinite(Number(analyte.value)) ? Number(analyte.value) : null,
-          analyte.unit || null, normalizeStatus(analyte.status), now);
+        .run(`ca-${randomUUID()}`, batchId, groupName, analyteName, value, analyte.unit || null, normalizeStatus(analyte.status), now);
     }
 
     const externalId = `pdf:${upload.sha256}`;
