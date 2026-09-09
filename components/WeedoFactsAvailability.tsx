@@ -4,30 +4,36 @@ import { useEffect, useMemo, useState } from 'react';
 import styles from './WeedoFactsAvailability.module.css';
 
 type AvailabilityItem = {
-  id: string;
-  dispensaryId: string;
-  dispensaryName?: string | null;
-  dispensarySlug?: string | null;
-  city?: string | null;
-  region?: string | null;
+  menuItemId: string;
+  productId: string;
+  batchId: string | null;
+  exactBatch: boolean;
+  dispensary: {
+    id: string;
+    name: string;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+  };
   itemName: string;
-  brandName?: string | null;
-  category?: string | null;
-  variant?: string | null;
-  packageSize?: string | null;
-  priceCents?: number | null;
-  currency?: string | null;
-  inventoryStatus?: string | null;
-  sourceUrl?: string | null;
-  verified?: number | boolean | null;
-  productId?: string | null;
-  batchId?: string | null;
-  linkedBatchNumber?: string | null;
-  linkedBatchVerified?: number | boolean | null;
+  brandName: string | null;
+  category: string | null;
+  variant: string | null;
+  packageSize: string | null;
+  priceCents: number | null;
+  currency: string;
+  inventoryStatus: string;
+  verified: boolean;
+  sourceUrl: string | null;
+  sourceUpdatedAt: string | null;
+  batchNumber: string | null;
+  uid: string | null;
+  batchVerified: boolean;
 };
 
 type AvailabilityResponse = {
   count?: number;
+  exactBatchCount?: number;
   items?: AvailabilityItem[];
 };
 
@@ -109,15 +115,14 @@ export default function WeedoFactsAvailability({ productId, batchId }: { product
       {items.length ? (
         <div className={styles.list}>
           {items.map(item => {
-            const exactBatch = Boolean(batchId && item.batchId === batchId && item.linkedBatchVerified);
             const price = money(item.priceCents, item.currency || 'USD');
-            const place = [item.city, item.region].filter(Boolean).join(', ');
-            const dispensaryHref = item.dispensarySlug ? `/dispensary/${encodeURIComponent(item.dispensarySlug)}` : `/dispensary/${encodeURIComponent(item.dispensaryId)}`;
+            const place = [item.dispensary.city, item.dispensary.region].filter(Boolean).join(', ');
+            const dispensaryHref = `/dispensary/${encodeURIComponent(item.dispensary.id)}`;
             return (
-              <article className={styles.item} key={item.id}>
+              <article className={styles.item} key={item.menuItemId}>
                 <div className={styles.itemHead}>
                   <div>
-                    <a className={styles.dispensary} href={dispensaryHref}>{item.dispensaryName || 'GeoWeedo dispensary'}</a>
+                    <a className={styles.dispensary} href={dispensaryHref}>{item.dispensary.name}</a>
                     {place ? <span className={styles.place}>{place}</span> : null}
                   </div>
                   {price ? <strong className={styles.price}>{price}</strong> : null}
@@ -130,7 +135,7 @@ export default function WeedoFactsAvailability({ productId, batchId }: { product
                   <span>{inventoryLabel(item.inventoryStatus)}</span>
                 </div>
                 <div className={styles.badges}>
-                  {exactBatch ? <span className={styles.exact}>✓ Exact tested batch</span> : item.productId === productId ? <span>Product match</span> : null}
+                  {item.exactBatch ? <span className={styles.exact}>✓ Exact tested batch</span> : <span>Product match</span>}
                   {item.verified ? <span>✓ Listing verified</span> : <span>Menu listing</span>}
                 </div>
                 <div className={styles.links}>
