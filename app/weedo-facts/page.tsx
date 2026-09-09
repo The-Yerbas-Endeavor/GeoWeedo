@@ -1,10 +1,12 @@
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsLookup from '../../components/WeedoFactsLookup';
+import WeedoFactsReconstruction from '../../components/WeedoFactsReconstruction';
 import './weedo-facts.css';
 import './coa-upload.css';
 import './contrast-fix.css';
 import './nutrition-label.css';
 import './headline-totals.css';
+import './reconstruction.css';
 
 export const metadata = {
   title: 'Weedo Facts | GeoWeedo',
@@ -31,13 +33,15 @@ export default function WeedoFactsPage() {
         </section>
 
         <WeedoFactsLookup />
+        <WeedoFactsReconstruction />
 
         <section className="weedoFactsRoadmap">
           <h2>How a scan is resolved</h2>
           <ol>
             <li><strong>Identify:</strong> scan QR/UPC when supported, or paste a UID, batch/lot, COA number, or lab URL.</li>
+            <li><strong>Reconstruct:</strong> if a valid UPC is unknown, scan the package label and compare its product, manufacturer, batch and potency evidence with public sources.</li>
             <li><strong>Match:</strong> keep product-level identity separate from the exact tested batch.</li>
-            <li><strong>Verify:</strong> prefer licensed-lab or original COA sources and clearly label unverified community data.</li>
+            <li><strong>Verify:</strong> prefer licensed-lab or original COA sources and clearly label reconstructed or community data as unverified until batch evidence exists.</li>
             <li><strong>Normalize:</strong> cannabinoids, terpenes, compliance analytes, dates, lab, producer, and batch metadata.</li>
             <li><strong>Present:</strong> show a consistent Weedo Facts panel while preserving the original lab/COA source.</li>
           </ol>
