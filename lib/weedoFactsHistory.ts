@@ -42,25 +42,33 @@ export function getWeedoFactsBatchHistory(productId: string) {
     const cannabinoids = rows.filter(row => row.group_name === 'cannabinoid');
     const terpenes = rows.filter(row => row.group_name === 'terpene');
     const thc = cannabinoids.find(row => normalizeName(row.analyte_name) === 'thc');
-    const thca = cannabinoids.find(row => normalizeName(row.analyte_name) === 'thca');
-    const totalThc = cannabinoids.find(row => ['totalthc','thctotal'].includes(normalizeName(row.analyte_name))) || thc || thca || null;
-    const terpeneTotal = terpenes.reduce((sum, row) => typeof row.value === 'number' && Number.isFinite(row.value) ? sum + row.value : sum, 0);
-    const dominant = terpenes
-      .filter(row => typeof row.value === 'number' && Number.isFinite(row.value))
+    const totalThc = cannabinoids.find(row => ['totalthc','thctotal'].includes(normalizeName(row.analyte_name))) || thc || null;
+
+    const terpeneRows = terpenes.filter(row => typeof row.value === 'number' && Number.isFinite(row.value));
+    const terpeneUnits = new Set(terpeneRows.map(row => String(row.unit || '').trim()).filter(Boolean));
+    const terpeneTotal = terpeneRows.length && terpeneUnits.size <= 1
+      ? { value: terpeneRows.reduce((sum, row) => sum + Number(row.value), 0), unit: terpeneRows[0]?.unit || null }
+      : null;
+
+    const dominant = terpeneRows
+      .slice()
       .sort((a, b) => Number(b.value) - Number(a.value))
       .slice(0, 3)
       .map(row => ({ name: row.analyte_name, value: row.value, unit: row.unit }));
+
     return {
       ...batch,
       verified: Boolean(batch.verified),
       totalThc: totalThc ? { value: totalThc.value, unit: totalThc.unit } : null,
-      terpeneTotal: terpenes.length ? { value: terpeneTotal, unit: terpenes.find(row => row.unit)?.unit || null } : null,
+      terpeneTotal,
       dominantTerpenes: dominant,
     };
   });
 
-  const thcRange = numericRange(history.map(row => row.totalThc?.value));
-  const terpeneRange = numericRange(history.map(row => row.terpeneTotal?.value));
+  const thcUnits = new Set(history.map(row => String(row.totalThc?.unit || '').trim()).filter(Boolean));
+  const terpeneUnits = new Set(history.map(row => String(row.terpeneTotal?.unit || '').trim()).filter(Boolean));
+  const thcRange = thcUnits.size <= 1 ? numericRange(history.map(row => row.totalThc?.value)) : null;
+  const terpeneRange = terpeneUnits.size <= 1 ? numericRange(history.map(row => row.terpeneTotal?.value)) : null;
   const terpeneCounts = new Map<string, { name: string; count: number }>();
   for (const row of history) {
     for (const terpene of row.dominantTerpenes || []) {
@@ -82,7 +90,9 @@ export function getWeedoFactsBatchHistory(productId: string) {
     summary: {
       verifiedBatchCount: history.length,
       thcRange,
+      thcUnit: thcUnits.size === 1 ? [...thcUnits][0] : null,
       terpeneRange,
+      terpeneUnit: terpeneUnits.size === 1 ? [...terpeneUnits][0] : null,
       dominantTerpenes: [...terpeneCounts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 5),
     },
     batches: history,
