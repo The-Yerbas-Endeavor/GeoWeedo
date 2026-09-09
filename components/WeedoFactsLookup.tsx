@@ -61,6 +61,8 @@ export default function WeedoFactsLookup() {
 
 function FactsCard({ record }: { record: any }) {
   const exact = record.matchLevel === 'exact_batch';
+  const overall = String(record.overallStatus || '').trim();
+  const failed = /^(fail|failed)$/i.test(overall);
   return (
     <article className="weedoFactsCard">
       <div className="weedoFactsCardHead">
@@ -69,19 +71,20 @@ function FactsCard({ record }: { record: any }) {
           <h2>{record.productName}</h2>
           <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p>
         </div>
-        <span className={`weedoFactsStatus ${exact ? 'verified' : 'partial'}`}>
-          {exact ? '✓ Exact batch verified' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}
+        <span className={`weedoFactsStatus ${exact && !failed ? 'verified' : 'partial'}`}>
+          {failed ? '⚠ Lab-reported batch failure' : exact ? '✓ Exact batch verified' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}
         </span>
       </div>
 
       {record.cannabinoids?.length ? <FactsSection title="Cannabinoids" rows={record.cannabinoids} /> : null}
       {record.terpenes?.length ? <FactsSection title="Terpenes" rows={record.terpenes} /> : null}
 
-      {record.safetyTests?.length ? (
+      {(overall || record.safetyTests?.length) ? (
         <section>
           <h3>Compliance testing</h3>
           <div className="weedoFactsRows">
-            {record.safetyTests.map((row: any, index: number) => (
+            {overall ? <Fact label="Overall lab result" value={overall} /> : null}
+            {record.safetyTests?.map((row: any, index: number) => (
               <div className="weedoFactsRow" key={`${row.category}-${row.analyte}-${index}`}>
                 <span>{row.analyte || row.category}</span>
                 <strong>{row.status || formatMeasurement(row)}</strong>
