@@ -145,13 +145,42 @@ function getAnalytes(batchId: string) {
                      FROM cannabis_analytes WHERE batch_id = ? ORDER BY group_name, analyte_name`).all(batchId) as any[];
 }
 
+function directVerifiedBatch(db: any, identifier: string, identifierType?: WeedoFactsLookup['identifierType']) {
+  const selectByField = (field: 'uid' | 'coa_number') => db.prepare(`
+    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+    FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
+    WHERE b.${field} = ?
+    ORDER BY b.verified DESC, b.tested_at DESC
+    LIMIT 1
+  `).get(identifier) as any;
+
+  const uniqueBatchNumber = () => {
+    const rows = db.prepare(`
+      SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+      FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
+      WHERE b.batch_number = ?
+      ORDER BY b.verified DESC, b.tested_at DESC
+      LIMIT 2
+    `).all(identifier) as any[];
+    return rows.length === 1 ? rows[0] : null;
+  };
+
+  if (identifierType === 'uid') return selectByField('uid');
+  if (identifierType === 'coa') return selectByField('coa_number');
+  if (identifierType === 'batch') return uniqueBatchNumber();
+  if (identifierType && !['unknown'].includes(identifierType)) return null;
+
+  return selectByField('uid') ?? selectByField('coa_number') ?? uniqueBatchNumber();
+}
+
 export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | null {
   const identifier = normalizeIdentifier(input.identifier);
   if (!identifier) return null;
   const db = ensureSchema();
 
   const batchHit = db.prepare(`
-    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents
+    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
+           i.verified AS identifier_verified
     FROM cannabis_batch_identifiers i
     JOIN cannabis_batches b ON b.id = i.batch_id
     JOIN cannabis_products p ON p.id = b.product_id
@@ -161,15 +190,11 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
     LIMIT 1
   `).get(identifier, input.identifierType ?? null, input.identifierType ?? null) as any;
 
-  const directBatch = batchHit ?? db.prepare(`
-    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents
-    FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
-    WHERE b.batch_number = ? OR b.uid = ? OR b.coa_number = ?
-    ORDER BY b.verified DESC, b.tested_at DESC LIMIT 1
-  `).get(identifier, identifier, identifier) as any;
+  const directBatch = batchHit ?? directVerifiedBatch(db, identifier, input.identifierType);
 
   if (directBatch) {
     const analytes = getAnalytes(directBatch.id);
+    const exactBatch = Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified);
     return {
       productId: directBatch.product_id,
       batchId: directBatch.id,
@@ -177,7 +202,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       productName: directBatch.product_name,
       productType: directBatch.product_type,
       netContents: directBatch.net_contents,
-      matchLevel: directBatch.verified ? 'exact_batch' : 'community_unverified',
+      matchLevel: exactBatch ? 'exact_batch' : 'community_unverified',
       batchNumber: directBatch.batch_number,
       uid: directBatch.uid,
       coaNumber: directBatch.coa_number,
@@ -193,7 +218,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       cannabinoids: analytes.filter(a => a.group_name === 'cannabinoid').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       terpenes: analytes.filter(a => a.group_name === 'terpene').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       safetyTests: analytes.filter(a => !['cannabinoid', 'terpene'].includes(a.group_name)).map(a => ({ category: a.group_name, analyte: a.analyte_name, status: a.status, value: a.value, unit: a.unit, limitValue: a.limit_value, limitUnit: a.limit_unit })),
-      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: Boolean(directBatch.verified) },
+      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: exactBatch },
     };
   }
 
