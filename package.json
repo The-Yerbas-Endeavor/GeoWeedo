@@ -12,6 +12,8 @@
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "bash scripts/create-admin.sh",
     "weedo:ingest:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-sc-labs.mjs",
+    "weedo:ingest:labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-labs.mjs",
+    "weedo:ingest:timer:install": "sudo bash scripts/install-weedo-facts-ingestion-timer.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
