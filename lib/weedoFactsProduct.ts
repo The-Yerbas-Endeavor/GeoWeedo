@@ -1,6 +1,22 @@
 import { getDatabase } from './sqlite.ts';
 import { ensureWeedoFactsSchema, type WeedoFactsRecord } from './weedoFacts.ts';
 
+export type WeedoFactsListingSummary = {
+  productId: string;
+  batchId: string;
+  brandName: string | null;
+  productName: string;
+  productType: string | null;
+  netContents: string | null;
+  batchNumber: string | null;
+  coaNumber: string | null;
+  labName: string | null;
+  producerName: string | null;
+  testedAt: string | null;
+  overallStatus: string | null;
+  analyteCount: number;
+};
+
 function analytesForBatch(batchId: string) {
   const db = getDatabase();
   return db.prepare(`
@@ -85,6 +101,51 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
       verified: Boolean(batch.verified),
     },
   };
+}
+
+export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
+  ensureWeedoFactsSchema();
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      p.id AS product_id,
+      p.brand_name,
+      p.product_name,
+      p.product_type,
+      p.net_contents,
+      b.id AS batch_id,
+      b.batch_number,
+      b.coa_number,
+      b.lab_name,
+      b.producer_name,
+      b.tested_at,
+      b.overall_status,
+      COUNT(a.id) AS analyte_count
+    FROM cannabis_batches b
+    JOIN cannabis_products p ON p.id = b.product_id
+    LEFT JOIN cannabis_analytes a ON a.batch_id = b.id
+    WHERE b.verified = 1
+    GROUP BY b.id
+    ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+             p.product_name COLLATE NOCASE,
+             p.brand_name COLLATE NOCASE
+  `).all() as any[];
+
+  return rows.map(row => ({
+    productId: row.product_id,
+    batchId: row.batch_id,
+    brandName: row.brand_name,
+    productName: row.product_name,
+    productType: row.product_type,
+    netContents: row.net_contents,
+    batchNumber: row.batch_number,
+    coaNumber: row.coa_number,
+    labName: row.lab_name,
+    producerName: row.producer_name,
+    testedAt: row.tested_at,
+    overallStatus: row.overall_status,
+    analyteCount: Number(row.analyte_count || 0),
+  }));
 }
 
 /**
