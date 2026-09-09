@@ -147,6 +147,23 @@ export default function WeedoFactsLookup() {
       if (!video) throw new Error('Camera preview could not start.');
       setScannerMessage('Point the camera at a QR code or barcode. For UPC/EAN, hold it steady and fill most of the frame width.');
       const reader = new zxing.BrowserMultiFormatReader();
+      const barcodeFormat = zxing.BarcodeFormat;
+      if (barcodeFormat) {
+        const formats = [
+          barcodeFormat.QR_CODE,
+          barcodeFormat.UPC_A,
+          barcodeFormat.UPC_E,
+          barcodeFormat.UPC_EAN_EXTENSION,
+          barcodeFormat.EAN_13,
+          barcodeFormat.EAN_8,
+          barcodeFormat.CODE_128,
+          barcodeFormat.CODE_39,
+          barcodeFormat.CODE_93,
+          barcodeFormat.ITF,
+          barcodeFormat.CODABAR,
+        ].filter((format: unknown) => format !== undefined && format !== null);
+        if (formats.length) reader.possibleFormats = formats;
+      }
       const controls = typeof reader.decodeFromConstraints === 'function'
         ? await reader.decodeFromConstraints({ video: scannerVideoConstraints, audio: false }, video, onZxingResult)
         : await reader.decodeFromVideoDevice(undefined, video, onZxingResult);
