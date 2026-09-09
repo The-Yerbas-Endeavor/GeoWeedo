@@ -8,14 +8,14 @@ let tesseractLoader: Promise<any> | null = null;
 
 function loadTesseract() {
   const current = (window as any).Tesseract;
-  if (current?.recognize) return Promise.resolve(current);
+  if (current?.recognize || current?.createWorker) return Promise.resolve(current);
   if (tesseractLoader) return tesseractLoader;
 
   tesseractLoader = new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>('script[data-geoweedo-tesseract]');
     const finish = () => {
       const api = (window as any).Tesseract;
-      if (api?.recognize) resolve(api);
+      if (api?.recognize || api?.createWorker) resolve(api);
       else reject(new Error('Label reader could not load.'));
     };
     if (existing) {
@@ -63,6 +63,82 @@ function evidenceRows(evidence: any) {
   ].filter(([, value]) => Boolean(value));
 }
 
+async function prepareLabelImage(file: File) {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+  try {
+    const longest = Math.max(bitmap.width, bitmap.height);
+    const targetLongest = Math.min(2400, Math.max(1600, longest));
+    const scale = targetLongest / longest;
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Label image could not be prepared.');
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    const image = context.getImageData(0, 0, width, height);
+    const data = image.data;
+    let min = 255;
+    let max = 0;
+    const grayscale = new Uint8Array(width * height);
+    for (let pixel = 0, index = 0; pixel < data.length; pixel += 4, index += 1) {
+      const gray = Math.round(data[pixel] * 0.299 + data[pixel + 1] * 0.587 + data[pixel + 2] * 0.114);
+      grayscale[index] = gray;
+      if (gray < min) min = gray;
+      if (gray > max) max = gray;
+    }
+    const range = Math.max(48, max - min);
+    for (let pixel = 0, index = 0; pixel < data.length; pixel += 4, index += 1) {
+      const stretched = Math.max(0, Math.min(255, Math.round(((grayscale[index] - min) * 255) / range)));
+      data[pixel] = stretched;
+      data[pixel + 1] = stretched;
+      data[pixel + 2] = stretched;
+    }
+    context.putImageData(image, 0, 0);
+    return canvas;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+function assessLabelText(text: string) {
+  const trimmed = text.trim();
+  const nonSpace = trimmed.replace(/\s/g, '');
+  const alphaNumeric = trimmed.match(/[A-Za-z0-9]/g)?.length || 0;
+  const words = trimmed.match(/[A-Za-z][A-Za-z0-9'&-]{2,}/g) || [];
+  const anchors = trimmed.match(/\b(?:thc|cbd|cannabis|batch|lot|uid|manufacturer|manufactured|mfg|license|lic|mg|gram|grams|flower|cartridge|vape|resin|rosin|indica|sativa|hybrid)\b/gi) || [];
+  const readableRatio = nonSpace.length ? alphaNumeric / nonSpace.length : 0;
+  const useful = alphaNumeric >= 24 && words.length >= 3 && readableRatio >= 0.58 && anchors.length >= 1;
+  return { useful, readableRatio, words: words.length, anchors: anchors.length };
+}
+
+async function recognizeLabel(tesseract: any, image: HTMLCanvasElement, onProgress: (progress: number) => void) {
+  if (typeof tesseract.createWorker === 'function') {
+    const worker = await tesseract.createWorker('eng', undefined, {
+      logger: (event: any) => {
+        if (event?.status === 'recognizing text' && Number.isFinite(event?.progress)) onProgress(event.progress);
+      },
+    });
+    try {
+      await worker.setParameters?.({
+        tessedit_pageseg_mode: String(tesseract?.PSM?.SPARSE_TEXT ?? 11),
+        preserve_interword_spaces: '1',
+      });
+      return await worker.recognize(image);
+    } finally {
+      await worker.terminate?.();
+    }
+  }
+
+  return tesseract.recognize(image, 'eng', {
+    logger: (event: any) => {
+      if (event?.status === 'recognizing text' && Number.isFinite(event?.progress)) onProgress(event.progress);
+    },
+  });
+}
+
 export default function WeedoFactsReconstruction() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [upc, setUpc] = useState('');
@@ -105,21 +181,28 @@ export default function WeedoFactsReconstruction() {
 
     setBusy(true);
     setError('');
-    setMessage('Reading product label on this device…');
+    setMessage('Preparing product label on this device…');
     setResult(null);
 
     try {
-      const tesseract = await loadTesseract();
-      const ocr = await tesseract.recognize(file, 'eng', {
-        logger: (event: any) => {
-          if (event?.status === 'recognizing text' && Number.isFinite(event?.progress)) {
-            setMessage(`Reading product label… ${Math.round(event.progress * 100)}%`);
-          }
-        },
+      const [tesseract, prepared] = await Promise.all([loadTesseract(), prepareLabelImage(file)]);
+      const ocr = await recognizeLabel(tesseract, prepared, progress => {
+        setMessage(`Reading product label… ${Math.round(progress * 100)}%`);
       });
       const text = String(ocr?.data?.text || '').trim();
-      if (text.length < 8) throw new Error('GeoWeedo could not read enough text from that label. Try a closer, sharper photo.');
       setLabelText(text);
+
+      if (text.length < 8) {
+        throw new Error('GeoWeedo could not read enough text from that label. Move closer so the printed label fills the photo, keep the text horizontal, and avoid glare.');
+      }
+
+      const quality = assessLabelText(text);
+      if (!quality.useful) {
+        setMessage('');
+        setError('GeoWeedo read the photo, but the text is too noisy to use for product reconstruction. Retake it closer with the label filling most of the frame, text horizontal, good focus, and minimal glare. You can also correct the recognized text below and re-run reconstruction.');
+        return;
+      }
+
       await reconstruct(scanned, text);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Product label reconstruction failed.');
@@ -175,7 +258,7 @@ export default function WeedoFactsReconstruction() {
         <div>
           <span className="weedoFactsEyebrow">UNKNOWN BARCODE RECOVERY</span>
           <h2>Reconstruct an unlisted cannabis product</h2>
-          <p>If the barcode is valid but GeoWeedo has no listing, photograph the package label. GeoWeedo reads the label locally, then compares the extracted product, batch, manufacturer and potency evidence with public sources.</p>
+          <p>If the barcode is valid but GeoWeedo has no listing, photograph the printed package label. Fill most of the frame with the label, keep the text horizontal, and avoid glare. GeoWeedo reads the label locally, then compares useful product, batch, manufacturer and potency evidence with public sources.</p>
         </div>
         <button type="button" className="weedoFactsScanButton" onClick={start} disabled={busy}>{busy ? 'Working…' : '📷 Scan product label'}</button>
       </div>
