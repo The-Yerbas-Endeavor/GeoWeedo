@@ -12,10 +12,7 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   ensureWeedoFactsUploadSchema();
   const status = request.nextUrl.searchParams.get('status') || 'pending';
-  const submissions = getAdminCoaReviewSubmissions(status).map((submission: any) => ({
-    ...submission,
-    matchPreview: getWeedoFactsReviewMatchPreview(submission),
-  }));
+  const submissions = getAdminCoaReviewSubmissions(status).map((submission: any) => ({ ...submission, matchPreview: getWeedoFactsReviewMatchPreview(submission) }));
   return NextResponse.json({ submissions }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
@@ -27,13 +24,11 @@ export async function PATCH(request: NextRequest) {
   const submissionId = String(body?.submissionId || '').trim();
   const action = String(body?.action || '').trim();
   const reviewNotes = typeof body?.reviewNotes === 'string' ? body.reviewNotes.trim().slice(0, 2000) : null;
-  if (!submissionId || !['approve_exact_batch', 'reject', 'needs_info'].includes(action)) {
-    return NextResponse.json({ error: 'submissionId and a valid action are required.' }, { status: 400 });
-  }
+  if (!submissionId || !['approve_exact_batch', 'reject', 'needs_info'].includes(action)) return NextResponse.json({ error: 'submissionId and a valid action are required.' }, { status: 400 });
 
   try {
     if (action === 'approve_exact_batch') {
-      const result = approveExactBatchFromCoa({ submissionId, adminId: admin.id, reviewNotes });
+      const result = await approveExactBatchFromCoa({ submissionId, adminId: admin.id, reviewNotes });
       const lookupUrl = `/api/weedo-facts/lookup?identifier=${encodeURIComponent(String(result.identifier || ''))}&type=${encodeURIComponent(result.identifierType)}`;
       return NextResponse.json({ ok: true, status: 'approved', ...result, lookupUrl });
     }
