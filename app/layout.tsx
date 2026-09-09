@@ -44,8 +44,10 @@ import MapLibreWorkerProvider from '@/components/MapLibreWorkerProvider';
 import MapOpenNowFilter from '@/components/MapOpenNowFilter';
 import DailyWeedoEnhancer from '@/components/DailyWeedoEnhancer';
 import HuntLeaderboardEnhancer from '@/components/HuntLeaderboardEnhancer';
+import PublicSiteChrome from '@/components/PublicSiteChrome';
 
 export const metadata = {
+  metadataBase: new URL('https://geoweedo.com'),
   title: 'GeoWeedo',
   description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
   manifest: '/assets/geoweedo/site.webmanifest',
@@ -77,7 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-map-marker.png" as="image" type="image/png" />
       </head>
-      <body><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body><MapLibreWorkerProvider><PublicSiteChrome>{children}</PublicSiteChrome></MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
