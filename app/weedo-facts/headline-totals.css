@@ -1,0 +1,75 @@
+.weedoFactsCard .weedoFactsHeadlineTotals{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:0;
+  margin:0;
+  padding:0;
+  border-bottom:8px solid #111;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric{
+  min-width:0;
+  padding:12px 14px 11px 0;
+  border-bottom:1px solid #555;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric:nth-child(odd){
+  padding-right:18px;
+  border-right:2px solid #111;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric:nth-child(even){
+  padding-left:18px;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric:nth-child(-n+2){
+  border-bottom:3px solid #111;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric span{
+  display:block;
+  margin:0 0 2px;
+  color:#111;
+  font-size:.78rem;
+  font-weight:950;
+  letter-spacing:.035em;
+  text-transform:uppercase;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric strong{
+  display:block;
+  color:#111;
+  font-size:clamp(1.65rem,5vw,2.35rem);
+  line-height:1;
+  font-weight:950;
+  letter-spacing:-.045em;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric small{
+  display:block;
+  margin-top:5px;
+  color:#333;
+  font-size:.66rem;
+  line-height:1.2;
+  font-weight:750;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric.calculated small{
+  font-style:italic;
+}
+.weedoFactsCard .weedoFactsHeadlineMetric.missing strong,
+.weedoFactsCard .weedoFactsHeadlineMetric.missing small{
+  color:#666;
+}
+/* Headline totals now carry the aggregate hierarchy; keep section rows uniform below them. */
+.weedoFactsCard section:not(.weedoFactsHeadlineTotals):nth-of-type(2) .weedoFactsRow:first-child{
+  min-height:34px;
+  padding:6px 0 5px;
+  border-bottom:1px solid #444;
+  font-size:.95rem;
+}
+.weedoFactsCard section:not(.weedoFactsHeadlineTotals):nth-of-type(2) .weedoFactsRow:first-child strong{
+  font-size:1rem;
+}
+@media(max-width:640px){
+  .weedoFactsCard .weedoFactsHeadlineMetric{
+    padding-top:10px;
+    padding-bottom:10px;
+  }
+  .weedoFactsCard .weedoFactsHeadlineMetric:nth-child(odd){padding-right:10px}
+  .weedoFactsCard .weedoFactsHeadlineMetric:nth-child(even){padding-left:10px}
+  .weedoFactsCard .weedoFactsHeadlineMetric strong{font-size:clamp(1.35rem,8vw,2rem)}
+  .weedoFactsCard .weedoFactsHeadlineMetric small{font-size:.6rem}
+}
