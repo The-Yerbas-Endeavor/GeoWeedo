@@ -4,6 +4,7 @@ import './weedo-facts.css';
 import './coa-upload.css';
 import './contrast-fix.css';
 import './nutrition-label.css';
+import './headline-totals.css';
 
 export const metadata = {
   title: 'Weedo Facts | GeoWeedo',
