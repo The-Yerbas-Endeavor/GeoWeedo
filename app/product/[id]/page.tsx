@@ -49,37 +49,30 @@ export default async function ProductListingPage({ params, searchParams }: Props
       <div className={styles.page}>
         <div className={styles.topline}>
           <a className={styles.back} href="/weedo-facts">← Scan another product</a>
-          <span>GeoWeedo product intelligence</span>
+          <span>GeoWeedo product listing</span>
         </div>
 
-        <div className={styles.productScene}>
-          <section className={styles.hero}>
-            <span>GEOWEEDO · WEEDO FACTS</span>
-            <h1>{record.productName}</h1>
-            <p className={styles.productMeta}>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
+        <section className={styles.productIntro}>
+          <span>GEOWEEDO · CANNABIS NUTRITIONAL FACTS</span>
+          <h1>{record.productName}</h1>
+          <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
+          <div className={styles.proofLine}>
+            <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'VERIFIED LAB RECORD' : 'PRODUCT RECORD'}</span>
+            {provenance ? <span>{provenance}</span> : null}
+          </div>
+        </section>
 
-            <p className={styles.editorialLead}>
-              A cannabis Nutritional Facts view built from the displayed lab record — chemistry first, source attached, and batch identity kept visible.
-            </p>
+        <section className={styles.factsFocus} aria-labelledby="weedo-facts-heading">
+          <div className={styles.factsHeading}>
+            <span>NUTRITIONAL FACTS</span>
+            <h2 id="weedo-facts-heading">Weedo Facts</h2>
+            <p>The lab-backed cannabis facts for this product are the primary content of this listing.</p>
+          </div>
 
-            <div className={styles.proofLine}>
-              <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'LAB-BACKED RECORD' : 'PRODUCT RECORD'}</span>
-              {provenance ? <span>{provenance}</span> : null}
-            </div>
-
-            <div className={styles.mascotMoment} aria-hidden="true">
-              <div className={styles.mascotHalo} />
-              <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" />
-              <span>Know what’s in your weedo.</span>
-            </div>
-          </section>
-
-          <div className={styles.factsStage}>
-            <div className={styles.factsTab}>NUTRITIONAL-STYLE LAB VIEW</div>
-            <div className={styles.factsPin} aria-hidden="true">✦</div>
+          <div className={styles.factsStage} id="weedo-facts-label">
             <WeedoFactsProductLabel record={record} />
           </div>
-        </div>
+        </section>
       </div>
     </main>
   );
