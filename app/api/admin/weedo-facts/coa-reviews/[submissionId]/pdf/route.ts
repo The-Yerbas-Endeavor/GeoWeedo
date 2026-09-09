@@ -14,14 +14,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sub
   ensureWeedoFactsUploadSchema();
   const { submissionId } = await context.params;
   const db = getDatabase();
-  const upload = db.prepare(`SELECT original_filename,stored_path FROM cannabis_coa_uploads WHERE submission_id=? LIMIT 1`).get(submissionId) as any;
-  if (!upload?.stored_path) return NextResponse.json({ error: 'COA PDF not found.' }, { status: 404 });
+  const upload = db.prepare(`SELECT original_filename,sha256 FROM cannabis_coa_uploads WHERE submission_id=? LIMIT 1`).get(submissionId) as any;
+  if (!upload?.sha256 || !/^[a-f0-9]{64}$/i.test(upload.sha256)) return NextResponse.json({ error: 'COA PDF not found.' }, { status: 404 });
 
   const root = path.resolve(process.cwd(), 'data', 'runtime', 'weedo-facts', 'coa');
-  const resolved = path.resolve(upload.stored_path);
-  if (!(resolved === root || resolved.startsWith(`${root}${path.sep}`))) {
-    return NextResponse.json({ error: 'Invalid COA storage path.' }, { status: 400 });
-  }
+  const resolved = path.join(root, `${upload.sha256}.pdf`);
   if (!fs.existsSync(resolved)) return NextResponse.json({ error: 'COA PDF is missing from storage.' }, { status: 404 });
 
   const bytes = fs.readFileSync(resolved);
