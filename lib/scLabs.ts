@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { getDatabase } from './sqlite.ts';
 import { ensureWeedoFactsSchema } from './weedoFacts.ts';
 
-type Scalar = string | number | boolean | null;
 type AnyRecord = Record<string, any>;
 
 export type ScLabsNormalizedSample = {
@@ -85,6 +84,15 @@ function classifyGroup(text: string) {
   return 'other';
 }
 
+function firstOwn(row: AnyRecord, keys: string[]) {
+  for (const key of keys) if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
+  return undefined;
+}
+function textOwn(row: AnyRecord, keys: string[]) {
+  const value = firstOwn(row, keys);
+  return value === undefined ? null : String(value).trim() || null;
+}
+
 function extractAnalytes(root: any) {
   const rows: ScLabsNormalizedSample['analytes'] = [];
   const seen = new Set<string>();
@@ -116,15 +124,6 @@ function extractAnalytes(root: any) {
   return rows;
 }
 
-function firstOwn(row: AnyRecord, keys: string[]) {
-  for (const key of keys) if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key];
-  return undefined;
-}
-function textOwn(row: AnyRecord, keys: string[]) {
-  const value = firstOwn(row, keys);
-  return value === undefined ? null : String(value).trim() || null;
-}
-
 function extractJsonDocuments(html: string) {
   const docs: any[] = [];
   const scriptPattern = /<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -137,51 +136,89 @@ function extractJsonDocuments(html: string) {
 }
 
 function htmlText(html: string) {
-  return html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function capture(pageText: string, label: string) {
+  const re = new RegExp(`${label}\\s*:?\\s*([^|]{1,160}?)(?=\\s+(?:Sample Type|Business Name|License Number|Sample ID|Date Collected|Date Issued|Cannabinoids|Terpenoids|Moisture|Class|$))`, 'i');
+  return pageText.match(re)?.[1]?.trim() || null;
+}
+
+function phytofactsAnalytes(pageText: string) {
+  const out: ScLabsNormalizedSample['analytes'] = [];
+  const seen = new Set<string>();
+  const cannabinoidSection = pageText.match(/Cannabinoids\s+Ratio of top two cannabinoids\s*\|?\s*Cannabinoids Weight %\s+([\s\S]*?)(?:Aroma & Flavor|PhytoPrint|Copyright|$)/i)?.[1] || '';
+  for (const match of cannabinoidSection.matchAll(/\b(THCA|THCVA|THCV|THC|CBDA|CBDVA|CBDV|CBD|CBGA|CBG|CBCA|CBC)\s+(-?\d+(?:\.\d+)?)%/gi)) {
+    const key = match[1].toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ groupName: 'cannabinoid', analyteName: key, value: Number(match[2]), unit: '%' });
+  }
+  const terpeneSection = pageText.match(/PhytoPrint[^]*?(?:terpinolene|α-phellandrene|beta-phellandrene|β-ocimene|carene|limonene|γ-terpinene|α-pinene|α-terpinene|β-pinene|fenchol|camphene|α-terpineol|α-humulene|β-caryophyllene|linalool|caryophyllene oxide|myrcene)[^]*?(?:Copyright|$)/i)?.[0] || '';
+  for (const match of terpeneSection.matchAll(/\b([A-Za-zαβγ-][A-Za-zαβγ\s-]+?)\s+(-?\d+(?:\.\d+)?)%/g)) {
+    const name = match[1].trim();
+    const key = `terpene:${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ groupName: 'terpene', analyteName: name, value: Number(match[2]), unit: '%' });
+  }
+  return out;
 }
 
 export function isScLabsSampleUrl(input: string) {
   try {
     const url = new URL(input);
-    return /(^|\.)sclabs\.com$/i.test(url.hostname) && /\/sample\/\d+\/?$/i.test(url.pathname);
+    if (!/(^|\.)sclabs\.com$/i.test(url.hostname)) return false;
+    return /\/sample\/\d+\/?$/i.test(url.pathname) || /\/phytofacts\/?$/i.test(url.pathname);
   } catch { return false; }
 }
 
 export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormalizedSample> {
-  if (!isScLabsSampleUrl(sourceUrl)) throw new Error('Expected an SC Labs sample URL.');
+  if (!isScLabsSampleUrl(sourceUrl)) throw new Error('Expected an SC Labs public sample or PhytoFacts URL.');
   const response = await fetch(sourceUrl, { headers: { 'User-Agent': 'GeoWeedo-WeedoFacts/0.1 (+https://geoweedo.com)' }, redirect: 'follow', cache: 'no-store' });
   if (!response.ok) throw new Error(`SC Labs returned HTTP ${response.status}.`);
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('text/html')) throw new Error(`Unexpected SC Labs content type: ${contentType || 'unknown'}.`);
   const html = await response.text();
   const docs = extractJsonDocuments(html);
-  const raw = docs.length ? { documents: docs } : { pageText: htmlText(html) };
-  const data = raw;
-  const sampleId = new URL(sourceUrl).pathname.match(/\/sample\/(\d+)/i)?.[1] || '';
   const pageText = htmlText(html);
-  const productName = firstText(data, ['sampleName','sample_name','productName','product_name','name']) || pageText.match(/(?:Sample|Product)\s*(?:Name)?\s*[:\-]\s*([^|]{2,100})/i)?.[1]?.trim();
-  if (!productName) throw new Error('SC Labs page loaded, but GeoWeedo could not identify the sample/product name. Adapter needs a parser update for this page shape.');
-  const analytes = extractAnalytes(data);
-  const status = firstText(data,['overallStatus','overall_status','resultStatus','result_status','status']);
+  const raw = { documents: docs, pageText };
+  const data = raw;
+  const legacyId = new URL(sourceUrl).pathname.match(/\/sample\/(\d+)/i)?.[1] || null;
+  const visibleSampleId = capture(pageText, 'Sample ID');
+  const sampleId = firstText(data,['sampleId','sample_id']) || visibleSampleId || legacyId || crypto.createHash('sha256').update(sourceUrl).digest('hex').slice(0,16);
+  const productName = firstText(data, ['sampleName','sample_name','productName','product_name','name']) || pageText.match(/^([^|]{2,120}?)(?=\s+General\b)/i)?.[1]?.trim() || pageText.match(/SC Labs\s*\|\s*PhytoFacts[^-]*-\s*([^|]{2,120})/i)?.[1]?.trim();
+  if (!productName) throw new Error('SC Labs page loaded, but GeoWeedo could not identify the product name. Adapter needs a parser update for this page shape.');
+  let analytes = extractAnalytes(data);
+  if (!analytes.length) analytes = phytofactsAnalytes(pageText);
   return {
     sampleId,
     sourceUrl,
     productName,
-    brandName: firstText(data,['companyName','company_name','brandName','brand_name','clientName','client_name']),
-    productType: firstText(data,['matrixType','matrix_type','sampleType','sample_type','productType','product_type']),
+    brandName: firstText(data,['companyName','company_name','brandName','brand_name','clientName','client_name']) || capture(pageText,'Business Name'),
+    productType: firstText(data,['matrixType','matrix_type','sampleType','sample_type','productType','product_type']) || capture(pageText,'Sample Type'),
     batchNumber: firstText(data,['batchNumber','batch_number','batch','lotNumber','lot_number']),
     uid: firstText(data,['uid','metrcUid','metrc_uid','trackAndTraceUid','track_and_trace_uid']),
     coaNumber: firstText(data,['coaNumber','coa_number','certificateNumber','certificate_number']) || sampleId,
     coaUrl: firstText(data,['coaUrl','coa_url','certificateUrl','certificate_url']),
     labName: 'SC Labs',
-    labLicenseNumber: firstText(data,['labLicenseNumber','lab_license_number','licenseNumber','license_number']),
-    producerName: firstText(data,['producerName','producer_name','cultivatorName','cultivator_name','manufacturerName','manufacturer_name']),
-    producerLicenseNumber: firstText(data,['producerLicenseNumber','producer_license_number','clientLicenseNumber','client_license_number']),
-    collectedAt: firstText(data,['collectedAt','collected_at','collectionDate','collection_date','dateCollected','date_collected']),
+    labLicenseNumber: firstText(data,['labLicenseNumber','lab_license_number']),
+    producerName: firstText(data,['producerName','producer_name','cultivatorName','cultivator_name','manufacturerName','manufacturer_name']) || capture(pageText,'Business Name'),
+    producerLicenseNumber: firstText(data,['producerLicenseNumber','producer_license_number','clientLicenseNumber','client_license_number']) || capture(pageText,'License Number'),
+    collectedAt: firstText(data,['collectedAt','collected_at','collectionDate','collection_date','dateCollected','date_collected']) || capture(pageText,'Date Collected'),
     receivedAt: firstText(data,['receivedAt','received_at','receivedDate','received_date','dateReceived','date_received']),
-    testedAt: firstText(data,['testedAt','tested_at','completedAt','completed_at','issueDate','issue_date','dateIssued','date_issued']),
-    overallStatus: status,
-    state: firstText(data,['state','stateCode','state_code']),
+    testedAt: firstText(data,['testedAt','tested_at','completedAt','completed_at','issueDate','issue_date','dateIssued','date_issued']) || capture(pageText,'Date Issued'),
+    overallStatus: firstText(data,['overallStatus','overall_status','resultStatus','result_status','status']),
+    state: firstText(data,['state','stateCode','state_code']) || 'CA',
     analytes,
     raw,
   };
@@ -217,6 +254,6 @@ export function ingestScLabsSample(sample: ScLabsNormalizedSample) {
   const insertAnalyte = db.prepare(`INSERT INTO cannabis_analytes (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (const row of sample.analytes) insertAnalyte.run(`ca-${crypto.randomUUID()}`,batchId,row.groupName,row.analyteName,row.value,row.unit,row.lod ?? null,row.loq ?? null,row.status ?? null,row.limitValue ?? null,row.limitUnit ?? null,now);
   db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at) VALUES (?,?, 'lab_public_page','SC Labs',?,?,?,?,?,1,?)`)
-    .run(`coa-${crypto.randomUUID()}`,batchId,sample.sourceUrl,sample.sampleId,JSON.stringify(sample.raw),'sclabs-public-v1',now,now);
+    .run(`coa-${crypto.randomUUID()}`,batchId,sample.sourceUrl,sample.sampleId,JSON.stringify(sample.raw),'sclabs-public-v2',now,now);
   return { productId: product.id, batchId, analyteCount: sample.analytes.length, sampleId: sample.sampleId };
 }
