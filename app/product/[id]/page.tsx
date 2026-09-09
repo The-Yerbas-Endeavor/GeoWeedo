@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
@@ -34,7 +35,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductListingPage({ params, searchParams }: Props) {
   const { id } = await params;
   const query = await searchParams;
-  const record = getWeedoFactsProductListing(id, one(query.batch));
+  const requestedBatch = one(query.batch);
+
+  if (requestedBatch) {
+    redirect(`/nutritional-facts?product=${encodeURIComponent(id)}&batch=${encodeURIComponent(requestedBatch)}`);
+  }
+
+  const record = getWeedoFactsProductListing(id);
 
   if (!record) {
     return <main className={`landing-shell ${styles.shell}`}><SiteHeader /><div className={styles.page}><a className={styles.back} href="/weedo-facts">← Weedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
