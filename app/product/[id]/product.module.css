@@ -1,0 +1,76 @@
+.page{
+  width:min(980px,calc(100% - 32px));
+  margin:0 auto;
+  padding:28px 0 64px;
+}
+.topline{
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  align-items:center;
+  margin-bottom:18px;
+  color:#d8e6dc;
+  font-size:.78rem;
+  font-weight:800;
+  letter-spacing:.035em;
+  text-transform:uppercase;
+}
+.back{
+  color:#eef8f0;
+  text-decoration:none;
+  font-weight:850;
+}
+.back:hover{text-decoration:underline}
+.hero{
+  max-width:760px;
+  margin:0 auto 18px;
+  text-align:left;
+}
+.hero>span{
+  display:block;
+  margin-bottom:7px;
+  color:#87c798;
+  font-size:.78rem;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.hero h1{
+  margin:0;
+  color:#fff;
+  font-size:clamp(2.2rem,7vw,4.25rem);
+  line-height:.96;
+  letter-spacing:-.05em;
+}
+.hero>p{
+  margin:10px 0 0;
+  color:#d6e1d8;
+  font-weight:750;
+}
+.intro{
+  margin-top:15px;
+  padding:12px 14px;
+  border-left:4px solid #76b883;
+  background:rgba(10,28,17,.72);
+  color:#e9f3eb;
+  font-size:.9rem;
+  line-height:1.5;
+}
+.page :global(.weedoFactsProductCard .weedoFactsProductNotice){
+  margin:0;
+  padding:10px 0;
+  border-bottom:4px solid #111;
+  color:#222;
+  font-size:.78rem;
+  line-height:1.4;
+  font-weight:700;
+}
+.page :global(.weedoFactsProductCard .weedoFactsProductNotice.warning){
+  font-weight:850;
+}
+@media(max-width:640px){
+  .page{width:min(100% - 18px,980px);padding-top:18px}
+  .topline{align-items:flex-start;flex-direction:column;gap:8px}
+  .hero{margin-bottom:12px}
+  .intro{font-size:.82rem}
+}
