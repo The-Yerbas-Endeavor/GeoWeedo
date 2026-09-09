@@ -3,7 +3,7 @@ export default function SiteHeader() {
     ['/how-to-play', 'How to play'],
     ['/leaderboard', 'Leaderboard'],
     ['/weedo-facts', 'Weedo Facts'],
-    ['/nutritional-facts', 'Nutritional Facts'],
+    ['/product-chemistry', 'Product Chemistry'],
     ['/rewards', 'YERB rewards'],
     ['/for-dispensaries', 'For dispensaries'],
     ['/about', 'About'],
