@@ -57,19 +57,28 @@ function digits(value: unknown) {
   return String(value || '').replace(/\D/g, '');
 }
 
-function tokens(value: unknown) {
-  return new Set(normalize(value).split(/\s+/).filter(token => token.length > 1));
+function meaningfulTokens(value: unknown) {
+  return normalize(value)
+    .split(/\s+/)
+    .filter(token => token.length >= 3 || token === 'og');
 }
 
 function tokenOverlap(needle: unknown, haystack: unknown) {
-  const left = tokens(needle);
-  if (!left.size) return 0;
-  const right = tokens(haystack);
+  const left = meaningfulTokens(needle);
+  if (!left.length) return 0;
+  const right = meaningfulTokens(haystack);
   let matched = 0;
-  left.forEach(token => {
-    if (right.has(token)) matched += 1;
-  });
-  return matched / left.size;
+
+  for (const token of left) {
+    const hit = right.some(candidate => {
+      if (candidate === token) return true;
+      const shortest = Math.min(candidate.length, token.length);
+      return shortest >= 4 && (candidate.startsWith(token) || token.startsWith(candidate));
+    });
+    if (hit) matched += 1;
+  }
+
+  return matched / left.length;
 }
 
 function host(raw: string) {
@@ -97,8 +106,10 @@ function numberMatch(text: string, patterns: RegExp[]) {
 
 function cleanManufacturer(line: string | null) {
   if (!line) return null;
-  return line
-    .replace(/\b(?:mfg|pkg|manufacturer|manufactured by)\b\s*[:/#-]*/gi, '')
+  const withoutLabel = line.replace(/\b(?:mfg|pkg|manufacturer|manufactured by)\b\s*[:/#-]*/gi, '').trim();
+  const corporate = withoutLabel.match(/^(.+?\b(?:llc|inc\.?|corp\.?|corporation|company|co\.?))\b/i)?.[1];
+  if (corporate) return corporate.replace(/[|,:;]+$/g, '').trim() || null;
+  return withoutLabel
     .replace(/\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}.*/g, '')
     .replace(/[|,:;]+$/g, '')
     .trim() || null;
@@ -126,14 +137,20 @@ export function parseReconstructionLabel(upc: string, labelText: string): Recons
   const text = String(labelText || '').replace(/\r/g, '\n');
   const lines = text.split(/\n+/).map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
 
+  // Avoid treating a short OCR fragment as an exact batch identifier. A false
+  // exact match is worse than leaving the field blank and using the other evidence.
   const batchNumber = firstMatch(text, [
-    /\bbatch\s*(?:#|no\.?|number)?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{3,})/i,
-    /\blot\s*(?:#|no\.?|number)?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{3,})/i,
+    /\bbatch\s*(?:#|no\.?|number)?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{5,})/i,
+    /\blot\s*(?:#|no\.?|number)?\s*[:#-]?\s*([a-z0-9][a-z0-9-]{5,})/i,
   ]);
+
+  // Package UIDs are long identifiers. Reject short/truncated OCR fragments so
+  // they cannot be scored later as an exact UID match.
   const uid = firstMatch(text, [
-    /\buid\s*[:#-]?\s*([a-z0-9]{12,})/i,
-    /\bpackage\s*uid\s*[:#-]?\s*([a-z0-9]{12,})/i,
+    /\buid\s*[:#.-]?\s*([a-z0-9]{20,})/i,
+    /\bpackage\s*uid\s*[:#.-]?\s*([a-z0-9]{20,})/i,
   ]);
+
   const phone = firstMatch(text, [/(\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4})/]);
 
   const manufacturerLine = lines.find(line => /\b(?:llc|inc\.?|corp\.?|corporation|company|co\.?)\b/i.test(line) && !/^total\b/i.test(line)) || null;
@@ -148,15 +165,15 @@ export function parseReconstructionLabel(upc: string, labelText: string): Recons
     /(\d+(?:\.\d+)?)\s*mg[^\n\r]{0,18}?(?:total\s*)?thc\b/i,
   ]);
   const cbdPercent = numberMatch(text, [
-    /(?:total\s*)?cbd\s*[:=]?\s*[<≤]?\s*(\d+(?:\.\d+)?)\s*%/i,
-    /(\d+(?:\.\d+)?)\s*%\s*(?:total\s*)?cbd\b/i,
+    /(?:total\s*)?cb[do]\s*[:=]?\s*[<≤]?\s*(\d+(?:\.\d+)?)\s*%/i,
+    /(\d+(?:\.\d+)?)\s*%\s*(?:total\s*)?cb[do]\b/i,
   ]);
   const cbdMg = numberMatch(text, [
-    /(?:total\s*)?cbd[^\n\r]{0,24}?(\d+(?:\.\d+)?)\s*mg\b/i,
-    /(\d+(?:\.\d+)?)\s*mg[^\n\r]{0,18}?(?:total\s*)?cbd\b/i,
+    /(?:total\s*)?cb[do][^\n\r]{0,24}?(\d+(?:\.\d+)?)\s*mg\b/i,
+    /(\d+(?:\.\d+)?)\s*mg[^\n\r]{0,18}?(?:total\s*)?cb[do]\b/i,
   ]);
 
-  const ignoredProductLine = /^(?:mfg|pkg|batch|lot|uid|total|sum|thc|cbd|cannabinoids?|terpenes?|indica|sativa|hybrid|warning|government|license|lic\b|net wt|net weight)/i;
+  const ignoredProductLine = /^(?:mfg|pkg|batch|lot|uid|total|sum|thc|cbd|cbo|cannabinoids?|terpenes?|indica|sativa|hybrid|warning|government|license|lic\b|net wt|net weight)/i;
   const productName = lines.find(line => {
     if (line.length < 4 || line.length > 80 || ignoredProductLine.test(line)) return false;
     if (!/[a-z]/i.test(line)) return false;
@@ -182,6 +199,12 @@ export function parseReconstructionLabel(upc: string, labelText: string): Recons
   };
 }
 
+function relaxedProductTerms(productName: string | null) {
+  if (!productName) return null;
+  const terms = meaningfulTokens(productName).slice(0, 5);
+  return terms.length ? terms.join(' ') : null;
+}
+
 function buildQueries(evidence: ReconstructionEvidence) {
   const queries: string[] = [];
   const add = (query: string | null) => {
@@ -189,15 +212,18 @@ function buildQueries(evidence: ReconstructionEvidence) {
     if (trimmed && !queries.includes(trimmed)) queries.push(trimmed);
   };
 
+  const relaxedProduct = relaxedProductTerms(evidence.productName);
+
   add(`\"${evidence.upc}\"`);
   if (evidence.batchNumber) add(`\"${evidence.batchNumber}\" cannabis`);
   if (evidence.uid) add(`\"${evidence.uid}\" cannabis`);
-  if (evidence.productName && evidence.thcPercent !== null) add(`\"${evidence.productName}\" \"${evidence.thcPercent}%\" cannabis`);
-  if (evidence.productName && evidence.manufacturer) add(`\"${evidence.productName}\" \"${evidence.manufacturer}\" cannabis`);
-  if (evidence.productName && evidence.productType) add(`\"${evidence.productName}\" ${evidence.productType} cannabis`);
+  if (relaxedProduct && evidence.manufacturer) add(`${relaxedProduct} \"${evidence.manufacturer}\" cannabis`);
+  if (relaxedProduct && evidence.thcPercent !== null) add(`${relaxedProduct} \"${evidence.thcPercent}%\" cannabis`);
+  if (relaxedProduct && evidence.productType) add(`${relaxedProduct} ${evidence.productType} cannabis`);
   if (evidence.phone) add(`\"${evidence.phone}\" cannabis`);
-  if (evidence.productName) add(`\"${evidence.productName}\" cannabis`);
-  return queries.slice(0, 6);
+  if (relaxedProduct) add(`${relaxedProduct} cannabis`);
+  if (evidence.manufacturer) add(`\"${evidence.manufacturer}\" cannabis`);
+  return queries.slice(0, 7);
 }
 
 function extractThcPercent(text: string) {
@@ -232,7 +258,7 @@ function scoreSearchResult(evidence: ReconstructionEvidence, result: SiteSearchR
   if (productOverlap >= 0.85) {
     score += 35;
     reasons.push('product name is a very strong match');
-  } else if (productOverlap >= 0.55) {
+  } else if (productOverlap >= 0.5) {
     score += 22;
     reasons.push('product name is a partial match');
   }
@@ -310,7 +336,7 @@ export function getCachedWeedoProductReconstruction(upc: string): WeedoProductRe
   const row = db.prepare(`
     SELECT result_json
     FROM weedo_facts_reconstruction_runs
-    WHERE upc = ? AND confidence IN ('strong_product_match', 'possible_product_match')
+    WHERE upc = ? AND confidence = 'strong_product_match'
     ORDER BY id DESC
     LIMIT 1
   `).get(normalizedUpc) as { result_json?: string } | undefined;
