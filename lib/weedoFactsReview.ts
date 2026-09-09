@@ -89,9 +89,8 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
 
     ensureIdentifier(db,{batchId,type:'uid',value:uid,now});
     ensureIdentifier(db,{batchId,type:'coa',value:sampleId,now});
-    ensureIdentifier(db,{batchId,type:'batch',value:batchNumber,now});
     if(submission.identifier_type==='upc')ensureProductIdentifier(db,{productId,type:'upc',value:submission.identifier_value,now});
-    else if(['qr','uid','coa','batch'].includes(submission.identifier_type))ensureIdentifier(db,{batchId,type:submission.identifier_type,value:submission.identifier_value,now});
+    else if(['qr','uid','coa'].includes(submission.identifier_type))ensureIdentifier(db,{batchId,type:submission.identifier_type,value:submission.identifier_value,now});
 
     const analytes=Array.isArray(parsed.analytes)?parsed.analytes:[];
     for(const analyte of analytes){
