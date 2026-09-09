@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { getDatabase } from './sqlite';
+import { getDatabase } from './sqlite.ts';
 
 export type WeedoFactsMatchLevel = 'exact_batch' | 'product_only' | 'community_unverified';
 
