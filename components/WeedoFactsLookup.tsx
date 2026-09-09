@@ -133,7 +133,7 @@ export default function WeedoFactsLookup() {
       {result?.found === false ? (
         <div className="weedoFactsEmpty">
           <strong>No Weedo Facts record yet.</strong>
-          <p>Try the package lab QR, batch/lot, UID, or original COA. If GeoWeedo still does not know it, submit the package details below for review.</p>
+          <p>Try the package lab QR, batch/lot, UID, or original COA. If GeoWeedo still does not know it, upload the official SC Labs COA or submit the package details below for review.</p>
           <UnknownContribution identifier={identifier} identifierType={inferIdentifierType(identifier)} />
         </div>
       ) : null}
@@ -148,9 +148,43 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
   const [batchNumber, setBatchNumber] = useState('');
   const [coaUrl, setCoaUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [coaFile, setCoaFile] = useState<File | null>(null);
+  const [coaUploading, setCoaUploading] = useState(false);
+  const [coaUploadId, setCoaUploadId] = useState('');
+  const [coaParsed, setCoaParsed] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [saveError, setSaveError] = useState('');
+
+  async function uploadCoa() {
+    if (!coaFile) return;
+    setCoaUploading(true);
+    setMessage('');
+    setSaveError('');
+    try {
+      const form = new FormData();
+      form.set('file', coaFile);
+      form.set('identifierValue', identifier);
+      form.set('identifierType', identifierType);
+      const response = await fetch('/api/weedo-facts/coa-upload', { method: 'POST', body: form });
+      const body = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('Login required to upload an official COA.');
+        throw new Error(body?.error || 'Unable to parse this COA PDF.');
+      }
+      setCoaUploadId(body.upload.id);
+      setCoaParsed(body.parsed || null);
+      if (!productName && body.parsed?.productName) setProductName(body.parsed.productName);
+      if (!batchNumber && body.parsed?.batchNumber) setBatchNumber(body.parsed.batchNumber);
+      setMessage(`COA parsed${body.parsed?.sampleId ? ` — sample ${body.parsed.sampleId}` : ''}. Review the details, then submit.`);
+    } catch (err) {
+      setCoaUploadId('');
+      setCoaParsed(null);
+      setSaveError(err instanceof Error ? err.message : 'Unable to parse this COA PDF.');
+    } finally {
+      setCoaUploading(false);
+    }
+  }
 
   async function submitContribution(event: FormEvent) {
     event.preventDefault();
@@ -168,6 +202,7 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
           productName,
           batchNumber,
           coaUrl,
+          coaUploadId: coaUploadId || undefined,
           sourceUrl: /^https?:\/\//i.test(identifier) ? identifier : undefined,
           notes,
         }),
@@ -188,14 +223,41 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
   return (
     <form className="weedoFactsContribution" onSubmit={submitContribution}>
       <h3>Add this scan to GeoWeedo</h3>
+      <div className="weedoFactsCoaUpload">
+        <div>
+          <strong>Official SC Labs COA PDF</strong>
+          <p>Upload the original certificate and GeoWeedo will parse its sample, batch, UID, lab status, cannabinoids and supported compliance results as review evidence.</p>
+        </div>
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          onChange={(event) => {
+            setCoaFile(event.target.files?.[0] || null);
+            setCoaUploadId('');
+            setCoaParsed(null);
+          }}
+        />
+        <button type="button" onClick={uploadCoa} disabled={!coaFile || coaUploading}>{coaUploading ? 'Parsing COA…' : coaUploadId ? 'COA attached ✓' : 'Upload & parse COA'}</button>
+        {coaParsed ? (
+          <div className="weedoFactsCoaParsed">
+            {coaParsed.sampleId ? <span>Sample <strong>{coaParsed.sampleId}</strong></span> : null}
+            {coaParsed.productName ? <span>Product <strong>{coaParsed.productName}</strong></span> : null}
+            {coaParsed.batchNumber ? <span>Batch <strong>{coaParsed.batchNumber}</strong></span> : null}
+            {coaParsed.uid ? <span>UID <strong>{coaParsed.uid}</strong></span> : null}
+            {coaParsed.overallStatus ? <span>Lab result <strong>{coaParsed.overallStatus}</strong></span> : null}
+            <span>Parsed analytes <strong>{coaParsed.analyteCount ?? 0}</strong></span>
+          </div>
+        ) : null}
+      </div>
+
       <div className="weedoFactsContributionGrid">
         <label>Brand<input value={brandName} onChange={(event) => setBrandName(event.target.value)} /></label>
-        <label>Product name<input value={productName} onChange={(event) => setProductName(event.target.value)} required /></label>
+        <label>Product name<input value={productName} onChange={(event) => setProductName(event.target.value)} /></label>
         <label>Batch / lot<input value={batchNumber} onChange={(event) => setBatchNumber(event.target.value)} /></label>
         <label>COA URL<input value={coaUrl} onChange={(event) => setCoaUrl(event.target.value)} placeholder="https://…" /></label>
       </div>
       <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Anything visible on the package that may help verify this product or batch" /></label>
-      <button type="submit" disabled={saving || !productName.trim()}>{saving ? 'Submitting…' : 'Submit for review'}</button>
+      <button type="submit" disabled={saving || (!productName.trim() && !coaUploadId)}>{saving ? 'Submitting…' : coaUploadId ? 'Submit scan + COA for review' : 'Submit for review'}</button>
       {saveError ? <p className="weedoFactsError">{saveError} {saveError.startsWith('Login required') ? <a href="/account">Log in or create an account</a> : null}</p> : null}
       {message ? <p className="weedoFactsSuccess">{message}</p> : null}
     </form>

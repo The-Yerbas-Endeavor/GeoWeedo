@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/userAuth';
 import { lookupWeedoFacts } from '@/lib/weedoFacts';
 import { createScanContribution, saveScanHistory } from '@/lib/weedoMenus';
+import { attachCoaUploadToSubmission, getOwnedCoaUpload } from '@/lib/weedoFactsUploads';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,16 @@ export async function POST(request: NextRequest) {
     const identifierValue = asText(body?.identifierValue, 2048);
     if (!identifierValue) return NextResponse.json({ error: 'A scanned identifier is required.' }, { status: 400 });
 
+    const coaUploadId = asText(body?.coaUploadId, 128);
+    const coaUpload = coaUploadId ? getOwnedCoaUpload(user.id, coaUploadId) : null;
+    if (coaUploadId && !coaUpload) {
+      return NextResponse.json({ error: 'The attached COA upload was not found for this account.' }, { status: 400 });
+    }
+    if (coaUpload?.submission_id) {
+      return NextResponse.json({ error: 'That COA upload is already attached to another submission.' }, { status: 409 });
+    }
+    const parsedCoa = coaUpload ? JSON.parse(coaUpload.parsed_json || '{}') : null;
+
     const existing = lookupWeedoFacts({ identifier: identifierValue, identifierType });
     const scanId = saveScanHistory({
       userId: user.id,
@@ -31,11 +42,9 @@ export async function POST(request: NextRequest) {
       matchLevel: existing?.matchLevel || 'not_found',
     });
 
-    // Known exact batches only need to be saved to scan history unless the user is also
-    // contributing a menu sighting, new source URL, or correction.
     const hasContribution = Boolean(
-      body?.dispensaryId || body?.menu || body?.sourceUrl || body?.coaUrl || body?.notes ||
-      (!existing && (body?.productName || body?.brandName || body?.batchNumber || body?.uid))
+      coaUploadId || body?.dispensaryId || body?.menu || body?.sourceUrl || body?.coaUrl || body?.notes ||
+      (!existing && (body?.productName || body?.brandName || body?.batchNumber || body?.uid || parsedCoa?.productName || parsedCoa?.batchNumber || parsedCoa?.uid))
     );
 
     if (!hasContribution) {
@@ -51,16 +60,16 @@ export async function POST(request: NextRequest) {
       batchId: existing?.batchId || asText(body?.batchId, 128),
       dispensaryId: asText(body?.dispensaryId, 128),
       brandName: asText(body?.brandName, 200) || existing?.brandName || null,
-      productName: asText(body?.productName, 300) || existing?.productName || null,
+      productName: asText(body?.productName, 300) || existing?.productName || asText(parsedCoa?.productName, 300),
       productType: asText(body?.productType, 100) || existing?.productType || null,
       netContents: asText(body?.netContents, 100) || existing?.netContents || null,
-      batchNumber: asText(body?.batchNumber, 200) || existing?.batchNumber || null,
-      uid: asText(body?.uid, 300) || existing?.uid || null,
+      batchNumber: asText(body?.batchNumber, 200) || existing?.batchNumber || asText(parsedCoa?.batchNumber, 200),
+      uid: asText(body?.uid, 300) || existing?.uid || asText(parsedCoa?.uid, 300),
       coaUrl: asText(body?.coaUrl, 2048) || existing?.coaUrl || null,
       sourceUrl: asText(body?.sourceUrl, 2048),
       notes: asText(body?.notes, 2000),
       menu: body?.menu ? {
-        itemName: asText(body.menu.itemName, 300) || asText(body?.productName, 300) || existing?.productName || null,
+        itemName: asText(body.menu.itemName, 300) || asText(body?.productName, 300) || existing?.productName || asText(parsedCoa?.productName, 300),
         category: asText(body.menu.category, 100),
         variant: asText(body.menu.variant, 150),
         packageSize: asText(body.menu.packageSize, 100) || asText(body?.netContents, 100) || existing?.netContents || null,
@@ -68,6 +77,8 @@ export async function POST(request: NextRequest) {
         currency: asText(body.menu.currency, 8) || 'USD',
       } : null,
     });
+
+    if (coaUploadId) attachCoaUploadToSubmission(user.id, coaUploadId, submission.id);
 
     return NextResponse.json({
       ok: true,
@@ -77,9 +88,12 @@ export async function POST(request: NextRequest) {
         id: submission.id,
         status: submission.status,
         requestedMenuAdd: Boolean(submission.requested_menu_add),
+        coaUploadId: coaUploadId || null,
         createdAt: submission.created_at,
       },
-      message: 'Thanks — your scan was saved and the new information was submitted for review.',
+      message: coaUploadId
+        ? 'Thanks — your scan and parsed COA were submitted together for review.'
+        : 'Thanks — your scan was saved and the new information was submitted for review.',
     }, { status: 201 });
   } catch (error) {
     console.error('[weedo-facts/contribute]', error);
