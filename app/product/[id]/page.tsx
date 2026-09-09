@@ -37,26 +37,49 @@ export default async function ProductListingPage({ params, searchParams }: Props
   const record = getWeedoFactsProductListing(id, one(query.batch));
 
   if (!record) {
-    return <main className="landing-shell"><SiteHeader /><div className={styles.page}><a className={styles.back} href="/weedo-facts">← Weedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
+    return <main className={`landing-shell ${styles.shell}`}><SiteHeader /><div className={styles.page}><a className={styles.back} href="/weedo-facts">← Weedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
   }
 
+  const verifiedBatch = Boolean(record.batchId && record.source?.verified);
+  const provenance = [record.labName, record.producerName].filter(Boolean).join(' · ');
+
   return (
-    <main className="landing-shell">
+    <main className={`landing-shell ${styles.shell}`}>
       <SiteHeader />
       <div className={styles.page}>
         <div className={styles.topline}>
-          <a className={styles.back} href="/weedo-facts">← Scan or search another product</a>
-          <span>GeoWeedo product listing</span>
+          <a className={styles.back} href="/weedo-facts">← Scan another product</a>
+          <span>GeoWeedo product intelligence</span>
         </div>
 
-        <section className={styles.hero}>
-          <span>GEOWEEDO · WEEDO FACTS</span>
-          <h1>{record.productName}</h1>
-          <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
-          <div className={styles.intro}>The Nutritional Facts-style panel below is the primary product information for this GeoWeedo listing. Values come from the displayed lab record; calculated totals are explicitly labeled as calculated.</div>
-        </section>
+        <div className={styles.productScene}>
+          <section className={styles.hero}>
+            <span>GEOWEEDO · WEEDO FACTS</span>
+            <h1>{record.productName}</h1>
+            <p className={styles.productMeta}>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
 
-        <WeedoFactsProductLabel record={record} />
+            <p className={styles.editorialLead}>
+              A cannabis Nutritional Facts view built from the displayed lab record — chemistry first, source attached, and batch identity kept visible.
+            </p>
+
+            <div className={styles.proofLine}>
+              <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'LAB-BACKED RECORD' : 'PRODUCT RECORD'}</span>
+              {provenance ? <span>{provenance}</span> : null}
+            </div>
+
+            <div className={styles.mascotMoment} aria-hidden="true">
+              <div className={styles.mascotHalo} />
+              <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" />
+              <span>Know what’s in your weedo.</span>
+            </div>
+          </section>
+
+          <div className={styles.factsStage}>
+            <div className={styles.factsTab}>NUTRITIONAL-STYLE LAB VIEW</div>
+            <div className={styles.factsPin} aria-hidden="true">✦</div>
+            <WeedoFactsProductLabel record={record} />
+          </div>
+        </div>
       </div>
     </main>
   );

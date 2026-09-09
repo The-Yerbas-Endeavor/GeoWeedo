@@ -19,6 +19,7 @@ import './home-play-promo.css';
 import './mobile-home-tuning.css';
 import './pending-game-reward.css';
 import './game-branding.css';
+import './art-direction.css';
 import LoadedRegionCoveragePortal from '@/components/LoadedRegionCoveragePortal';
 import BrowseCountryPartition from '@/components/BrowseCountryPartition';
 import FloatingStreetViewEnhancer from '@/components/FloatingStreetViewEnhancer';

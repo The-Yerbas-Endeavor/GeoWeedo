@@ -1,0 +1,372 @@
+/*
+ * GeoWeedo art direction v1
+ *
+ * Goal: move the public experience away from generic stacked cards and toward
+ * an organic, editorial, map-first visual identity while preserving the
+ * existing interaction model and accessibility.
+ */
+:root{
+  --gw-ink:#08110b;
+  --gw-forest:#0c1b11;
+  --gw-moss:#17331e;
+  --gw-leaf:#7ed957;
+  --gw-leaf-soft:#9be66f;
+  --gw-cream:#f2f0df;
+  --gw-sand:#d8d2b9;
+  --gw-glass:rgba(8,17,11,.78);
+  --gw-glass-soft:rgba(11,28,17,.62);
+  --gw-hairline:rgba(225,243,221,.14);
+  --gw-shadow:0 30px 90px rgba(0,0,0,.42);
+}
+
+html{background:var(--gw-ink)}
+body{
+  background:
+    radial-gradient(circle at 14% 8%,rgba(80,151,66,.18),transparent 32rem),
+    radial-gradient(circle at 92% 22%,rgba(126,217,87,.08),transparent 28rem),
+    linear-gradient(155deg,#071009 0%,#0c1710 46%,#08110b 100%);
+  background-attachment:fixed;
+}
+
+/* Atmospheric public-page shell. */
+.landing-shell:not(.map-first-home),
+.info-shell,
+.result-shell{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  background:transparent;
+}
+.landing-shell:not(.map-first-home)::before,
+.info-shell::before,
+.result-shell::before{
+  content:'';
+  position:fixed;
+  z-index:-2;
+  width:46vw;
+  height:46vw;
+  min-width:430px;
+  min-height:430px;
+  right:-18vw;
+  top:12vh;
+  border-radius:63% 37% 67% 33% / 42% 58% 42% 58%;
+  background:radial-gradient(circle at 35% 35%,rgba(126,217,87,.14),rgba(42,93,48,.08) 42%,transparent 70%);
+  filter:blur(10px);
+  transform:rotate(-17deg);
+  pointer-events:none;
+}
+.landing-shell:not(.map-first-home)::after,
+.info-shell::after,
+.result-shell::after{
+  content:'';
+  position:fixed;
+  z-index:-1;
+  width:34vw;
+  height:34vw;
+  min-width:320px;
+  min-height:320px;
+  left:-18vw;
+  bottom:-15vw;
+  border-radius:38% 62% 37% 63% / 63% 38% 62% 37%;
+  border:1px solid rgba(126,217,87,.08);
+  box-shadow:0 0 0 42px rgba(126,217,87,.018),0 0 0 84px rgba(126,217,87,.012);
+  transform:rotate(22deg);
+  pointer-events:none;
+}
+
+/* Header: one continuous branded ribbon instead of a row of boxed buttons. */
+.site-topbar{
+  position:relative;
+  z-index:40;
+  height:72px;
+  min-height:72px;
+  padding:0 clamp(18px,3vw,42px);
+  overflow:visible;
+  border:0;
+  background:linear-gradient(180deg,rgba(6,14,9,.96),rgba(7,18,11,.86));
+  box-shadow:0 16px 44px rgba(0,0,0,.18);
+  backdrop-filter:blur(18px) saturate(120%);
+  -webkit-backdrop-filter:blur(18px) saturate(120%);
+}
+.site-topbar::after{
+  content:'';
+  position:absolute;
+  left:clamp(18px,3vw,42px);
+  right:clamp(18px,3vw,42px);
+  bottom:0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(126,217,87,.55) 20%,rgba(255,255,255,.08) 66%,transparent);
+}
+.geoweedo-header-brand{
+  gap:10px;
+  position:relative;
+}
+.geoweedo-header-mascot{
+  width:46px;
+  height:46px;
+  object-fit:contain;
+  filter:drop-shadow(0 8px 14px rgba(0,0,0,.34));
+  transform:rotate(-7deg);
+  transition:transform .22s ease;
+}
+.geoweedo-header-brand:hover .geoweedo-header-mascot{transform:rotate(3deg) translateY(-2px)}
+.geoweedo-header-lockup{display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0}
+.geoweedo-header-logo{height:36px;max-width:210px}
+.geoweedo-header-tagline{
+  margin-left:3px;
+  color:rgba(237,247,233,.57);
+  font-size:7px;
+  line-height:1;
+  letter-spacing:.24em;
+  font-weight:850;
+  white-space:nowrap;
+}
+.site-topbar .nav-actions{align-items:center;gap:2px}
+.site-topbar .ghost.nav-link{
+  position:relative;
+  border:0;
+  border-radius:999px;
+  padding:10px 12px;
+  background:transparent;
+  color:rgba(241,247,242,.78);
+  font-size:12px;
+  font-weight:720;
+  transition:color .16s ease,background .16s ease,transform .16s ease;
+}
+.site-topbar .ghost.nav-link::after{
+  content:'';
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:5px;
+  height:1px;
+  background:var(--gw-leaf);
+  transform:scaleX(0);
+  transform-origin:left;
+  transition:transform .16s ease;
+}
+.site-topbar .ghost.nav-link:hover,
+.site-topbar .ghost.nav-link:focus-visible{
+  color:#fff;
+  background:rgba(126,217,87,.065);
+  outline:none;
+  transform:translateY(-1px);
+}
+.site-topbar .ghost.nav-link:hover::after,
+.site-topbar .ghost.nav-link:focus-visible::after{transform:scaleX(1)}
+.site-topbar .primary.nav-link{
+  margin-left:8px;
+  padding:10px 16px 10px 17px;
+  border:1px solid rgba(155,230,111,.54);
+  border-radius:999px 999px 18px 999px;
+  background:linear-gradient(135deg,#8fe36d,#68ca55);
+  color:#081108;
+  font-size:12px;
+  font-weight:900;
+  box-shadow:0 8px 24px rgba(83,186,76,.18);
+  transition:transform .16s ease,box-shadow .16s ease;
+}
+.site-topbar .primary.nav-link:hover{transform:translateY(-2px) rotate(-1deg);box-shadow:0 13px 30px rgba(83,186,76,.27)}
+
+/* Map-first homepage: cinematic map, organic floating game console. */
+.map-first-home .home-map-stage::after{
+  background:
+    radial-gradient(circle at 23% 42%,transparent 0 15%,rgba(4,8,5,.13) 47%,rgba(3,7,4,.38) 100%),
+    linear-gradient(90deg,rgba(4,8,5,.58) 0%,rgba(4,8,5,.12) 42%,rgba(4,8,5,.02) 72%,rgba(4,8,5,.22) 100%);
+}
+.home-play-card.home-play-card-promo{
+  border:1px solid rgba(159,228,113,.34);
+  border-radius:32px 32px 104px 32px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(126,217,87,.14),transparent 36%),
+    linear-gradient(155deg,rgba(7,16,10,.88),rgba(10,28,16,.68));
+  box-shadow:0 34px 110px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.045);
+  backdrop-filter:blur(16px) saturate(125%);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);
+}
+.home-play-card.home-play-card-promo::before{
+  content:'';
+  position:absolute;
+  z-index:-1;
+  width:160px;
+  height:160px;
+  right:-48px;
+  bottom:-52px;
+  border-radius:68% 32% 70% 30% / 34% 63% 37% 66%;
+  background:linear-gradient(145deg,rgba(126,217,87,.24),rgba(40,92,46,.06));
+  transform:rotate(-24deg);
+  filter:blur(.2px);
+}
+.home-promo-brand{position:relative}
+.home-promo-brand::before{
+  content:'';
+  position:absolute;
+  width:82px;
+  height:82px;
+  left:2%;
+  top:50%;
+  transform:translateY(-50%) rotate(-12deg);
+  border:1px solid rgba(126,217,87,.14);
+  border-radius:62% 38% 68% 32% / 42% 64% 36% 58%;
+}
+.home-promo-logo{filter:drop-shadow(0 12px 24px rgba(0,0,0,.26))}
+.home-promo-divider{opacity:.78}
+.home-promo-intro{text-align:left;padding:0 4px}
+.home-promo-kicker{
+  font-size:12px;
+  color:var(--gw-leaf-soft);
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+.home-promo-intro p{margin:7px 0 0;max-width:560px;text-align:left;color:rgba(240,246,241,.78);font-size:14px}
+.home-play-card.home-play-card-promo button[aria-label="Findo Weedo on the dispensary map"]{
+  border:0!important;
+  border-radius:999px 999px 24px 999px!important;
+  background:linear-gradient(135deg,#92e96e,#61c94f)!important;
+  box-shadow:0 16px 40px rgba(67,185,86,.25)!important;
+  transition:transform .16s ease,box-shadow .16s ease!important;
+}
+.home-play-card.home-play-card-promo button[aria-label="Findo Weedo on the dispensary map"]:hover{
+  transform:translateY(-2px) rotate(-.35deg);
+  box-shadow:0 20px 46px rgba(67,185,86,.34)!important;
+}
+.game-selector{gap:12px}
+.game-selector-card{
+  position:relative;
+  overflow:hidden;
+  border:1px solid rgba(234,246,230,.11);
+  background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(126,217,87,.028));
+  box-shadow:none;
+}
+.game-selector-card:nth-child(1){border-radius:26px 14px 30px 18px;transform:rotate(-.45deg)}
+.game-selector-card:nth-child(2){border-radius:16px 30px 18px 28px;transform:translateY(2px) rotate(.4deg)}
+.game-selector-card:nth-child(3){border-radius:30px 18px 27px 14px;transform:rotate(-.2deg)}
+.game-selector-card::after{
+  content:'';
+  position:absolute;
+  width:70px;
+  height:70px;
+  right:-26px;
+  bottom:-32px;
+  border-radius:70% 30% 64% 36%;
+  background:rgba(126,217,87,.055);
+  transform:rotate(28deg);
+}
+.game-selector-card:hover,.game-selector-card:focus-visible{
+  transform:translateY(-4px) rotate(0);
+  border-color:rgba(126,217,87,.44);
+  background:linear-gradient(145deg,rgba(126,217,87,.105),rgba(255,255,255,.025));
+}
+.home-promo-stats{gap:0;border-top:1px solid rgba(255,255,255,.075);padding-top:9px}
+.home-promo-stat{
+  min-height:78px;
+  padding:8px;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.075);
+  border-radius:0;
+  background:transparent;
+}
+.home-promo-stat:first-child{border-radius:22px 0 0 22px}
+.home-promo-stat:last-child{border-right:0}
+.home-promo-stat.reward{border:0;background:radial-gradient(circle,rgba(245,196,81,.11),transparent 72%);box-shadow:none}
+
+/* Map controls should feel like instruments floating over the map, not form cards. */
+.map-browser-tools input,
+.map-browser-tools select,
+.map-browser-tools button{
+  border-color:rgba(222,243,219,.16);
+  border-radius:999px;
+  background:rgba(6,15,9,.78);
+  box-shadow:0 8px 26px rgba(0,0,0,.18);
+  backdrop-filter:blur(12px);
+}
+.map-location-card,
+.map-browser-panel{
+  border-color:rgba(151,224,110,.22);
+  border-radius:28px 28px 48px 28px;
+  background:linear-gradient(150deg,rgba(7,16,10,.91),rgba(10,26,15,.82));
+}
+
+/* Generic editorial pages: vary rhythm and silhouette rather than cloning one card. */
+.info-hero{position:relative;text-align:left;max-width:1080px;padding-top:92px}
+.info-hero::before{
+  content:'GEOWEEDO';
+  display:block;
+  margin-bottom:12px;
+  color:var(--gw-leaf);
+  font-size:11px;
+  font-weight:950;
+  letter-spacing:.28em;
+}
+.info-hero h1{max-width:780px;font-size:clamp(48px,8vw,92px);letter-spacing:-.065em;line-height:.9}
+.info-hero p{margin-left:0;max-width:720px}
+.info-grid{gap:22px}
+.info-grid article{
+  position:relative;
+  border-color:rgba(221,242,217,.10);
+  background:linear-gradient(145deg,rgba(18,33,22,.84),rgba(9,19,12,.72));
+  box-shadow:0 18px 55px rgba(0,0,0,.16);
+}
+.info-grid article:nth-child(4n+1){border-radius:34px 16px 42px 18px;transform:rotate(-.35deg)}
+.info-grid article:nth-child(4n+2){border-radius:18px 42px 20px 34px;transform:translateY(10px)}
+.info-grid article:nth-child(4n+3){border-radius:46px 18px 34px 20px;transform:rotate(.3deg)}
+.info-grid article:nth-child(4n){border-radius:20px 32px 44px 16px;transform:translateY(-5px)}
+.info-grid article>strong{border-radius:62% 38% 66% 34% / 41% 60% 40% 59%;transform:rotate(-8deg)}
+.account-card,.result-card{
+  border-color:rgba(221,242,217,.12);
+  border-radius:34px 22px 54px 24px;
+  background:linear-gradient(145deg,rgba(18,33,22,.92),rgba(9,19,12,.86));
+  box-shadow:var(--gw-shadow);
+}
+
+/* Weedo Facts landing page gets editorial atmosphere while the actual facts remain rigorous. */
+.weedoFactsPage{position:relative}
+.weedoFactsHero{position:relative;max-width:980px;text-align:left!important}
+.weedoFactsHero h1{font-size:clamp(58px,10vw,112px)!important;line-height:.86!important;letter-spacing:-.075em!important}
+.weedoFactsHero::after{
+  content:'';
+  position:absolute;
+  width:180px;
+  height:180px;
+  right:-28px;
+  top:38px;
+  background:url('/assets/geoweedo/geoweedo-icon-master.png') center/contain no-repeat;
+  filter:drop-shadow(0 24px 32px rgba(0,0,0,.24));
+  transform:rotate(8deg);
+  opacity:.96;
+  pointer-events:none;
+}
+.weedoFactsPrinciples{justify-content:flex-start!important}
+
+@media(max-width:900px){
+  .geoweedo-header-tagline{display:none}
+  .geoweedo-header-mascot{width:40px;height:40px}
+  .info-grid article{transform:none!important}
+  .home-promo-intro{text-align:center;padding:0}
+  .home-promo-intro p{text-align:center;margin-left:auto;margin-right:auto}
+}
+
+@media(max-width:760px){
+  .site-topbar{height:60px;min-height:60px;padding:0 12px}
+  .geoweedo-header-mascot{width:36px;height:36px}
+  .geoweedo-header-logo{height:30px;max-width:150px}
+  .site-topbar::after{left:12px;right:12px}
+  .home-play-card.home-play-card-promo{border-radius:24px 24px 56px 24px!important}
+  .weedoFactsHero::after{width:110px;height:110px;right:-18px;top:30px;opacity:.35}
+}
+
+@media(max-width:520px){
+  .geoweedo-header-mascot{display:none}
+  .geoweedo-header-logo{height:31px;max-width:165px}
+  .info-hero{padding-top:56px}
+  .info-hero h1{font-size:clamp(42px,14vw,68px)}
+  .home-promo-stats{grid-template-columns:repeat(3,1fr)}
+  .home-promo-stat{border-right:0;border-bottom:1px solid rgba(255,255,255,.07)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .geoweedo-header-mascot,
+  .site-topbar .nav-link,
+  .game-selector-card,
+  .home-play-card.home-play-card-promo button{transition:none!important;transform:none!important}
+}
