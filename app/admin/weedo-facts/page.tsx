@@ -113,6 +113,8 @@ export default function WeedoFactsAdminPage() {
   }
 
   const retrievedRecord = retrieved?.record;
+  const retrievedSample = retrieved?.sample;
+  const retrievedImported = Boolean(retrieved?.imported);
   const retrievedAnalytes = retrievedRecord
     ? (retrievedRecord.cannabinoids?.length || 0) + (retrievedRecord.terpenes?.length || 0) + (retrievedRecord.safetyTests?.length || 0)
     : 0;
@@ -142,14 +144,14 @@ export default function WeedoFactsAdminPage() {
       {retrieveError ? <div className={styles.error}>{retrieveError}</div> : null}
       {retrievedRecord ? <div className={styles.retrievedCard}>
         <div className={styles.retrievedTitle}>
-          <div><span>{retrieved.imported ? 'SC LABS DATA RETRIEVED' : 'GEOWEEDO RECORD FOUND'}</span><h3>{retrievedRecord.brandName ? `${retrievedRecord.brandName} — ` : ''}{retrievedRecord.productName}</h3></div>
+          <div><span>{retrievedImported ? 'SC LABS DATA RETRIEVED' : 'GEOWEEDO RECORD FOUND'}</span><h3>{retrievedRecord.brandName ? `${retrievedRecord.brandName} — ` : ''}{retrievedRecord.productName}</h3></div>
           <strong>{retrievedRecord.matchLevel === 'exact_batch' ? 'VERIFIED BATCH RECORD' : retrievedRecord.matchLevel}</strong>
         </div>
         <dl>
-          <dt>Sample / COA</dt><dd>{retrievedRecord.coaNumber || retrieved.sample?.sampleId || '—'}</dd>
+          <dt>Sample / COA</dt><dd>{retrievedRecord.coaNumber || retrievedSample?.sampleId || '—'}</dd>
           <dt>Batch / lot</dt><dd>{retrievedRecord.batchNumber || '—'}</dd>
           <dt>UID</dt><dd>{retrievedRecord.uid || '—'}</dd>
-          <dt>Laboratory</dt><dd>{retrievedRecord.labName || retrieved.sample?.labName || '—'}</dd>
+          <dt>Laboratory</dt><dd>{retrievedRecord.labName || retrievedSample?.labName || '—'}</dd>
           <dt>Tested / issued</dt><dd>{retrievedRecord.testedAt ? new Date(retrievedRecord.testedAt).toLocaleDateString() : '—'}</dd>
           <dt>Lab status</dt><dd>{retrievedRecord.overallStatus || '—'}</dd>
           <dt>Analytes loaded</dt><dd>{retrievedAnalytes}</dd>
