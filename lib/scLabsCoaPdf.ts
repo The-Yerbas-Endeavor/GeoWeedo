@@ -49,9 +49,7 @@ function numeric(value: string | undefined | null) {
   return match ? Number(match[0]) : null;
 }
 
-function esc(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+function esc(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function canonicalStatus(value: string | undefined | null) {
   if (!value) return null;
@@ -68,31 +66,19 @@ function addUnique(out: ScLabsCoaPdfAnalyte[], row: ScLabsCoaPdfAnalyte) {
 function parseKnownRows(text: string, groupName: string, names: string[]) {
   const out: ScLabsCoaPdfAnalyte[] = [];
   for (const name of names) {
-    const linePattern = new RegExp(`(?:^|\\n)\\s*${esc(name)}\\s+([^\\n]{0,180})`, 'im');
-    const line = text.match(linePattern)?.[1] || '';
+    const line = text.match(new RegExp(`(?:^|\\n)\\s*${esc(name)}\\s+([^\\n]{0,180})`, 'im'))?.[1] || '';
     if (!line) continue;
     const values = [...line.matchAll(/(?:ND|N\/A|NT|<LO[QD]|-?\d+(?:\.\d+)?)/gi)].map(m => m[0]);
     const unit = line.match(/(%|mg\/?g|mg\/?mL|µg\/?g|ug\/?g|ppm|ppb|CFU\/?g)/i)?.[1] || null;
     const status = canonicalStatus(line.match(/\b(Pass|Fail|Passed|Failed)\b/i)?.[1]);
     if (!values.length && !status) continue;
-    addUnique(out, {
-      groupName,
-      analyteName: name,
-      value: numeric(values[0]),
-      unit,
-      lod: values.length >= 2 ? numeric(values[1]) : null,
-      loq: values.length >= 3 ? numeric(values[2]) : null,
-      limitValue: values.length >= 4 ? numeric(values[3]) : null,
-      limitUnit: values.length >= 4 ? unit : null,
-      status,
-    });
+    addUnique(out, { groupName, analyteName: name, value: numeric(values[0]), unit, lod: values.length >= 2 ? numeric(values[1]) : null, loq: values.length >= 3 ? numeric(values[2]) : null, limitValue: values.length >= 4 ? numeric(values[3]) : null, limitUnit: values.length >= 4 ? unit : null, status });
   }
   return out;
 }
 
 function extractAnalytes(text: string) {
   const out: ScLabsCoaPdfAnalyte[] = [];
-
   const cannabinoids = ['THCA','THCVA','THCV','Delta-9 THC','THC','CBDA','CBDVA','CBDV','CBD','CBGA','CBG','CBCA','CBC','CBN'];
   const terpenes = ['Alpha-Bisabolol','Alpha-Humulene','Alpha-Pinene','Alpha-Terpinene','Beta-Caryophyllene','Beta-Myrcene','Beta-Pinene','Borneol','Camphene','Camphor','Caryophyllene Oxide','Cedrol','Citral','Citronellol','Eucalyptol','Fenchol','Fenchone','Gamma-Terpinene','Geraniol','Guaiol','Isoborneol','Limonene','Linalool','Menthol','Nerolidol','Ocimene','Pulegone','Sabinene','Sabinene Hydrate','Terpineol','Terpinolene','Valencene'];
   const pesticides = ['Abamectin','Acephate','Acequinocyl','Acetamiprid','Aldicarb','Azoxystrobin','Bifenazate','Bifenthrin','Boscalid','Carbaryl','Carbofuran','Chlorantraniliprole','Chlorphenapyr','Chlorpyrifos','Clofentezine','Clothianidin','Coumaphos','Cyantraniliprole','Cyfluthrin','Cyhalothrin','Cypermethrin','Daminozide','DDVP','Diazinon','Dimethoate','Dimethomorph','Dinotefuran','Etoxazole','Etridiazole','Fenhexamid','Fenpyroximate','Fipronil','Flonicamid','Fludioxonil','Hexythiazox','Imazalil','Imidacloprid','Iprodione','Malathion','Metalaxyl','Methiocarb','Methomyl','Methyl parathion','Mevinphos','Myclobutanil','Naled','Oxamyl','Paclobutrazol','Permethrin','Phenothrin','Phosmet','Piperonylbutoxide','Prallethrin','Propiconazole','Propoxur','Pyraclostrobin','Pyrethrins','Pyridaben','Spinetoram','Spinosad','Spiromesifen','Spirotetramat','Spiroxamine','Tebuconazole','Thiacloprid','Thiamethoxam','Trifloxystrobin'];
@@ -109,16 +95,12 @@ function extractAnalytes(text: string) {
   for (const row of parseKnownRows(text, 'residual_solvent', solvents)) addUnique(out, row);
   for (const row of parseKnownRows(text, 'microbial', microbial)) addUnique(out, row);
 
-  const summaryRows: Array<[string,string,RegExp]> = [
-    ['moisture','Moisture Content',/Moisture(?:\s+Content)?[^\n]{0,80}?(ND|-?\d+(?:\.\d+)?)\s*(%)/i],
-    ['water_activity','Water Activity',/Water\s+Activity[^\n]{0,80}?(ND|-?\d+(?:\.\d+)?)/i],
-    ['foreign_material','Foreign Material',/Foreign\s+Material[\s\S]{0,120}?\b(Pass|Fail|Passed|Failed)\b/i],
-  ];
-  for (const [groupName, analyteName, pattern] of summaryRows) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    addUnique(out, { groupName, analyteName, value: numeric(match[1]), unit: match[2] || null, status: canonicalStatus(match[1]) });
-  }
+  const moisture = text.match(/Moisture(?:\s+Content)?[^\n]{0,80}?(ND|-?\d+(?:\.\d+)?)\s*(%)/i);
+  if (moisture) addUnique(out, { groupName: 'moisture', analyteName: 'Moisture Content', value: numeric(moisture[1]), unit: moisture[2] || null, status: null });
+  const waterActivity = text.match(/Water\s+Activity[^\n]{0,80}?(ND|-?\d+(?:\.\d+)?)/i);
+  if (waterActivity) addUnique(out, { groupName: 'water_activity', analyteName: 'Water Activity', value: numeric(waterActivity[1]), unit: null, status: null });
+  const foreignMaterial = canonicalStatus(text.match(/Foreign\s+Material[\s\S]{0,120}?\b(Pass|Fail|Passed|Failed)\b/i)?.[1]);
+  if (foreignMaterial) addUnique(out, { groupName: 'foreign_material', analyteName: 'Foreign Material', value: null, unit: null, status: foreignMaterial });
 
   const safetyPanels: Array<[string,string,RegExp]> = [
     ['pesticide','Pesticides',/Pesticides?[\s\S]{0,160}?\b(Pass|Fail|Passed|Failed)\b/i],
@@ -131,29 +113,18 @@ function extractAnalytes(text: string) {
     const status = canonicalStatus(text.match(pattern)?.[1]);
     if (status) addUnique(out, { groupName, analyteName, value: null, unit: null, status });
   }
-
   return out;
 }
 
 export async function parseScLabsCoaPdf(bytes: Uint8Array): Promise<ScLabsCoaPdfData> {
   if (bytes.byteLength < 5 || Buffer.from(bytes.slice(0, 5)).toString('ascii') !== '%PDF-') throw new Error('Uploaded file is not a PDF.');
   if (bytes.byteLength > 15 * 1024 * 1024) throw new Error('COA PDF exceeds the 15 MB limit.');
-
   const parser = new PDFParse({ data: bytes });
   let text = '';
-  try {
-    const result = await parser.getText();
-    text = result.text || '';
-  } finally {
-    await parser.destroy();
-  }
+  try { const result = await parser.getText(); text = result.text || ''; } finally { await parser.destroy(); }
   if (!/SC\s*Labs/i.test(text)) throw new Error('PDF does not appear to be an SC Labs certificate.');
 
-  const producerName = capture(text, [
-    /(?:Client|Producer|Distributor|Licensee|Business)\s*(?:Name)?\s*:?\s*([^\n]+)/i,
-    /Submitted\s+By\s*:?\s*([^\n]+)/i,
-  ]);
-
+  const producerName = capture(text, [/(?:Client|Producer|Distributor|Licensee|Business)\s*(?:Name)?\s*:?\s*([^\n]+)/i,/Submitted\s+By\s*:?\s*([^\n]+)/i]);
   return {
     sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
     sampleId: capture(text, [/Sample\s*ID\s*[:#]?\s*([A-Z0-9-]+)/i]),
