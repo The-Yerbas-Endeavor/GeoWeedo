@@ -181,24 +181,58 @@ function productNameFromPhytofacts(pageText: string) {
   return cleanPhytofactsProductName(withoutStats);
 }
 
+const TERPENES = [
+  'terpinolene','α-phellandrene','alpha-phellandrene','β-phellandrene','beta-phellandrene','β-ocimene','beta-ocimene','carene','limonene','γ-terpinene','gamma-terpinene','α-pinene','alpha-pinene','α-terpinene','alpha-terpinene','β-pinene','beta-pinene','fenchol','camphene','α-terpineol','alpha-terpineol','α-humulene','alpha-humulene','β-caryophyllene','beta-caryophyllene','linalool','caryophyllene oxide','myrcene','bisabolol','borneol','camphor','eucalyptol','guaiol','isopulegol','nerolidol','pulegone'
+];
+
+function pushUnique(out: ScLabsNormalizedSample['analytes'], seen: Set<string>, row: ScLabsNormalizedSample['analytes'][number]) {
+  const key = `${row.groupName}|${row.analyteName.toLowerCase()}|${row.value ?? ''}|${row.unit ?? ''}|${row.status ?? ''}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  out.push(row);
+}
+
 function phytofactsAnalytes(pageText: string) {
   const out: ScLabsNormalizedSample['analytes'] = [];
   const seen = new Set<string>();
-  const cannabinoidSection = pageText.match(/Cannabinoids\s+Ratio of top two cannabinoids\s*\|?\s*Cannabinoids Weight %\s+([\s\S]*?)(?:Aroma & Flavor|PhytoPrint|Copyright|$)/i)?.[1] || '';
+
+  const cannabinoidSection = pageText.match(/Cannabinoids\s+Ratio of top two cannabinoids\s*\|?\s*Cannabinoids Weight %\s+([\s\S]*?)(?:Aroma & Flavor|PhytoPrint|Copyright|$)/i)?.[1] || pageText;
   for (const match of cannabinoidSection.matchAll(/\b(THCA|THCVA|THCV|THC|CBDA|CBDVA|CBDV|CBD|CBGA|CBG|CBCA|CBC)\s+(-?\d+(?:\.\d+)?)%/gi)) {
-    const key = match[1].toUpperCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ groupName: 'cannabinoid', analyteName: key, value: Number(match[2]), unit: '%' });
+    pushUnique(out, seen, { groupName: 'cannabinoid', analyteName: match[1].toUpperCase(), value: Number(match[2]), unit: '%' });
   }
-  const terpeneSection = pageText.match(/PhytoPrint[^]*?(?:terpinolene|α-phellandrene|beta-phellandrene|β-ocimene|carene|limonene|γ-terpinene|α-pinene|α-terpinene|β-pinene|fenchol|camphene|α-terpineol|α-humulene|β-caryophyllene|linalool|caryophyllene oxide|myrcene)[^]*?(?:Copyright|$)/i)?.[0] || '';
-  for (const match of terpeneSection.matchAll(/\b([A-Za-zαβγ-][A-Za-zαβγ\s-]+?)\s+(-?\d+(?:\.\d+)?)%/g)) {
-    const name = match[1].trim();
-    const key = `terpene:${name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ groupName: 'terpene', analyteName: name, value: Number(match[2]), unit: '%' });
+
+  for (const name of TERPENES) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = pageText.match(new RegExp(`(?:^|\\s)(${escaped})\\s+(-?\\d+(?:\\.\\d+)?)%`, 'i'));
+    if (match) pushUnique(out, seen, { groupName: 'terpene', analyteName: match[1], value: Number(match[2]), unit: '%' });
   }
+
+  const totals: Array<[string,string]> = [['Total Cannabinoids','Cannabinoids'],['Total Terpenoids','Terpenoids'],['Moisture','Moisture']];
+  for (const [analyteName,label] of totals) {
+    const match = pageText.match(new RegExp(`${label}\\s*:?\\s*(-?\\d+(?:\\.\\d+)?)%`, 'i'));
+    if (match) pushUnique(out, seen, { groupName: label === 'Terpenoids' ? 'terpene' : label === 'Moisture' ? 'moisture' : 'cannabinoid', analyteName, value: Number(match[1]), unit: '%' });
+  }
+
+  const complianceGroups: Array<[string,string[]]> = [
+    ['pesticide',['Pesticides','Pesticide']],
+    ['heavy_metal',['Heavy Metals','Heavy Metal']],
+    ['microbial',['Microbials','Microbial Impurities','Microbial']],
+    ['mycotoxin',['Mycotoxins','Mycotoxin']],
+    ['residual_solvent',['Residual Solvents','Residual Solvent','Processing Chemicals']],
+    ['foreign_material',['Foreign Material']],
+    ['water_activity',['Water Activity']]
+  ];
+  for (const [groupName,labels] of complianceGroups) {
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = pageText.match(new RegExp(`${escaped}\\s*(?:Result|Status)?\\s*:?\\s*(PASS|PASSED|FAIL|FAILED|NOT TESTED|NT)\\b`, 'i'));
+      if (match) {
+        pushUnique(out, seen, { groupName, analyteName: label, value: null, unit: null, status: match[1].toUpperCase() });
+        break;
+      }
+    }
+  }
+
   return out;
 }
 
@@ -228,7 +262,12 @@ export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormal
   const productName = cleanPhytofactsProductName(structuredProductName) || productNameFromPhytofacts(pageText) || pageText.match(/SC Labs\s*\|\s*PhytoFacts[^-]*-\s*([^|]{2,120})/i)?.[1]?.trim();
   if (!productName) throw new Error('SC Labs page loaded, but GeoWeedo could not identify the product name. Adapter needs a parser update for this page shape.');
   let analytes = extractAnalytes(data);
-  if (!analytes.length) analytes = phytofactsAnalytes(pageText);
+  const fallbackAnalytes = phytofactsAnalytes(pageText);
+  if (!analytes.length) analytes = fallbackAnalytes;
+  else {
+    const seen = new Set(analytes.map(row => `${row.groupName}|${row.analyteName.toLowerCase()}|${row.value ?? ''}|${row.unit ?? ''}|${row.status ?? ''}`));
+    for (const row of fallbackAnalytes) pushUnique(analytes, seen, row);
+  }
   return {
     sampleId,
     sourceUrl,
