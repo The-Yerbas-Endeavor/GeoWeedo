@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { getDatabase } from './sqlite';
-import { ensureWeedoFactsSchema } from './weedoFacts';
+import { getDatabase } from './sqlite.ts';
+import { ensureWeedoFactsSchema } from './weedoFacts.ts';
 
 type Scalar = string | number | boolean | null;
 type AnyRecord = Record<string, any>;
@@ -156,7 +156,7 @@ export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormal
   const html = await response.text();
   const docs = extractJsonDocuments(html);
   const raw = docs.length ? { documents: docs } : { pageText: htmlText(html) };
-  const data = docs.length ? raw : raw;
+  const data = raw;
   const sampleId = new URL(sourceUrl).pathname.match(/\/sample\/(\d+)/i)?.[1] || '';
   const pageText = htmlText(html);
   const productName = firstText(data, ['sampleName','sample_name','productName','product_name','name']) || pageText.match(/(?:Sample|Product)\s*(?:Name)?\s*[:\-]\s*([^|]{2,100})/i)?.[1]?.trim();
