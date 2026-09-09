@@ -32,6 +32,10 @@ function ensureSchema() {
   return db;
 }
 
+export function ensureWeedoFactsUploadSchema() {
+  return ensureSchema();
+}
+
 function storageRoot() {
   return path.join(process.cwd(), 'data', 'runtime', 'weedo-facts', 'coa');
 }
