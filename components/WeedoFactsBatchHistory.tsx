@@ -7,11 +7,12 @@ function measure(value: any) {
   return `${Number(value.value).toLocaleString(undefined, { maximumFractionDigits: 4 })}${value.unit ? ` ${value.unit}` : ''}`;
 }
 
-function range(value: any) {
+function range(value: any, unit?: string | null) {
   if (!value) return '—';
   const min = Number(value.min).toLocaleString(undefined, { maximumFractionDigits: 4 });
   const max = Number(value.max).toLocaleString(undefined, { maximumFractionDigits: 4 });
-  return min === max ? min : `${min}–${max}`;
+  const text = min === max ? min : `${min}–${max}`;
+  return unit ? `${text} ${unit}` : text;
 }
 
 export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { productId: string; currentBatchId?: string | null }) {
@@ -45,8 +46,8 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
 
     {batches.length ? <>
       <div className="weedoFactsBatchSummary">
-        <div><span>THC range</span><strong>{range(summary.thcRange)}</strong></div>
-        <div><span>Terpene range</span><strong>{range(summary.terpeneRange)}</strong></div>
+        <div><span>THC range</span><strong>{range(summary.thcRange, summary.thcUnit)}</strong></div>
+        <div><span>Terpene range</span><strong>{range(summary.terpeneRange, summary.terpeneUnit)}</strong></div>
         <div><span>Recurring dominant terpenes</span><strong>{summary.dominantTerpenes?.length ? summary.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></div>
       </div>
       <div className="weedoFactsBatchHistoryList">
