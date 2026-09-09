@@ -3,6 +3,13 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 type LookupResult = any;
+type IdentifierType = 'qr' | 'upc' | 'uid' | 'batch' | 'coa' | 'unknown';
+
+function inferIdentifierType(value: string): IdentifierType {
+  if (/^https?:\/\//i.test(value)) return 'qr';
+  if (/^\d{8,14}$/.test(value.replace(/[\s-]/g, ''))) return 'upc';
+  return 'unknown';
+}
 
 export default function WeedoFactsLookup() {
   const [identifier, setIdentifier] = useState('');
@@ -123,9 +130,75 @@ export default function WeedoFactsLookup() {
       </form>
 
       {error ? <p className="weedoFactsError">{error}</p> : null}
-      {result?.found === false ? <div className="weedoFactsEmpty"><strong>No Weedo Facts record yet.</strong><p>Try the package lab QR, batch/lot, UID, or original COA. Community contribution support is available for products GeoWeedo does not know yet.</p></div> : null}
+      {result?.found === false ? (
+        <div className="weedoFactsEmpty">
+          <strong>No Weedo Facts record yet.</strong>
+          <p>Try the package lab QR, batch/lot, UID, or original COA. If GeoWeedo still does not know it, submit the package details below for review.</p>
+          <UnknownContribution identifier={identifier} identifierType={inferIdentifierType(identifier)} />
+        </div>
+      ) : null}
       {result?.found && result.record ? <FactsCard record={result.record} /> : null}
     </div>
+  );
+}
+
+function UnknownContribution({ identifier, identifierType }: { identifier: string; identifierType: IdentifierType }) {
+  const [brandName, setBrandName] = useState('');
+  const [productName, setProductName] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [coaUrl, setCoaUrl] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
+
+  async function submitContribution(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage('');
+    setSaveError('');
+    try {
+      const response = await fetch('/api/weedo-facts/contribute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifierType,
+          identifierValue: identifier,
+          brandName,
+          productName,
+          batchNumber,
+          coaUrl,
+          sourceUrl: /^https?:\/\//i.test(identifier) ? identifier : undefined,
+          notes,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) throw new Error('Login required to submit a new scan.');
+        throw new Error(body?.error || 'Unable to submit this scan.');
+      }
+      setMessage(body?.message || 'Thanks — this scan was submitted for review.');
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Unable to submit this scan.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="weedoFactsContribution" onSubmit={submitContribution}>
+      <h3>Add this scan to GeoWeedo</h3>
+      <div className="weedoFactsContributionGrid">
+        <label>Brand<input value={brandName} onChange={(event) => setBrandName(event.target.value)} /></label>
+        <label>Product name<input value={productName} onChange={(event) => setProductName(event.target.value)} required /></label>
+        <label>Batch / lot<input value={batchNumber} onChange={(event) => setBatchNumber(event.target.value)} /></label>
+        <label>COA URL<input value={coaUrl} onChange={(event) => setCoaUrl(event.target.value)} placeholder="https://…" /></label>
+      </div>
+      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Anything visible on the package that may help verify this product or batch" /></label>
+      <button type="submit" disabled={saving || !productName.trim()}>{saving ? 'Submitting…' : 'Submit for review'}</button>
+      {saveError ? <p className="weedoFactsError">{saveError} {saveError.startsWith('Login required') ? <a href="/account">Log in or create an account</a> : null}</p> : null}
+      {message ? <p className="weedoFactsSuccess">{message}</p> : null}
+    </form>
   );
 }
 
