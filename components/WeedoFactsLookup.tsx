@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import WeedoFactsBatchHistory from '@/components/WeedoFactsBatchHistory';
+import WeedoFactsHeadlineTotals, { filterHeadlineTotals } from '@/components/WeedoFactsHeadlineTotals';
 
 type LookupResult = any;
 type IdentifierType = 'qr' | 'upc' | 'uid' | 'batch' | 'coa' | 'unknown';
@@ -326,6 +327,9 @@ function FactsCard({ record }: { record: any }) {
   const exact = record.matchLevel === 'exact_batch';
   const statusText = String(record.overallStatus || '').trim();
   const failed = /fail/i.test(statusText);
+  const cannabinoidRows = filterHeadlineTotals(record.cannabinoids, 'cannabinoid');
+  const terpeneRows = filterHeadlineTotals(record.terpenes, 'terpene');
+  const hasChemistry = Boolean(record.cannabinoids?.length || record.terpenes?.length);
   return (
     <article className="weedoFactsCard">
       <div className="weedoFactsCardHead">
@@ -333,9 +337,10 @@ function FactsCard({ record }: { record: any }) {
         <span className={`weedoFactsStatus ${exact ? 'verified' : 'partial'}`}>{exact ? '✓ Exact batch verified' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}</span>
       </div>
 
+      {hasChemistry ? <WeedoFactsHeadlineTotals cannabinoids={record.cannabinoids} terpenes={record.terpenes} /> : null}
       {statusText ? <div className={`weedoFactsOverallStatus ${failed ? 'failed' : 'reported'}`}><span>Lab-reported compliance status</span><strong>{statusText}</strong></div> : null}
-      {record.cannabinoids?.length ? <FactsSection title="Cannabinoids" rows={record.cannabinoids} /> : null}
-      {record.terpenes?.length ? <FactsSection title="Terpenes" rows={record.terpenes} /> : null}
+      {cannabinoidRows.length ? <FactsSection title="Cannabinoids" rows={cannabinoidRows} /> : null}
+      {terpeneRows.length ? <FactsSection title="Terpenes" rows={terpeneRows} /> : null}
       {record.safetyTests?.length ? <section><h3>Compliance testing</h3><div className="weedoFactsRows">{record.safetyTests.map((row: any, index: number) => <div className="weedoFactsRow" key={`${row.category}-${row.analyte}-${index}`}><span>{row.analyte || row.category}</span><strong>{row.status || formatMeasurement(row)}</strong></div>)}</div></section> : null}
       <section><h3>Batch information</h3><div className="weedoFactsRows">{record.batchNumber ? <Fact label="Batch / lot" value={record.batchNumber} /> : null}{record.uid ? <Fact label="California UID" value={record.uid} /> : null}{record.coaNumber ? <Fact label="COA" value={record.coaNumber} /> : null}{record.testedAt ? <Fact label="Tested" value={new Date(record.testedAt).toLocaleDateString()} /> : null}{record.labName ? <Fact label="Laboratory" value={record.labName} /> : null}{record.producerName ? <Fact label="Producer / manufacturer" value={record.producerName} /> : null}</div></section>
       {record.coaUrl ? <a className="weedoFactsCoaLink" href={record.coaUrl} target="_blank" rel="noreferrer">View original COA ↗</a> : null}
