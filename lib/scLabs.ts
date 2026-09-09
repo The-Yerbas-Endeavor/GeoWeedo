@@ -153,6 +153,34 @@ function capture(pageText: string, label: string) {
   return pageText.match(re)?.[1]?.trim() || null;
 }
 
+function cleanPhytofactsProductName(value: string | null) {
+  if (!value) return null;
+  const cleaned = value
+    .replace(/\s*\([^)]*\bC-\d+(?:\.\d+)?%[^)]*\)\s*.*$/i, '')
+    .replace(/\s+Powered By\b.*$/i, '')
+    .replace(/\s+General\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || null;
+}
+
+function productNameFromPhytofacts(pageText: string) {
+  const heading = pageText.match(/^(.{2,180}?)(?=\s+General\s+Cannabinoids\b)/i)?.[1]?.trim() || null;
+  if (!heading) return null;
+  const poweredIndex = heading.search(/\s+Powered By\b/i);
+  const left = poweredIndex >= 0 ? heading.slice(0, poweredIndex).trim() : heading;
+  const withoutStats = left.replace(/\s*\([^)]*\bC-\d+(?:\.\d+)?%[^)]*\)\s*$/i, '').trim();
+  const words = withoutStats.split(/\s+/);
+  if (words.length >= 2) {
+    for (let width = Math.min(8, Math.floor(words.length / 2)); width >= 1; width--) {
+      const tail = words.slice(-width).join(' ');
+      const previous = words.slice(-width * 2, -width).join(' ');
+      if (previous && tail.toLowerCase() === previous.toLowerCase()) return tail;
+    }
+  }
+  return cleanPhytofactsProductName(withoutStats);
+}
+
 function phytofactsAnalytes(pageText: string) {
   const out: ScLabsNormalizedSample['analytes'] = [];
   const seen = new Set<string>();
@@ -196,7 +224,8 @@ export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormal
   const legacyId = new URL(sourceUrl).pathname.match(/\/sample\/(\d+)/i)?.[1] || null;
   const visibleSampleId = capture(pageText, 'Sample ID');
   const sampleId = firstText(data,['sampleId','sample_id']) || visibleSampleId || legacyId || crypto.createHash('sha256').update(sourceUrl).digest('hex').slice(0,16);
-  const productName = firstText(data, ['sampleName','sample_name','productName','product_name','name']) || pageText.match(/^([^|]{2,120}?)(?=\s+General\b)/i)?.[1]?.trim() || pageText.match(/SC Labs\s*\|\s*PhytoFacts[^-]*-\s*([^|]{2,120})/i)?.[1]?.trim();
+  const structuredProductName = firstText(data, ['sampleName','sample_name','productName','product_name']);
+  const productName = cleanPhytofactsProductName(structuredProductName) || productNameFromPhytofacts(pageText) || pageText.match(/SC Labs\s*\|\s*PhytoFacts[^-]*-\s*([^|]{2,120})/i)?.[1]?.trim();
   if (!productName) throw new Error('SC Labs page loaded, but GeoWeedo could not identify the product name. Adapter needs a parser update for this page shape.');
   let analytes = extractAnalytes(data);
   if (!analytes.length) analytes = phytofactsAnalytes(pageText);
