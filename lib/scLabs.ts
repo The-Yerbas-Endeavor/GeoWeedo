@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { getDatabase } from './sqlite.ts';
-import { ensureWeedoFactsSchema } from './weedoFacts.ts';
+import { getDatabase } from './sqlite';
+import { ensureWeedoFactsSchema } from './weedoFacts';
 
 type AnyRecord = Record<string, any>;
 
@@ -109,17 +109,12 @@ function extractAnalytes(root: any) {
     const key = `${groupName}|${String(name).toLowerCase()}|${String(rawResult)}|${unit || ''}`;
     if (seen.has(key)) return;
     seen.add(key);
-    rows.push({
-      groupName,
-      analyteName: String(name).trim(),
-      value: asNumber(rawResult),
-      unit,
+    rows.push({ groupName, analyteName: String(name).trim(), value: asNumber(rawResult), unit,
       lod: asNumber(firstOwn(row,['lod','limitOfDetection','limit_of_detection'])),
       loq: asNumber(firstOwn(row,['loq','limitOfQuantitation','limit_of_quantitation'])),
       status,
       limitValue: asNumber(firstOwn(row,['actionLimit','action_limit','limit','limitValue','limit_value'])),
-      limitUnit: textOwn(row,['limitUnit','limit_unit','actionLimitUnit','action_limit_unit']) || unit,
-    });
+      limitUnit: textOwn(row,['limitUnit','limit_unit','actionLimitUnit','action_limit_unit']) || unit });
   });
   return rows;
 }
@@ -127,7 +122,8 @@ function extractAnalytes(root: any) {
 function extractJsonDocuments(html: string) {
   const docs: any[] = [];
   const scriptPattern = /<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  for (const match of html.matchAll(scriptPattern)) {
+  let match: RegExpExecArray | null;
+  while ((match = scriptPattern.exec(html)) !== null) {
     try { docs.push(JSON.parse(match[1])); } catch {}
   }
   const next = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
@@ -136,16 +132,7 @@ function extractJsonDocuments(html: string) {
 }
 
 function htmlText(html: string) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
 }
 
 function capture(pageText: string, label: string) {
@@ -155,12 +142,7 @@ function capture(pageText: string, label: string) {
 
 function cleanPhytofactsProductName(value: string | null) {
   if (!value) return null;
-  const cleaned = value
-    .replace(/\s*\([^)]*\bC-\d+(?:\.\d+)?%[^)]*\)\s*.*$/i, '')
-    .replace(/\s+Powered By\b.*$/i, '')
-    .replace(/\s+General\b.*$/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const cleaned = value.replace(/\s*\([^)]*\bC-\d+(?:\.\d+)?%[^)]*\)\s*.*$/i, '').replace(/\s+Powered By\b.*$/i, '').replace(/\s+General\b.*$/i, '').replace(/\s+/g, ' ').trim();
   return cleaned || null;
 }
 
@@ -181,9 +163,7 @@ function productNameFromPhytofacts(pageText: string) {
   return cleanPhytofactsProductName(withoutStats);
 }
 
-const TERPENES = [
-  'terpinolene','α-phellandrene','alpha-phellandrene','β-phellandrene','beta-phellandrene','β-ocimene','beta-ocimene','carene','limonene','γ-terpinene','gamma-terpinene','α-pinene','alpha-pinene','α-terpinene','alpha-terpinene','β-pinene','beta-pinene','fenchol','camphene','α-terpineol','alpha-terpineol','α-humulene','alpha-humulene','β-caryophyllene','beta-caryophyllene','linalool','caryophyllene oxide','myrcene','bisabolol','borneol','camphor','eucalyptol','guaiol','isopulegol','nerolidol','pulegone'
-];
+const TERPENES = ['terpinolene','α-phellandrene','alpha-phellandrene','β-phellandrene','beta-phellandrene','β-ocimene','beta-ocimene','carene','limonene','γ-terpinene','gamma-terpinene','α-pinene','alpha-pinene','α-terpinene','alpha-terpinene','β-pinene','beta-pinene','fenchol','camphene','α-terpineol','alpha-terpineol','α-humulene','alpha-humulene','β-caryophyllene','beta-caryophyllene','linalool','caryophyllene oxide','myrcene','bisabolol','borneol','camphor','eucalyptol','guaiol','isopulegol','nerolidol','pulegone'];
 
 function pushUnique(out: ScLabsNormalizedSample['analytes'], seen: Set<string>, row: ScLabsNormalizedSample['analytes'][number]) {
   const key = `${row.groupName}|${row.analyteName.toLowerCase()}|${row.value ?? ''}|${row.unit ?? ''}|${row.status ?? ''}`;
@@ -195,53 +175,35 @@ function pushUnique(out: ScLabsNormalizedSample['analytes'], seen: Set<string>, 
 function phytofactsAnalytes(pageText: string) {
   const out: ScLabsNormalizedSample['analytes'] = [];
   const seen = new Set<string>();
-
   const cannabinoidSection = pageText.match(/Cannabinoids\s+Ratio of top two cannabinoids\s*\|?\s*Cannabinoids Weight %\s+([\s\S]*?)(?:Aroma & Flavor|PhytoPrint|Copyright|$)/i)?.[1] || pageText;
-  for (const match of cannabinoidSection.matchAll(/\b(THCA|THCVA|THCV|THC|CBDA|CBDVA|CBDV|CBD|CBGA|CBG|CBCA|CBC)\s+(-?\d+(?:\.\d+)?)%/gi)) {
-    pushUnique(out, seen, { groupName: 'cannabinoid', analyteName: match[1].toUpperCase(), value: Number(match[2]), unit: '%' });
+  const cannabinoidPattern = /\b(THCA|THCVA|THCV|THC|CBDA|CBDVA|CBDV|CBD|CBGA|CBG|CBCA|CBC)\s+(-?\d+(?:\.\d+)?)%/gi;
+  let cannabinoidMatch: RegExpExecArray | null;
+  while ((cannabinoidMatch = cannabinoidPattern.exec(cannabinoidSection)) !== null) {
+    pushUnique(out, seen, { groupName: 'cannabinoid', analyteName: cannabinoidMatch[1].toUpperCase(), value: Number(cannabinoidMatch[2]), unit: '%' });
   }
-
   for (const name of TERPENES) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = pageText.match(new RegExp(`(?:^|\\s)(${escaped})\\s+(-?\\d+(?:\\.\\d+)?)%`, 'i'));
     if (match) pushUnique(out, seen, { groupName: 'terpene', analyteName: match[1], value: Number(match[2]), unit: '%' });
   }
-
   const totals: Array<[string,string]> = [['Total Cannabinoids','Cannabinoids'],['Total Terpenoids','Terpenoids'],['Moisture','Moisture']];
   for (const [analyteName,label] of totals) {
     const match = pageText.match(new RegExp(`${label}\\s*:?\\s*(-?\\d+(?:\\.\\d+)?)%`, 'i'));
     if (match) pushUnique(out, seen, { groupName: label === 'Terpenoids' ? 'terpene' : label === 'Moisture' ? 'moisture' : 'cannabinoid', analyteName, value: Number(match[1]), unit: '%' });
   }
-
-  const complianceGroups: Array<[string,string[]]> = [
-    ['pesticide',['Pesticides','Pesticide']],
-    ['heavy_metal',['Heavy Metals','Heavy Metal']],
-    ['microbial',['Microbials','Microbial Impurities','Microbial']],
-    ['mycotoxin',['Mycotoxins','Mycotoxin']],
-    ['residual_solvent',['Residual Solvents','Residual Solvent','Processing Chemicals']],
-    ['foreign_material',['Foreign Material']],
-    ['water_activity',['Water Activity']]
-  ];
+  const complianceGroups: Array<[string,string[]]> = [['pesticide',['Pesticides','Pesticide']],['heavy_metal',['Heavy Metals','Heavy Metal']],['microbial',['Microbials','Microbial Impurities','Microbial']],['mycotoxin',['Mycotoxins','Mycotoxin']],['residual_solvent',['Residual Solvents','Residual Solvent','Processing Chemicals']],['foreign_material',['Foreign Material']],['water_activity',['Water Activity']]];
   for (const [groupName,labels] of complianceGroups) {
     for (const label of labels) {
       const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const match = pageText.match(new RegExp(`${escaped}\\s*(?:Result|Status)?\\s*:?\\s*(PASS|PASSED|FAIL|FAILED|NOT TESTED|NT)\\b`, 'i'));
-      if (match) {
-        pushUnique(out, seen, { groupName, analyteName: label, value: null, unit: null, status: match[1].toUpperCase() });
-        break;
-      }
+      if (match) { pushUnique(out, seen, { groupName, analyteName: label, value: null, unit: null, status: match[1].toUpperCase() }); break; }
     }
   }
-
   return out;
 }
 
 export function isScLabsSampleUrl(input: string) {
-  try {
-    const url = new URL(input);
-    if (!/(^|\.)sclabs\.com$/i.test(url.hostname)) return false;
-    return /\/sample\/\d+\/?$/i.test(url.pathname) || /\/phytofacts\/?$/i.test(url.pathname);
-  } catch { return false; }
+  try { const url = new URL(input); if (!/(^|\.)sclabs\.com$/i.test(url.hostname)) return false; return /\/sample\/\d+\/?$/i.test(url.pathname) || /\/phytofacts\/?$/i.test(url.pathname); } catch { return false; }
 }
 
 export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormalizedSample> {
@@ -261,35 +223,25 @@ export async function fetchScLabsSample(sourceUrl: string): Promise<ScLabsNormal
   const structuredProductName = firstText(data, ['sampleName','sample_name','productName','product_name']);
   const productName = cleanPhytofactsProductName(structuredProductName) || productNameFromPhytofacts(pageText) || pageText.match(/SC Labs\s*\|\s*PhytoFacts[^-]*-\s*([^|]{2,120})/i)?.[1]?.trim();
   if (!productName) throw new Error('SC Labs page loaded, but GeoWeedo could not identify the product name. Adapter needs a parser update for this page shape.');
-  let analytes = extractAnalytes(data);
-  const fallbackAnalytes = phytofactsAnalytes(pageText);
-  if (!analytes.length) analytes = fallbackAnalytes;
-  else {
-    const seen = new Set(analytes.map(row => `${row.groupName}|${row.analyteName.toLowerCase()}|${row.value ?? ''}|${row.unit ?? ''}|${row.status ?? ''}`));
-    for (const row of fallbackAnalytes) pushUnique(analytes, seen, row);
-  }
-  return {
-    sampleId,
-    sourceUrl,
-    productName,
+  const structuredAnalytes = extractAnalytes(data);
+  const pageAnalytes = phytofactsAnalytes(pageText);
+  const analytes: ScLabsNormalizedSample['analytes'] = [];
+  const seen = new Set<string>();
+  for (const row of [...structuredAnalytes, ...pageAnalytes]) pushUnique(analytes, seen, row);
+  return { sampleId, sourceUrl, productName,
     brandName: firstText(data,['companyName','company_name','brandName','brand_name','clientName','client_name']) || capture(pageText,'Business Name'),
     productType: firstText(data,['matrixType','matrix_type','sampleType','sample_type','productType','product_type']) || capture(pageText,'Sample Type'),
     batchNumber: firstText(data,['batchNumber','batch_number','batch','lotNumber','lot_number']),
     uid: firstText(data,['uid','metrcUid','metrc_uid','trackAndTraceUid','track_and_trace_uid']),
     coaNumber: firstText(data,['coaNumber','coa_number','certificateNumber','certificate_number']) || sampleId,
-    coaUrl: firstText(data,['coaUrl','coa_url','certificateUrl','certificate_url']),
-    labName: 'SC Labs',
+    coaUrl: firstText(data,['coaUrl','coa_url','certificateUrl','certificate_url']), labName: 'SC Labs',
     labLicenseNumber: firstText(data,['labLicenseNumber','lab_license_number']),
     producerName: firstText(data,['producerName','producer_name','cultivatorName','cultivator_name','manufacturerName','manufacturer_name']) || capture(pageText,'Business Name'),
     producerLicenseNumber: firstText(data,['producerLicenseNumber','producer_license_number','clientLicenseNumber','client_license_number']) || capture(pageText,'License Number'),
     collectedAt: firstText(data,['collectedAt','collected_at','collectionDate','collection_date','dateCollected','date_collected']) || capture(pageText,'Date Collected'),
     receivedAt: firstText(data,['receivedAt','received_at','receivedDate','received_date','dateReceived','date_received']),
     testedAt: firstText(data,['testedAt','tested_at','completedAt','completed_at','issueDate','issue_date','dateIssued','date_issued']) || capture(pageText,'Date Issued'),
-    overallStatus: firstText(data,['overallStatus','overall_status','resultStatus','result_status','status']),
-    state: firstText(data,['state','stateCode','state_code']) || 'CA',
-    analytes,
-    raw,
-  };
+    overallStatus: firstText(data,['overallStatus','overall_status','resultStatus','result_status','status']), state: firstText(data,['state','stateCode','state_code']) || 'CA', analytes, raw };
 }
 
 export function ingestScLabsSample(sample: ScLabsNormalizedSample) {
@@ -298,30 +250,15 @@ export function ingestScLabsSample(sample: ScLabsNormalizedSample) {
   const now = new Date().toISOString();
   const normalized = `${sample.brandName || ''} ${sample.productName}`.trim().toLowerCase();
   let product = db.prepare(`SELECT * FROM cannabis_products WHERE normalized_name=? LIMIT 1`).get(normalized) as any;
-  if (!product) {
-    const id = `cp-${crypto.randomUUID()}`;
-    db.prepare(`INSERT INTO cannabis_products (id,brand_name,product_name,product_type,net_contents,normalized_name,created_at,updated_at) VALUES (?,?,?,?,NULL,?,?,?)`)
-      .run(id,sample.brandName || null,sample.productName,sample.productType || null,normalized,now,now);
-    product = { id };
-  }
+  if (!product) { const id = `cp-${crypto.randomUUID()}`; db.prepare(`INSERT INTO cannabis_products (id,brand_name,product_name,product_type,net_contents,normalized_name,created_at,updated_at) VALUES (?,?,?,?,NULL,?,?,?)`).run(id,sample.brandName || null,sample.productName,sample.productType || null,normalized,now,now); product = { id }; }
   const existing = db.prepare(`SELECT * FROM cannabis_batches WHERE source_type='lab' AND source_name='SC Labs' AND coa_number=? LIMIT 1`).get(sample.coaNumber || sample.sampleId) as any;
   const batchId = existing?.id || `cb-${crypto.randomUUID()}`;
-  if (!existing) {
-    db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'lab','SC Labs',?,1,?,?)`)
-      .run(batchId,product.id,sample.batchNumber || null,sample.uid || null,sample.coaNumber || sample.sampleId,sample.coaUrl || sample.sourceUrl,'SC Labs',sample.labLicenseNumber || null,sample.producerName || sample.brandName || null,sample.producerLicenseNumber || null,sample.collectedAt || null,sample.receivedAt || null,sample.testedAt || null,sample.overallStatus || null,sample.sourceUrl,now,now);
-  } else {
-    db.prepare(`UPDATE cannabis_batches SET product_id=?,batch_number=COALESCE(?,batch_number),uid=COALESCE(?,uid),coa_url=COALESCE(?,coa_url),lab_license_number=COALESCE(?,lab_license_number),producer_name=COALESCE(?,producer_name),producer_license_number=COALESCE(?,producer_license_number),collected_at=COALESCE(?,collected_at),received_at=COALESCE(?,received_at),tested_at=COALESCE(?,tested_at),overall_status=COALESCE(?,overall_status),source_url=?,verified=1,updated_at=? WHERE id=?`)
-      .run(product.id,sample.batchNumber || null,sample.uid || null,sample.coaUrl || sample.sourceUrl,sample.labLicenseNumber || null,sample.producerName || sample.brandName || null,sample.producerLicenseNumber || null,sample.collectedAt || null,sample.receivedAt || null,sample.testedAt || null,sample.overallStatus || null,sample.sourceUrl,now,batchId);
-    db.prepare('DELETE FROM cannabis_analytes WHERE batch_id=?').run(batchId);
-  }
+  if (!existing) { db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'lab','SC Labs',?,1,?,?)`).run(batchId,product.id,sample.batchNumber || null,sample.uid || null,sample.coaNumber || sample.sampleId,sample.coaUrl || sample.sourceUrl,'SC Labs',sample.labLicenseNumber || null,sample.producerName || sample.brandName || null,sample.producerLicenseNumber || null,sample.collectedAt || null,sample.receivedAt || null,sample.testedAt || null,sample.overallStatus || null,sample.sourceUrl,now,now); }
+  else { db.prepare(`UPDATE cannabis_batches SET product_id=?,batch_number=COALESCE(?,batch_number),uid=COALESCE(?,uid),coa_url=COALESCE(?,coa_url),lab_license_number=COALESCE(?,lab_license_number),producer_name=COALESCE(?,producer_name),producer_license_number=COALESCE(?,producer_license_number),collected_at=COALESCE(?,collected_at),received_at=COALESCE(?,received_at),tested_at=COALESCE(?,tested_at),overall_status=COALESCE(?,overall_status),source_url=?,verified=1,updated_at=? WHERE id=?`).run(product.id,sample.batchNumber || null,sample.uid || null,sample.coaUrl || sample.sourceUrl,sample.labLicenseNumber || null,sample.producerName || sample.brandName || null,sample.producerLicenseNumber || null,sample.collectedAt || null,sample.receivedAt || null,sample.testedAt || null,sample.overallStatus || null,sample.sourceUrl,now,batchId); db.prepare('DELETE FROM cannabis_analytes WHERE batch_id=?').run(batchId); }
   const addIdentifier = db.prepare(`INSERT OR IGNORE INTO cannabis_batch_identifiers (id,batch_id,identifier_type,identifier_value,verified,created_at) VALUES (?,?,?,?,1,?)`);
-  addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'coa',sample.coaNumber || sample.sampleId,now);
-  addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'qr',sample.sourceUrl,now);
-  if (sample.batchNumber) addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'batch',sample.batchNumber,now);
-  if (sample.uid) addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'uid',sample.uid,now);
+  addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'coa',sample.coaNumber || sample.sampleId,now); addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'qr',sample.sourceUrl,now); if (sample.batchNumber) addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'batch',sample.batchNumber,now); if (sample.uid) addIdentifier.run(`cbi-${crypto.randomUUID()}`,batchId,'uid',sample.uid,now);
   const insertAnalyte = db.prepare(`INSERT INTO cannabis_analytes (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (const row of sample.analytes) insertAnalyte.run(`ca-${crypto.randomUUID()}`,batchId,row.groupName,row.analyteName,row.value,row.unit,row.lod ?? null,row.loq ?? null,row.status ?? null,row.limitValue ?? null,row.limitUnit ?? null,now);
-  db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at) VALUES (?,?, 'lab_public_page','SC Labs',?,?,?,?,?,1,?)`)
-    .run(`coa-${crypto.randomUUID()}`,batchId,sample.sourceUrl,sample.sampleId,JSON.stringify(sample.raw),'sclabs-public-v2',now,now);
+  db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at) VALUES (?,?, 'lab_public_page','SC Labs',?,?,?,?,?,1,?)`).run(`coa-${crypto.randomUUID()}`,batchId,sample.sourceUrl,sample.sampleId,JSON.stringify(sample.raw),'sclabs-public-v2',now,now);
   return { productId: product.id, batchId, analyteCount: sample.analytes.length, sampleId: sample.sampleId };
 }
