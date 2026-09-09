@@ -1,6 +1,7 @@
 import WeedoFactsBatchHistory from '@/components/WeedoFactsBatchHistory';
 import WeedoFactsHeadlineTotals, { filterHeadlineTotals } from '@/components/WeedoFactsHeadlineTotals';
 import type { WeedoFactsRecord } from '@/lib/weedoFacts';
+import { chemistryHref, type ChemistryKind } from '@/lib/weedoChemistry';
 
 function formatMeasurement(row: any) {
   if (row.value === null || row.value === undefined) return row.status || '—';
@@ -9,12 +10,12 @@ function formatMeasurement(row: any) {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}${row.unit ? ` ${row.unit}` : ''}`;
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return <div className="weedoFactsRow"><span>{label}</span><strong>{value}</strong></div>;
+function Fact({ label, value, href }: { label: string; value: string; href?: string | null }) {
+  return <div className="weedoFactsRow"><span>{href ? <a className="weedoFactsChemistryLink" href={href}>{label}</a> : label}</span><strong>{value}</strong></div>;
 }
 
-function FactsSection({ title, rows }: { title: string; rows: any[] }) {
-  return <section><h3>{title}</h3><div className="weedoFactsRows">{rows.map((row, index) => <Fact key={`${row.name}-${index}`} label={row.name} value={formatMeasurement(row)} />)}</div></section>;
+function FactsSection({ title, rows, kind }: { title: string; rows: any[]; kind: ChemistryKind }) {
+  return <section><h3>{title}</h3><div className="weedoFactsRows">{rows.map((row, index) => <Fact key={`${row.name}-${index}`} label={row.name} value={formatMeasurement(row)} href={chemistryHref(kind, row.name)} />)}</div></section>;
 }
 
 function formatDate(value?: string | null) {
@@ -61,8 +62,8 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
       )}
 
       {statusText ? <div className={`weedoFactsOverallStatus ${failed ? 'failed' : 'reported'}`}><span>Lab-reported compliance status</span><strong>{statusText}</strong></div> : null}
-      {cannabinoidRows.length ? <FactsSection title="Cannabinoids" rows={cannabinoidRows} /> : null}
-      {terpeneRows.length ? <FactsSection title="Terpenes" rows={terpeneRows} /> : null}
+      {cannabinoidRows.length ? <FactsSection title="Cannabinoids" rows={cannabinoidRows} kind="cannabinoid" /> : null}
+      {terpeneRows.length ? <FactsSection title="Terpenes" rows={terpeneRows} kind="terpene" /> : null}
 
       {measurementRows.length ? <section><h3>Other lab measurements</h3><div className="weedoFactsRows">{measurementRows.map((row, index) => <Fact key={`${row.category}-${row.analyte}-${index}`} label={row.analyte || row.category} value={formatMeasurement(row)} />)}</div></section> : null}
 
