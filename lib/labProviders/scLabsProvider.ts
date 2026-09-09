@@ -7,6 +7,7 @@ const DEFAULT_SITEMAPS = [
   'https://client.sclabs.com/sitemap.xml',
   'https://client.sclabs.com/sitemap_index.xml',
 ];
+const ROBOTS_URL = 'https://client.sclabs.com/robots.txt';
 
 function unique(values: string[]) { return [...new Set(values)]; }
 function configuredUrls(name: string) {
@@ -32,6 +33,9 @@ function extractLinks(html: string, baseUrl: string) {
   }
   return out;
 }
+function extractRobotSitemaps(text: string) {
+  return text.split(/\r?\n/).map(line => line.match(/^\s*Sitemap\s*:\s*(\S+)/i)?.[1] || '').filter(Boolean);
+}
 function isScLabsPublicHost(input: string) {
   try { return new URL(input).hostname.toLowerCase() === 'client.sclabs.com'; } catch { return false; }
 }
@@ -43,9 +47,11 @@ async function fetchText(url: string) {
 
 async function discoverFromSitemaps(maxItems: number) {
   const samples = new Set<string>();
-  const queue = unique([...configuredUrls('SC_LABS_SITEMAPS'), ...DEFAULT_SITEMAPS]);
+  let robotSitemaps: string[] = [];
+  try { robotSitemaps = extractRobotSitemaps((await fetchText(ROBOTS_URL)).text); } catch {}
+  const queue = unique([...configuredUrls('SC_LABS_SITEMAPS'), ...robotSitemaps, ...DEFAULT_SITEMAPS]);
   const visited = new Set<string>();
-  while (queue.length && samples.size < maxItems && visited.size < 50) {
+  while (queue.length && samples.size < maxItems && visited.size < 75) {
     const url = queue.shift()!;
     if (visited.has(url) || !isScLabsPublicHost(url)) continue;
     visited.add(url);
@@ -57,7 +63,7 @@ async function discoverFromSitemaps(maxItems: number) {
         if (samples.size >= maxItems) break;
       }
     } catch {
-      // SC Labs may not publish a global sitemap. Catalog discovery below remains available.
+      // Missing/blocked sitemaps are non-fatal; configured catalog discovery still runs.
     }
   }
   return [...samples];
@@ -90,7 +96,7 @@ async function discoverFromCatalogs(maxItems: number) {
         if (samples.size >= maxItems) break;
       }
     } catch {
-      // One unavailable catalog must not stop the rest of discovery.
+      // One unavailable public catalog must not stop the rest of discovery.
     }
   }
   return [...samples];
