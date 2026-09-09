@@ -3,6 +3,7 @@ import WeedoFactsLookup from '../../components/WeedoFactsLookup';
 import './weedo-facts.css';
 import './coa-upload.css';
 import './contrast-fix.css';
+import './nutrition-label.css';
 
 export const metadata = {
   title: 'Weedo Facts | GeoWeedo',
