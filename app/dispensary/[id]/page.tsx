@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import {redirect} from 'next/navigation';
 import DispensaryCommunityDetails from '@/components/DispensaryCommunityDetails';
 import DispensaryHeroMap from '@/components/DispensaryHeroMap';
+import DispensaryMenuPanel from '@/components/DispensaryMenuPanel';
 import ModeratorDispensaryEditor from '@/components/ModeratorDispensaryEditor';
 import {getCommunityProfile,getLocationBase} from '@/lib/dispensaryCommunity';
 import {getDispensaryLogo} from '@/lib/dispensaryLogo';
@@ -54,6 +55,7 @@ export default async function DispensaryProfilePage({params}:Props){
    </section>
    <div className={styles.content}>
     {sponsored&&<aside className={styles.sponsor}><strong>★ Featured GeoWeedo profile</strong><p>This dispensary has active sponsored placement. Sponsorship changes presentation and placement, not reviews, licensing data, or organic search relevance.</p></aside>}
+    <DispensaryMenuPanel dispensaryId={location.id}/>
     <div className={styles.sectionTitle}><div><span>DISPENSARY PROFILE</span><h2>Details & community</h2></div><p>Hours, business information, services, reviews and community details.</p></div>
     <div className={styles.community}><DispensaryCommunityDetails locationId={location.id}/></div>
     <div className={styles.admin}><ModeratorDispensaryEditor locationId={location.id}/></div>
