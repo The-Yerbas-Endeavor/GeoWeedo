@@ -6,6 +6,35 @@ import WeedoFactsBatchHistory from '@/components/WeedoFactsBatchHistory';
 type LookupResult = any;
 type IdentifierType = 'qr' | 'upc' | 'uid' | 'batch' | 'coa' | 'unknown';
 
+let zxingLoader: Promise<any> | null = null;
+function loadZxingBrowser() {
+  const current = (window as any).ZXingBrowser;
+  if (current?.BrowserMultiFormatReader) return Promise.resolve(current);
+  if (zxingLoader) return zxingLoader;
+  zxingLoader = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-geoweedo-zxing]');
+    const finish = () => {
+      const api = (window as any).ZXingBrowser;
+      if (api?.BrowserMultiFormatReader) resolve(api);
+      else reject(new Error('Compatible barcode scanner could not load.'));
+    };
+    if (existing) {
+      existing.addEventListener('load', finish, { once: true });
+      existing.addEventListener('error', () => reject(new Error('Compatible barcode scanner could not load.')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js';
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.dataset.geoweedoZxing = '1';
+    script.addEventListener('load', finish, { once: true });
+    script.addEventListener('error', () => reject(new Error('Compatible barcode scanner could not load.')), { once: true });
+    document.head.appendChild(script);
+  });
+  return zxingLoader;
+}
+
 function inferIdentifierType(value: string): IdentifierType {
   if (/^https?:\/\//i.test(value)) return 'qr';
   if (/^\d{8,14}$/.test(value.replace(/[\s-]/g, ''))) return 'upc';
@@ -22,14 +51,18 @@ export default function WeedoFactsLookup() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
+  const zxingControlsRef = useRef<any>(null);
 
   useEffect(() => () => stopScanner(), []);
 
   function stopScanner() {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
+    try { zxingControlsRef.current?.stop?.(); } catch {}
+    zxingControlsRef.current = null;
     streamRef.current?.getTracks().forEach(track => track.stop());
     streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
     setScannerOpen(false);
   }
 
@@ -60,17 +93,44 @@ export default function WeedoFactsLookup() {
     if (value) await resolveIdentifier(value);
   }
 
+  async function handleScannedValue(raw: unknown) {
+    const value = String(raw || '').trim();
+    if (!value) return;
+    const type = /^https?:\/\//i.test(value) ? 'qr' : /^\d{8,14}$/.test(value) ? 'upc' : undefined;
+    stopScanner();
+    await resolveIdentifier(value, type);
+  }
+
   async function startScanner() {
     setError('');
     setScannerMessage('Starting camera…');
-    const BarcodeDetectorCtor = (window as any).BarcodeDetector;
-    if (!BarcodeDetectorCtor) {
-      setError('This browser does not support live barcode detection yet. Paste the QR URL, UPC, UID, batch, or COA number instead.');
-      return;
-    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Camera access is not available in this browser.');
       return;
+    }
+
+    const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+    if (!BarcodeDetectorCtor) {
+      try {
+        setScannerMessage('Loading compatible scanner…');
+        const zxing = await loadZxingBrowser();
+        setScannerOpen(true);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const video = videoRef.current;
+        if (!video) throw new Error('Camera preview could not start.');
+        setScannerMessage('Point the camera at a QR code or product barcode.');
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromVideoDevice(undefined, video, (scanResult: any) => {
+          const value = scanResult?.getText?.() || scanResult?.text;
+          if (value) void handleScannedValue(value);
+        });
+        zxingControlsRef.current = controls;
+        return;
+      } catch (err) {
+        stopScanner();
+        setError(err instanceof Error ? err.message : 'Compatible barcode scanner could not start.');
+        return;
+      }
     }
 
     try {
@@ -90,10 +150,7 @@ export default function WeedoFactsLookup() {
           const codes = await detector.detect(video);
           const hit = codes?.find((code: any) => code?.rawValue);
           if (hit?.rawValue) {
-            const value = String(hit.rawValue).trim();
-            const type = /^https?:\/\//i.test(value) ? 'qr' : /^\d{8,14}$/.test(value) ? 'upc' : undefined;
-            stopScanner();
-            await resolveIdentifier(value, type);
+            await handleScannedValue(hit.rawValue);
             return;
           }
         } catch {}
@@ -110,7 +167,7 @@ export default function WeedoFactsLookup() {
     <div className="weedoFactsLookup">
       <div className="weedoFactsScanActions">
         <button type="button" className="weedoFactsScanButton" onClick={startScanner} disabled={loading || scannerOpen}>📷 Scan package</button>
-        <span>QR codes and UPC/EAN barcodes are supported when the browser provides BarcodeDetector.</span>
+        <span>Scan QR codes and UPC/EAN barcodes with the camera, including browsers without native BarcodeDetector support.</span>
       </div>
 
       {scannerOpen ? (
