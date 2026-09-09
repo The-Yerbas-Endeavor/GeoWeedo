@@ -42,6 +42,23 @@ function inferIdentifierType(value: string): IdentifierType {
   return 'unknown';
 }
 
+const scannerVideoConstraints: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+};
+
+async function tuneScannerStream(stream: MediaStream | null) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track) return;
+  try {
+    const capabilities = (track as any).getCapabilities?.();
+    if (Array.isArray(capabilities?.focusMode) && capabilities.focusMode.includes('continuous')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as any);
+    }
+  } catch {}
+}
+
 export default function WeedoFactsLookup() {
   const [identifier, setIdentifier] = useState('');
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -114,41 +131,63 @@ export default function WeedoFactsLookup() {
       return;
     }
 
-    const BarcodeDetectorCtor = (window as any).BarcodeDetector;
-    if (!BarcodeDetectorCtor) {
-      try {
-        setScannerMessage('Loading compatible scanner…');
-        const zxing = await loadZxingBrowser();
-        setScannerOpen(true);
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const video = videoRef.current;
-        if (!video) throw new Error('Camera preview could not start.');
-        setScannerMessage('Point the camera at a QR code or product barcode.');
-        const reader = new zxing.BrowserMultiFormatReader();
-        const controls = await reader.decodeFromVideoDevice(undefined, video, (scanResult: any) => {
-          const value = scanResult?.getText?.() || scanResult?.text;
-          if (value) void handleScannedValue(value);
-        });
-        zxingControlsRef.current = controls;
-        return;
-      } catch (err) {
-        stopScanner();
-        setError(err instanceof Error ? err.message : 'Compatible barcode scanner could not start.');
+    const onZxingResult = (scanResult: any) => {
+      const value = scanResult?.getText?.() || scanResult?.text;
+      if (value) void handleScannedValue(value);
+    };
+
+    // Prefer ZXing for the camera path because it consistently supports both
+    // QR and retail 1D formats such as UPC-A/E and EAN-8/13 across browsers.
+    try {
+      setScannerMessage('Loading barcode scanner…');
+      const zxing = await loadZxingBrowser();
+      setScannerOpen(true);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const video = videoRef.current;
+      if (!video) throw new Error('Camera preview could not start.');
+      setScannerMessage('Point the camera at a QR code or barcode. For UPC/EAN, hold it steady and fill most of the frame width.');
+      const reader = new zxing.BrowserMultiFormatReader();
+      const controls = typeof reader.decodeFromConstraints === 'function'
+        ? await reader.decodeFromConstraints({ video: scannerVideoConstraints, audio: false }, video, onZxingResult)
+        : await reader.decodeFromVideoDevice(undefined, video, onZxingResult);
+      zxingControlsRef.current = controls;
+      const stream = video.srcObject instanceof MediaStream ? video.srcObject : null;
+      streamRef.current = stream;
+      await tuneScannerStream(stream);
+      return;
+    } catch (zxingError) {
+      stopScanner();
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+      if (!BarcodeDetectorCtor) {
+        setError(zxingError instanceof Error ? zxingError.message : 'Compatible barcode scanner could not start.');
         return;
       }
     }
 
+    // Native BarcodeDetector remains a fallback. Explicitly request common
+    // retail barcode formats when the browser exposes a supported-format list.
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: scannerVideoConstraints, audio: false });
       streamRef.current = stream;
       setScannerOpen(true);
-      setScannerMessage('Point the camera at a QR code or product barcode.');
+      setScannerMessage('Point the camera at a QR code or barcode. For UPC/EAN, hold it steady and fill most of the frame width.');
       await new Promise(resolve => setTimeout(resolve, 0));
       const video = videoRef.current;
       if (!video) throw new Error('Camera preview could not start.');
       video.srcObject = stream;
       await video.play();
-      const detector = new BarcodeDetectorCtor();
+      await tuneScannerStream(stream);
+
+      const desiredFormats = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'codabar'];
+      let detector: any;
+      if (typeof BarcodeDetectorCtor.getSupportedFormats === 'function') {
+        const supported = await BarcodeDetectorCtor.getSupportedFormats();
+        const formats = desiredFormats.filter(format => supported.includes(format));
+        detector = formats.length ? new BarcodeDetectorCtor({ formats }) : new BarcodeDetectorCtor();
+      } else {
+        detector = new BarcodeDetectorCtor();
+      }
 
       const scan = async () => {
         try {
