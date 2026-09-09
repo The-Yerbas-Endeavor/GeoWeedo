@@ -24,7 +24,9 @@ try {
     refreshHours: Number.isFinite(refreshHours) ? refreshHours : 24,
   });
   console.log(JSON.stringify(summary, null, 2));
-  process.exitCode = summary.failed ? 1 : 0;
+  // Per-source failures are recorded in SQLite and should not make the hourly
+  // systemd unit fail. Reserve a non-zero exit for a run-level failure.
+  process.exitCode = 0;
 } catch (error) {
   console.error(error instanceof Error ? error.stack || error.message : error);
   process.exit(1);
