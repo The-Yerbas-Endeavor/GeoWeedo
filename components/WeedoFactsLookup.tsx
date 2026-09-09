@@ -71,14 +71,18 @@ export default function WeedoFactsLookup() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/weedo-facts/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: value, type }),
-      });
+      const trimmed = value.trim();
+      const isUrl = /^https?:\/\//i.test(trimmed);
+      const response = isUrl || type
+        ? await fetch('/api/weedo-facts/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: trimmed, type }),
+          })
+        : await fetch(`/api/weedo-facts/lookup?identifier=${encodeURIComponent(trimmed)}`, { cache: 'no-store' });
       const body = await response.json();
       if (!response.ok) throw new Error(body?.error || 'Lookup failed');
-      setIdentifier(value);
+      setIdentifier(trimmed);
       setResult(body);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Lookup failed');
