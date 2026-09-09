@@ -32,12 +32,12 @@ function ensureSchema() {
   return db;
 }
 
-export function ensureWeedoFactsUploadSchema() {
-  return ensureSchema();
-}
+export function ensureWeedoFactsUploadSchema() { return ensureSchema(); }
 
-function storageRoot() {
-  return path.join(process.cwd(), 'data', 'runtime', 'weedo-facts', 'coa');
+function storageRoot() { return path.join(process.cwd(), 'data', 'runtime', 'weedo-facts', 'coa'); }
+
+export function getStoredCoaPath(sha256: string) {
+  return path.join(storageRoot(), `${sha256}.pdf`);
 }
 
 export function saveCoaUpload(input: {
@@ -54,23 +54,12 @@ export function saveCoaUpload(input: {
 
   const root = storageRoot();
   fs.mkdirSync(root, { recursive: true });
-  const storedPath = path.join(root, `${input.parsed.sha256}.pdf`);
+  const storedPath = getStoredCoaPath(input.parsed.sha256);
   if (!fs.existsSync(storedPath)) fs.writeFileSync(storedPath, Buffer.from(input.bytes));
 
   const id = `wfcoa-${randomUUID()}`;
   const now = new Date().toISOString();
-  const parsedJson = JSON.stringify({
-    sampleId: input.parsed.sampleId,
-    productName: input.parsed.productName,
-    batchNumber: input.parsed.batchNumber,
-    uid: input.parsed.uid,
-    collectedAt: input.parsed.collectedAt,
-    receivedAt: input.parsed.receivedAt,
-    testedAt: input.parsed.testedAt,
-    overallStatus: input.parsed.overallStatus,
-    analytes: input.parsed.analytes,
-    sha256: input.parsed.sha256,
-  });
+  const parsedJson = JSON.stringify(input.parsed);
   db.prepare(`INSERT INTO cannabis_coa_uploads
     (id,user_id,identifier_type,identifier_value,sha256,original_filename,stored_path,parsed_json,status,created_at,updated_at)
     VALUES (?,?,?,?,?,?,?,?, 'pending', ?,?)`)
@@ -90,16 +79,8 @@ export function attachCoaUploadToSubmission(userId: string, uploadId: string, su
   if (upload.submission_id && upload.submission_id !== submissionId) throw new Error('COA upload is already attached to another submission.');
   const now = new Date().toISOString();
   const parsed = JSON.parse(upload.parsed_json || '{}');
-  const evidence = JSON.stringify({
-    type: 'coa_pdf_upload',
-    uploadId: upload.id,
-    sha256: upload.sha256,
-    filename: upload.original_filename,
-    parsed,
-  });
-  db.prepare(`UPDATE cannabis_product_submissions SET evidence_json=?, updated_at=? WHERE id=? AND submitted_by_user_id=?`)
-    .run(evidence, now, submissionId, userId);
-  db.prepare(`UPDATE cannabis_coa_uploads SET submission_id=?, status='submitted', updated_at=? WHERE id=? AND user_id=?`)
-    .run(submissionId, now, uploadId, userId);
+  const evidence = JSON.stringify({ type: 'coa_pdf_upload', uploadId: upload.id, sha256: upload.sha256, filename: upload.original_filename, parsed });
+  db.prepare(`UPDATE cannabis_product_submissions SET evidence_json=?, updated_at=? WHERE id=? AND submitted_by_user_id=?`).run(evidence, now, submissionId, userId);
+  db.prepare(`UPDATE cannabis_coa_uploads SET submission_id=?, status='submitted', updated_at=? WHERE id=? AND user_id=?`).run(submissionId, now, uploadId, userId);
   return upload;
 }
