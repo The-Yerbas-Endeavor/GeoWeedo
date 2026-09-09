@@ -1,0 +1,210 @@
+/* Consumer-facing Weedo Facts result: intentionally modeled after the visual hierarchy of a nutrition label. */
+.weedoFactsCard{
+  max-width:720px;
+  margin:26px auto 0;
+  padding:22px 24px 24px;
+  background:#fff;
+  color:#111;
+  border:4px solid #111;
+  border-radius:4px;
+  box-shadow:none;
+  font-family:Arial,Helvetica,sans-serif;
+}
+.weedoFactsCard *{box-sizing:border-box}
+.weedoFactsCardHead{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start;
+  gap:16px;
+  padding-bottom:14px;
+  border-bottom:12px solid #111;
+}
+.weedoFactsCardHead>div{min-width:0}
+.weedoFactsCard .weedoFactsEyebrow{
+  display:block;
+  margin:0 0 2px;
+  color:#111;
+  font-size:1.05rem;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.weedoFactsCard h2{
+  margin:0;
+  color:#111;
+  font-size:clamp(2.25rem,7vw,4rem);
+  line-height:.94;
+  font-weight:950;
+  letter-spacing:-.055em;
+}
+.weedoFactsCardHead p{
+  margin:9px 0 0;
+  color:#222;
+  font-size:.95rem;
+  line-height:1.35;
+  font-weight:700;
+}
+.weedoFactsCard .weedoFactsStatus{
+  align-self:start;
+  max-width:190px;
+  white-space:normal;
+  padding:7px 9px;
+  border:2px solid #111;
+  border-radius:3px;
+  background:#fff;
+  color:#111;
+  font-size:.72rem;
+  line-height:1.2;
+  font-weight:900;
+  text-align:center;
+  text-transform:uppercase;
+  letter-spacing:.02em;
+}
+.weedoFactsCard .weedoFactsStatus.verified{
+  background:#111;
+  color:#fff;
+}
+.weedoFactsCard .weedoFactsOverallStatus{
+  margin:0;
+  padding:9px 0 8px;
+  border-radius:0;
+  border-bottom:5px solid #111;
+  background:#fff;
+  color:#111;
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:16px;
+}
+.weedoFactsCard .weedoFactsOverallStatus span{
+  font-size:.79rem;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.035em;
+}
+.weedoFactsCard .weedoFactsOverallStatus strong{
+  color:#111;
+  font-size:1.15rem;
+  font-weight:950;
+}
+.weedoFactsCard .weedoFactsOverallStatus.failed{
+  background:#111;
+  color:#fff;
+  padding-left:10px;
+  padding-right:10px;
+}
+.weedoFactsCard .weedoFactsOverallStatus.failed strong{color:#fff}
+.weedoFactsCard section{
+  margin:0;
+  padding:0;
+}
+.weedoFactsCard section h3{
+  margin:0;
+  padding:9px 0 5px;
+  color:#111;
+  border-bottom:2px solid #111;
+  font-size:1.35rem;
+  line-height:1;
+  font-weight:950;
+  text-transform:none;
+  letter-spacing:-.02em;
+}
+.weedoFactsCard .weedoFactsRows{display:block}
+.weedoFactsCard .weedoFactsRow{
+  min-height:34px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:baseline;
+  gap:18px;
+  padding:6px 0 5px;
+  border-bottom:1px solid #444;
+  color:#111;
+  font-size:.95rem;
+}
+.weedoFactsCard .weedoFactsRow span{
+  color:#111;
+  font-weight:650;
+  overflow-wrap:anywhere;
+}
+.weedoFactsCard .weedoFactsRow strong{
+  color:#111;
+  text-align:right;
+  font-size:1rem;
+  font-weight:900;
+  white-space:nowrap;
+}
+.weedoFactsCard section:nth-of-type(1) h3{
+  padding-top:10px;
+  border-top:0;
+}
+.weedoFactsCard section:nth-of-type(1) .weedoFactsRow:first-child{
+  min-height:44px;
+  padding-top:8px;
+  padding-bottom:8px;
+  border-bottom:4px solid #111;
+  font-size:1.05rem;
+}
+.weedoFactsCard section:nth-of-type(1) .weedoFactsRow:first-child strong{
+  font-size:1.45rem;
+}
+.weedoFactsCard .weedoFactsCoaLink{
+  display:inline-block;
+  margin:13px 0 3px;
+  padding:8px 10px;
+  border:2px solid #111;
+  border-radius:2px;
+  background:#fff;
+  color:#111;
+  font-size:.82rem;
+  font-weight:900;
+  text-transform:uppercase;
+  text-decoration:none;
+}
+.weedoFactsCard .weedoFactsCoaLink:hover{
+  background:#111;
+  color:#fff;
+}
+/* Batch history is useful context, but visually subordinate to the primary label. */
+.weedoFactsCard .weedoFactsBatchHistory{
+  margin:18px -24px -24px;
+  padding:16px 24px 20px;
+  border-top:9px solid #111;
+  background:#f1f1f1;
+  color:#111;
+}
+.weedoFactsCard .weedoFactsBatchHistory h3{
+  font-size:1rem;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+  border-bottom:0;
+}
+.weedoFactsCard .weedoFactsBatchHistoryHead p,
+.weedoFactsCard .weedoFactsBatchHistoryMeta,
+.weedoFactsCard .weedoFactsBatchSummary span{color:#444}
+.weedoFactsCard .weedoFactsBatchHistoryHead>strong{
+  background:#111;
+  color:#fff;
+  border-radius:2px;
+}
+.weedoFactsCard .weedoFactsBatchSummary>div,
+.weedoFactsCard .weedoFactsBatchHistoryItem{
+  border:1px solid #777;
+  border-radius:2px;
+  background:#fff;
+  box-shadow:none;
+}
+.weedoFactsCard .weedoFactsBatchHistoryItem.current{
+  border:3px solid #111;
+  box-shadow:none;
+}
+.weedoFactsCard .weedoFactsBatchHistoryLinks a{color:#111;text-decoration:underline}
+@media(max-width:640px){
+  .weedoFactsCard{padding:18px 16px 18px;border-width:3px}
+  .weedoFactsCardHead{grid-template-columns:1fr;border-bottom-width:9px}
+  .weedoFactsCard .weedoFactsStatus{max-width:none;justify-self:start}
+  .weedoFactsCard h2{font-size:clamp(2.25rem,13vw,3.6rem)}
+  .weedoFactsCard .weedoFactsOverallStatus{align-items:flex-start}
+  .weedoFactsCard .weedoFactsRow{grid-template-columns:minmax(0,1fr) auto;gap:10px}
+  .weedoFactsCard .weedoFactsRow strong{white-space:normal}
+  .weedoFactsCard .weedoFactsBatchHistory{margin-left:-16px;margin-right:-16px;margin-bottom:-18px;padding-left:16px;padding-right:16px}
+}
