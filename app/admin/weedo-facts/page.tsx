@@ -5,6 +5,10 @@ import styles from './weedo-facts-admin.module.css';
 
 type Submission = any;
 
+function lookupHref(identifier: string, type: string) {
+  return `/api/weedo-facts/lookup?identifier=${encodeURIComponent(identifier)}&type=${encodeURIComponent(type)}`;
+}
+
 export default function WeedoFactsAdminPage() {
   const [status, setStatus] = useState('pending');
   const [items, setItems] = useState<Submission[]>([]);
@@ -55,7 +59,7 @@ export default function WeedoFactsAdminPage() {
         <a href="/admin" className={styles.back}>← Admin</a>
         <span className={styles.eyebrow}>WEEDO FACTS</span>
         <h1>COA review</h1>
-        <p>Review submitted SC Labs PDFs and promote verified evidence into an exact batch record.</p>
+        <p>Review submitted SC Labs PDFs, compare them against existing GeoWeedo records, and promote verified evidence into an exact batch record.</p>
       </div>
       <div className={styles.links}>
         <a href="/weedo-facts" target="_blank" rel="noreferrer">Open Weedo Facts</a>
@@ -77,6 +81,10 @@ export default function WeedoFactsAdminPage() {
       {items.map(item => {
         const parsed = item.coa?.parsed || {};
         const analytes = Array.isArray(parsed.analytes) ? parsed.analytes : [];
+        const preview = item.matchPreview || {};
+        const productCandidates = Array.isArray(preview.productCandidates) ? preview.productCandidates : [];
+        const batchCandidates = Array.isArray(preview.batchCandidates) ? preview.batchCandidates : [];
+        const identifiers = preview.identifiers || {};
         return <article className={styles.card} key={item.id}>
           <div className={styles.cardHead}>
             <div>
@@ -106,10 +114,36 @@ export default function WeedoFactsAdminPage() {
             </dl></section>
           </div>
 
+          <div className={styles.grid}>
+            <section>
+              <h3>Existing GeoWeedo matches</h3>
+              {preview.hasPotentialConflict ? <p><strong>⚠ Potential conflict:</strong> a matching batch identifier points at a different product candidate. Do not approve until resolved.</p> : null}
+              {productCandidates.length === 0 && batchCandidates.length === 0 ? <p>No existing product or batch match found.</p> : null}
+              {productCandidates.length > 0 ? <div>
+                <strong>Products</strong>
+                <ul>{productCandidates.map((row: any) => <li key={row.id}>{[row.brandName, row.productName].filter(Boolean).join(' — ')} <small>({row.reason})</small></li>)}</ul>
+              </div> : null}
+              {batchCandidates.length > 0 ? <div>
+                <strong>Batches</strong>
+                <ul>{batchCandidates.map((row: any) => <li key={row.id}>{[row.brandName, row.productName].filter(Boolean).join(' — ')} · batch {row.batchNumber || '—'} · {row.verified ? 'verified' : 'unverified'} <small>({row.reasons.join(', ')})</small></li>)}</ul>
+              </div> : null}
+            </section>
+            <section>
+              <h3>Test current lookup</h3>
+              <p>Open these before approval to see what GeoWeedo currently returns. After approval, the exact identifier should return <code>exact_batch</code>.</p>
+              <ul>
+                {identifiers.uid ? <li><a href={lookupHref(identifiers.uid, 'uid')} target="_blank" rel="noreferrer">Lookup UID {identifiers.uid} →</a></li> : null}
+                {identifiers.sampleId ? <li><a href={lookupHref(identifiers.sampleId, 'coa')} target="_blank" rel="noreferrer">Lookup COA/sample {identifiers.sampleId} →</a></li> : null}
+                {identifiers.batchNumber ? <li><a href={lookupHref(identifiers.batchNumber, 'batch')} target="_blank" rel="noreferrer">Lookup batch {identifiers.batchNumber} →</a></li> : null}
+                {!identifiers.uid && !identifiers.sampleId && !identifiers.batchNumber ? <li>No batch identity parsed yet.</li> : null}
+              </ul>
+            </section>
+          </div>
+
           {item.coa ? <div className={styles.pdfRow}><a href={`/api/admin/weedo-facts/coa-reviews/${encodeURIComponent(item.id)}/pdf`} target="_blank" rel="noreferrer">View private COA PDF →</a></div> : null}
 
           <div className={styles.actions}>
-            <button disabled={busy===item.id || !item.coa || !['pending','needs_info'].includes(item.status)} className={styles.approve} onClick={() => review(item.id,'approve_exact_batch')}>✓ Approve exact batch</button>
+            <button disabled={busy===item.id || !item.coa || !['pending','needs_info'].includes(item.status) || preview.hasPotentialConflict} className={styles.approve} onClick={() => review(item.id,'approve_exact_batch')}>✓ Approve exact batch</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} onClick={() => review(item.id,'needs_info')}>Needs info</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} className={styles.reject} onClick={() => review(item.id,'reject')}>Reject</button>
           </div>

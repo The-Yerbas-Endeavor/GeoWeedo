@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { ensureWeedoFactsUploadSchema } from '@/lib/weedoFactsUploads';
 import { approveExactBatchFromCoa, getAdminCoaReviewSubmissions, updateCoaReviewStatus } from '@/lib/weedoFactsReview';
+import { getWeedoFactsReviewMatchPreview } from '@/lib/weedoFactsMatchPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,11 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   ensureWeedoFactsUploadSchema();
   const status = request.nextUrl.searchParams.get('status') || 'pending';
-  return NextResponse.json({ submissions: getAdminCoaReviewSubmissions(status) }, { headers: { 'Cache-Control': 'no-store' } });
+  const submissions = getAdminCoaReviewSubmissions(status).map((submission: any) => ({
+    ...submission,
+    matchPreview: getWeedoFactsReviewMatchPreview(submission),
+  }));
+  return NextResponse.json({ submissions }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function PATCH(request: NextRequest) {
