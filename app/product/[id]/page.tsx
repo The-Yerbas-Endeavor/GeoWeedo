@@ -38,7 +38,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
   const requestedBatch = one(query.batch);
 
   if (requestedBatch) {
-    redirect(`/nutritional-facts?product=${encodeURIComponent(id)}&batch=${encodeURIComponent(requestedBatch)}`);
+    redirect(`/product-chemistry?product=${encodeURIComponent(id)}&batch=${encodeURIComponent(requestedBatch)}`);
   }
 
   const record = getWeedoFactsProductListing(id);
@@ -60,7 +60,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
         </div>
 
         <section className={styles.productIntro}>
-          <span>GEOWEEDO · CANNABIS NUTRITIONAL FACTS</span>
+          <span>GEOWEEDO · PRODUCT CHEMISTRY</span>
           <h1>{record.productName}</h1>
           <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
           <div className={styles.proofLine}>
@@ -71,9 +71,9 @@ export default async function ProductListingPage({ params, searchParams }: Props
 
         <section className={styles.factsFocus} aria-labelledby="weedo-facts-heading">
           <div className={styles.factsHeading}>
-            <span>NUTRITIONAL FACTS</span>
+            <span>PRODUCT CHEMISTRY</span>
             <h2 id="weedo-facts-heading">Weedo Facts</h2>
-            <p>The lab-backed cannabis facts for this product are the primary content of this listing.</p>
+            <p>The lab-backed cannabis chemistry for this product is the primary content of this listing.</p>
           </div>
 
           <div className={styles.factsStage} id="weedo-facts-label">
