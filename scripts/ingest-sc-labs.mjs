@@ -1,16 +1,18 @@
-import { fetchScLabsSample, ingestScLabsSample } from '../lib/scLabs.ts';
+import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../lib/scLabs.ts';
 
 const sourceUrl = process.argv[2]?.trim();
 
 if (!sourceUrl) {
-  console.error('Usage: npm run weedo:ingest:sc-labs -- <SC Labs sample URL>');
-  console.error('Example: npm run weedo:ingest:sc-labs -- "https://client.sclabs.com/sample/123456/"');
+  console.error('Usage: npm run weedo:ingest:sc-labs -- <SC Labs public result URL>');
+  console.error('Examples:');
+  console.error('  https://client.sclabs.com/sample/123456/');
+  console.error('  https://client.sclabs.com/<catalog>/<product>/phytofacts/');
   process.exit(1);
 }
 
-if (!/^https:\/\/client\.sclabs\.com\/sample\/\d+\/?$/i.test(sourceUrl)) {
-  console.error('Expected a current SC Labs sample URL with a numeric sample ID, for example:');
-  console.error('https://client.sclabs.com/sample/123456/');
+if (!isScLabsSampleUrl(sourceUrl)) {
+  console.error('Expected an SC Labs public sample or PhytoFacts URL, for example:');
+  console.error('https://client.sclabs.com/<catalog>/<product>/phytofacts/');
   process.exit(1);
 }
 
