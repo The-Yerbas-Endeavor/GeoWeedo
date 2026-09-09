@@ -84,7 +84,18 @@ export function attachCoaUploadToSubmission(userId: string, uploadId: string, su
   const upload = getOwnedCoaUpload(userId, uploadId);
   if (!upload) throw new Error('COA upload was not found for this user.');
   if (upload.submission_id && upload.submission_id !== submissionId) throw new Error('COA upload is already attached to another submission.');
+  const now = new Date().toISOString();
+  const parsed = JSON.parse(upload.parsed_json || '{}');
+  const evidence = JSON.stringify({
+    type: 'coa_pdf_upload',
+    uploadId: upload.id,
+    sha256: upload.sha256,
+    filename: upload.original_filename,
+    parsed,
+  });
+  db.prepare(`UPDATE cannabis_product_submissions SET evidence_json=?, updated_at=? WHERE id=? AND submitted_by_user_id=?`)
+    .run(evidence, now, submissionId, userId);
   db.prepare(`UPDATE cannabis_coa_uploads SET submission_id=?, status='submitted', updated_at=? WHERE id=? AND user_id=?`)
-    .run(submissionId, new Date().toISOString(), uploadId, userId);
+    .run(submissionId, now, uploadId, userId);
   return upload;
 }
