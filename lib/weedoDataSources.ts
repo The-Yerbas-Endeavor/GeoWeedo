@@ -34,6 +34,10 @@ export const WEEDO_DATA_SOURCES = [
   },
 ] as const;
 
+function tableExists(db: any, name: string) {
+  return Boolean(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name));
+}
+
 function ensureSourceSchema() {
   const db = getDatabase();
   db.exec(`
@@ -115,10 +119,6 @@ export function failSourceUpdate(sourceId: WeedoDataSourceId, error: unknown) {
     .run(now, message.slice(0, 2000), now, sourceId);
 }
 
-function tableExists(db: any, name: string) {
-  return Boolean(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name));
-}
-
 function countScLabs(db: any) {
   if (!tableExists(db, 'cannabis_batches')) return { records:0, products:0, primaryLabel:'products', secondaryCount:0, secondaryLabel:'licensed businesses' };
   const row = db.prepare(`SELECT COUNT(*) records,COUNT(DISTINCT product_id) products,COUNT(DISTINCT producer_name) businesses FROM cannabis_batches WHERE source_name='SC Labs' AND verified=1`).get() as any;
@@ -138,9 +138,14 @@ function countCannlytics(db: any) {
   const products = hasBatches ? Number((db.prepare(`SELECT COUNT(DISTINCT product_id) count FROM cannabis_batches WHERE source_name='Cannlytics' AND verified=1`).get() as any)?.count || 0) : 0;
   const importedByState = new Map<string, number>();
   if (hasRecords) {
-    for (const row of db.prepare(`SELECT state_code,COUNT(*) count FROM cannlytics_source_records GROUP BY state_code`).all() as any[]) importedByState.set(row.state_code, Number(row.count||0));
+    for (const row of db.prepare(`SELECT state_code,COUNT(*) count FROM cannlytics_source_records GROUP BY state_code`).all() as any[]) {
+      importedByState.set(String(row.state_code), Number(row.count || 0));
+    }
   }
-  const syncRows = new Map<string, any>((db.prepare(`SELECT * FROM cannlytics_state_sync`).all() as any[]).map(row => [row.state_code, row]));
+  const syncRows = new Map<string, any>();
+  for (const row of db.prepare(`SELECT * FROM cannlytics_state_sync`).all() as any[]) {
+    syncRows.set(String(row.state_code), row);
+  }
   const regions = CANNLYTICS_REGIONS.map(([code,label,upstreamRecords]) => {
     const sync = syncRows.get(code);
     return {
