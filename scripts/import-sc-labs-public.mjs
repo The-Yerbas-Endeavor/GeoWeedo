@@ -199,11 +199,30 @@ async function discoverFromSitemaps(urls) {
   return additions;
 }
 
+function sampleIdDate(sampleId) {
+  const match = String(sampleId || '').trim().match(/^(\d{2})(\d{2})(\d{2})/);
+  if (!match) return null;
+  const yearValue = 2000 + Number(match[1]);
+  const monthValue = Number(match[2]);
+  const dayValue = Number(match[3]);
+  const parsed = new Date(Date.UTC(yearValue, monthValue - 1, dayValue));
+  if (
+    parsed.getUTCFullYear() !== yearValue ||
+    parsed.getUTCMonth() !== monthValue - 1 ||
+    parsed.getUTCDate() !== dayValue
+  ) return null;
+  return parsed;
+}
+
 function sampleDate(sample) {
-  const value = sample.testedAt || sample.collectedAt || null;
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  for (const value of [sample.testedAt, sample.collectedAt]) {
+    if (!value) continue;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  // SC Labs sample IDs observed on public PhytoFacts records begin with YYMMDD.
+  // Use that only as a filtering fallback when the public page exposes no usable date.
+  return sampleIdDate(sample.sampleId);
 }
 
 function summarize(sample) {
@@ -272,6 +291,7 @@ console.log(`\nEvaluating ${Math.min(urls.size, limit)} discovered public SC Lab
 let considered = 0;
 let imported = 0;
 let skippedOld = 0;
+let skippedUndated = 0;
 let failed = 0;
 const brands = new Set();
 const businesses = new Set();
@@ -281,9 +301,14 @@ for (const sourceUrl of [...urls].slice(0, limit)) {
   try {
     const sample = normalizeScLabsPublicSample(await fetchScLabsSample(sourceUrl));
     const date = sampleDate(sample);
-    if (date && date < since) {
+    if (!date) {
+      skippedUndated += 1;
+      console.log(`SKIP undated: ${sample.sampleId} | ${sample.productName}`);
+      continue;
+    }
+    if (date < since) {
       skippedOld += 1;
-      console.log(`SKIP old: ${sample.sampleId} | ${sample.testedAt || sample.collectedAt}`);
+      console.log(`SKIP old: ${sample.sampleId} | ${date.toISOString().slice(0, 10)}`);
       continue;
     }
 
@@ -303,6 +328,7 @@ console.log('\nSC Labs public catalog import summary');
 console.log(`  discovered/considered: ${considered}`);
 console.log(`  ${dryRun ? 'eligible' : 'imported/updated'}: ${imported}`);
 console.log(`  skipped before ${sinceText}: ${skippedOld}`);
+console.log(`  skipped without a usable date: ${skippedUndated}`);
 console.log(`  failed: ${failed}`);
 console.log(`  consumer brands identified: ${brands.size}`);
 console.log(`  licensed businesses identified: ${businesses.size}`);
