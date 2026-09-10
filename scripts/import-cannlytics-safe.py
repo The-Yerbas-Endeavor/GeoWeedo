@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Run the Cannlytics importer with conservative producer-identity cleanup.
+"""Run the Cannlytics importer with production-safe cleanup and path fixes.
 
 Cannlytics source rows can occasionally expose a role/category such as
-"Processing" where GeoWeedo expects a licensed business name.  This wrapper
+"Processing" where GeoWeedo expects a licensed business name. This wrapper
 filters only exact generic labels and leaves real business names (for example,
 "MFNY Processor LLC") unchanged.
+
+The original importer currently contains a one-character database filename typo
+(`geoweodo.sqlite`). GeoWeedo's production database is `geoweedo.sqlite`. Rather
+than duplicate or rewrite the large importer, this wrapper redirects only that
+exact filename while the importer runs.
 """
 from collections import Counter
 import importlib.util
@@ -35,6 +40,7 @@ if spec is None or spec.loader is None:
 importer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(importer)
 original_pick = importer.pick
+original_path_join = importer.Path.__truediv__
 sanitized = Counter()
 
 
@@ -50,8 +56,20 @@ def safe_pick(row, *keys):
     return value
 
 
+def safe_path_join(path, child):
+    # Redirect only the importer's known typo to GeoWeedo's real production DB.
+    if child == "geoweodo.sqlite":
+        child = "geoweedo.sqlite"
+    return original_path_join(path, child)
+
+
 importer.pick = safe_pick
-importer.main()
+importer.Path.__truediv__ = safe_path_join
+
+try:
+    importer.main()
+finally:
+    importer.Path.__truediv__ = original_path_join
 
 if sanitized:
     total = sum(sanitized.values())
