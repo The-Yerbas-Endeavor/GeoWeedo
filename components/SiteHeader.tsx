@@ -4,6 +4,7 @@ export default function SiteHeader() {
     ['/leaderboard', 'Leaderboard'],
     ['/weedo-facts', 'Weedo Facts'],
     ['/product-chemistry', 'Product Chemistry'],
+    ['/cultivars', 'Cultivar Genetics'],
     ['/rewards', 'YERB rewards'],
     ['/for-dispensaries', 'For dispensaries'],
     ['/about', 'About'],
@@ -13,14 +14,14 @@ export default function SiteHeader() {
     <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
       <a className="brand brand-link geoweedo-header-brand" href="/" aria-label="GeoWeedo home">
         <img
-          src="/assets/geoweedo/geoweedo-icon-master.png"
+          src="/assets/geoweodo/geoweedo-icon-master.png"
           alt=""
           aria-hidden="true"
           className="geoweedo-header-mascot"
         />
         <span className="geoweedo-header-lockup">
           <img
-            src="/assets/geoweedo/geoweedo-logo-horizontal-dark.png"
+            src="/assets/geoweodo/geoweedo-logo-horizontal-dark.png"
             alt="GeoWeedo"
             className="geoweedo-header-logo"
           />
