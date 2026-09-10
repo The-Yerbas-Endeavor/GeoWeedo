@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
-import { getWeedoFactsProductListing, listWeedoFactsListings } from '@/lib/weedoFactsProduct';
+import { getProductChemistryCatalog, getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import '../weedo-facts/weedo-facts.css';
 import '../weedo-facts/contrast-fix.css';
 import '../weedo-facts/nutrition-label.css';
@@ -12,13 +12,17 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Cannabis Product Chemistry · GeoWeedo',
-  description: 'GeoWeedo Product Chemistry built from lab-reported cannabis product and batch data.',
+  description: 'Search GeoWeedo Product Chemistry by product, consumer brand, licensed business, product type, batch, COA, and lab data.',
 };
 
 type Props = {
   searchParams: Promise<{
     product?: string | string[];
     batch?: string | string[];
+    q?: string | string[];
+    brand?: string | string[];
+    business?: string | string[];
+    type?: string | string[];
   }>;
 };
 
@@ -36,19 +40,30 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const query = await searchParams;
   const productId = one(query.product)?.trim() || '';
   const batchId = one(query.batch)?.trim() || null;
+  const q = one(query.q)?.trim() || '';
+  const brand = one(query.brand)?.trim() || '';
+  const business = one(query.business)?.trim() || '';
+  const productType = one(query.type)?.trim() || '';
   const record = productId ? getWeedoFactsProductListing(productId, batchId) : null;
-  const listings = listWeedoFactsListings();
+  const catalog = getProductChemistryCatalog({ q, brand, business, type: productType });
+  const filtersActive = Boolean(q || brand || business || productType);
 
   return (
     <main className="landing-shell">
       <SiteHeader />
-      <div className="weedoFactsPage">
+      <div className="weedoFactsPage productChemistryPage">
         <section className="weedoFactsHero">
           <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
           <h1>Product Chemistry</h1>
           <p className="weedoFactsLead">
-            Browse every verified cannabis product and batch currently available as a GeoWeedo Product Chemistry listing.
+            Search verified cannabis product and batch chemistry by product, consumer brand, licensed business, product type, batch, COA, or laboratory data.
           </p>
+          <div className="productChemistryStats" aria-label="Product Chemistry catalog totals">
+            <div><strong>{catalog.productCount}</strong><span>Products</span></div>
+            <div><strong>{catalog.totalListings}</strong><span>Verified batches</span></div>
+            <div><strong>{catalog.brandCount}</strong><span>Consumer brands</span></div>
+            <div><strong>{catalog.businessCount}</strong><span>Licensed businesses</span></div>
+          </div>
         </section>
 
         {productId ? (
@@ -60,7 +75,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             </section>
           ) : (
             <>
-              <section className="weedoFactsHero">
+              <section className="weedoFactsHero productChemistryDetailHero">
                 <a className="nutritionalFactsBack" href="/product-chemistry">← All Product Chemistry</a>
                 <span className="weedoFactsKicker">CANNABIS PRODUCT CHEMISTRY</span>
                 <h2>{record.productName}</h2>
@@ -76,29 +91,70 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
         <section className="nutritionalFactsIndex" aria-labelledby="product-chemistry-listings-heading">
           <div className="nutritionalFactsIndexHead">
             <div>
-              <span className="weedoFactsEyebrow">AVAILABLE LISTINGS</span>
-              <h2 id="product-chemistry-listings-heading">All Product Chemistry</h2>
-              <p>Each listing below is backed by a verified batch record in GeoWeedo.</p>
+              <span className="weedoFactsEyebrow">VERIFIED CATALOG</span>
+              <h2 id="product-chemistry-listings-heading">Product Chemistry catalog</h2>
+              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a verified batch record.</p>
             </div>
-            <span className="nutritionalFactsCount">{listings.length} {listings.length === 1 ? 'listing' : 'listings'}</span>
+            <span className="nutritionalFactsCount">
+              {catalog.listings.length}{filtersActive ? ` of ${catalog.totalListings}` : ''} {catalog.listings.length === 1 ? 'batch' : 'batches'}
+            </span>
           </div>
 
-          {listings.length ? (
+          <form className="productChemistryFilters" method="get" action="/product-chemistry">
+            <label className="productChemistrySearch">
+              <span>Search catalog</span>
+              <input name="q" defaultValue={q} placeholder="Product, batch, COA, brand, business, license…" />
+            </label>
+            <label>
+              <span>Consumer brand</span>
+              <select name="brand" defaultValue={brand}>
+                <option value="">All brands</option>
+                {catalog.brands.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Licensed business</span>
+              <select name="business" defaultValue={business}>
+                <option value="">All businesses</option>
+                {catalog.businesses.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Product type</span>
+              <select name="type" defaultValue={productType}>
+                <option value="">All types</option>
+                {catalog.productTypes.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
+            </label>
+            <div className="productChemistryFilterActions">
+              <button type="submit">Search</button>
+              {filtersActive ? <a href="/product-chemistry">Clear</a> : null}
+            </div>
+          </form>
+
+          {catalog.listings.length ? (
             <div className="nutritionalFactsList">
-              {listings.map(listing => {
+              {catalog.listings.map(listing => {
                 const tested = formatDate(listing.testedAt);
                 const identity = listing.batchNumber || listing.coaNumber || listing.batchId;
                 return (
                   <a
                     key={listing.batchId}
-                    className="nutritionalFactsListing"
+                    className="nutritionalFactsListing productChemistryListing"
                     href={`/product-chemistry?product=${encodeURIComponent(listing.productId)}&batch=${encodeURIComponent(listing.batchId)}`}
                   >
-                    <span>
+                    <span className="productChemistryIdentity">
                       <span className="nutritionalFactsName">{listing.productName}</span>
-                      <span className="nutritionalFactsBrand">{listing.brandName || listing.producerName || 'Brand not reported'}</span>
+                      <span className="nutritionalFactsBrand">
+                        <strong>Consumer brand:</strong> {listing.brandName || 'Not reported'}
+                      </span>
+                      <span className="productChemistryBusiness">
+                        <strong>Licensed business:</strong> {listing.producerName || 'Not reported'}
+                        {listing.producerLicenseNumber ? ` · ${listing.producerLicenseNumber}` : ''}
+                      </span>
                     </span>
                     <span className="nutritionalFactsMeta">
+                      {listing.productType ? <span><strong>Type:</strong> {listing.productType}</span> : null}
                       <span><strong>Batch / COA:</strong> {identity}</span>
                       {listing.labName ? <span><strong>Lab:</strong> {listing.labName}</span> : null}
                       {tested ? <span><strong>Tested:</strong> {tested}</span> : null}
@@ -110,7 +166,9 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               })}
             </div>
           ) : (
-            <div className="nutritionalFactsEmptyIndex">No verified Product Chemistry listings are available yet.</div>
+            <div className="nutritionalFactsEmptyIndex">
+              {filtersActive ? 'No verified Product Chemistry listings match these filters.' : 'No verified Product Chemistry listings are available yet.'}
+            </div>
           )}
         </section>
       </div>
