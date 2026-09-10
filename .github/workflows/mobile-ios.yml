@@ -8,9 +8,11 @@ on:
     paths:
       - 'app/**'
       - 'components/**'
+      - 'lib/**'
       - 'public/**'
       - 'mobile-shell/**'
       - 'scripts/mobile-bootstrap.sh'
+      - 'scripts/mobile-configure-native.mjs'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -21,9 +23,11 @@ on:
     paths:
       - 'app/**'
       - 'components/**'
+      - 'lib/**'
       - 'public/**'
       - 'mobile-shell/**'
       - 'scripts/mobile-bootstrap.sh'
+      - 'scripts/mobile-configure-native.mjs'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -52,6 +56,17 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Select Xcode 26
+        run: |
+          XCODE_APP="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort | tail -n 1)"
+          if [[ -z "$XCODE_APP" ]]; then
+            echo 'Xcode 26 is not installed on this GitHub runner.' >&2
+            ls -1 /Applications | grep '^Xcode' || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
       - name: Bootstrap Capacitor iOS
         run: |
           chmod +x scripts/mobile-bootstrap.sh
@@ -63,12 +78,13 @@ jobs:
           xcrun simctl list runtimes
           node --version
           npm --version
+          find ios/App -maxdepth 1 -type d -print
 
       - name: Build GeoWeedo for iOS Simulator
         working-directory: ios/App
         run: |
           xcodebuild \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -sdk iphonesimulator \
