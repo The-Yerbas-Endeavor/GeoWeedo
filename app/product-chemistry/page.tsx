@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
+import { getCultivarLinksForProduct } from '@/lib/kannapedia';
 import { getProductChemistryCatalog, getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import '../weedo-facts/weedo-facts.css';
 import '../weedo-facts/contrast-fix.css';
@@ -45,6 +46,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const business = one(query.business)?.trim() || '';
   const productType = one(query.type)?.trim() || '';
   const record = productId ? getWeedoFactsProductListing(productId, batchId) : null;
+  const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
   const catalog = getProductChemistryCatalog({ q, brand, business, type: productType });
   const filtersActive = Boolean(q || brand || business || productType);
 
@@ -82,6 +84,10 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                 <p className="weedoFactsLead">
                   {[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}
                 </p>
+                {cultivarLinks.length ? <div className="productChemistryCultivarLinks">
+                  <strong>Cultivar Genetics:</strong>
+                  {cultivarLinks.map((link: any) => <a key={link.rsp_id} href={`/cultivars/${encodeURIComponent(link.rsp_id)}`}>{link.name}{link.registrant ? ` · ${link.registrant}` : ''} →</a>)}
+                </div> : null}
               </section>
               <WeedoFactsProductLabel record={record} />
             </>
