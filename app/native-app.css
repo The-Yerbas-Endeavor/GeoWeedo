@@ -1,0 +1,24 @@
+html.geoweedo-native-app {
+  --geoweedo-safe-top: env(safe-area-inset-top, 0px);
+  --geoweedo-safe-right: env(safe-area-inset-right, 0px);
+  --geoweedo-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --geoweedo-safe-left: env(safe-area-inset-left, 0px);
+}
+
+html.geoweedo-native-app,
+html.geoweedo-native-app body {
+  min-height: 100%;
+  overscroll-behavior-y: none;
+}
+
+html.geoweedo-native-app body {
+  padding-left: var(--geoweedo-safe-left);
+  padding-right: var(--geoweedo-safe-right);
+}
+
+html.geoweedo-native-app input,
+html.geoweedo-native-app textarea,
+html.geoweedo-native-app select,
+html.geoweedo-native-app button {
+  -webkit-tap-highlight-color: transparent;
+}
