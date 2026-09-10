@@ -24,6 +24,7 @@ type Props = {
     brand?: string | string[];
     business?: string | string[];
     type?: string | string[];
+    page?: string | string[];
   }>;
 };
 
@@ -45,10 +46,24 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const brand = one(query.brand)?.trim() || '';
   const business = one(query.business)?.trim() || '';
   const productType = one(query.type)?.trim() || '';
+  const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
   const record = productId ? getWeedoFactsProductListing(productId, batchId) : null;
   const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
-  const catalog = getProductChemistryCatalog({ q, brand, business, type: productType });
+  const catalog = getProductChemistryCatalog({ q, brand, business, type: productType, page: requestedPage, pageSize: 50 });
   const filtersActive = Boolean(q || brand || business || productType);
+  const resultStart = catalog.matchingListings ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
+  const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingListings);
+
+  function pageHref(nextPage: number) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (brand) params.set('brand', brand);
+    if (business) params.set('business', business);
+    if (productType) params.set('type', productType);
+    if (nextPage > 1) params.set('page', String(nextPage));
+    const queryString = params.toString();
+    return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
+  }
 
   return (
     <main className="landing-shell">
@@ -61,10 +76,10 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             Search verified cannabis product and batch chemistry by product, consumer brand, licensed business, product type, batch, COA, or laboratory data.
           </p>
           <div className="productChemistryStats" aria-label="Product Chemistry catalog totals">
-            <div><strong>{catalog.productCount}</strong><span>Products</span></div>
-            <div><strong>{catalog.totalListings}</strong><span>Verified batches</span></div>
-            <div><strong>{catalog.brandCount}</strong><span>Consumer brands</span></div>
-            <div><strong>{catalog.businessCount}</strong><span>Licensed businesses</span></div>
+            <div><strong>{catalog.productCount.toLocaleString()}</strong><span>Products</span></div>
+            <div><strong>{catalog.totalListings.toLocaleString()}</strong><span>Verified batches</span></div>
+            <div><strong>{catalog.brandCount.toLocaleString()}</strong><span>Consumer brands</span></div>
+            <div><strong>{catalog.businessCount.toLocaleString()}</strong><span>Licensed businesses</span></div>
           </div>
         </section>
 
@@ -102,7 +117,8 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a verified batch record with source provenance.</p>
             </div>
             <span className="nutritionalFactsCount">
-              {catalog.listings.length}{filtersActive ? ` of ${catalog.totalListings}` : ''} {catalog.listings.length === 1 ? 'batch' : 'batches'}
+              {catalog.matchingListings ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingListings.toLocaleString()}` : '0'} {catalog.matchingListings === 1 ? 'batch' : 'batches'}
+              {filtersActive && catalog.matchingListings !== catalog.totalListings ? ` · ${catalog.totalListings.toLocaleString()} total` : ''}
             </span>
           </div>
 
@@ -177,6 +193,12 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               {filtersActive ? 'No verified Product Chemistry listings match these filters.' : 'No verified Product Chemistry listings are available yet.'}
             </div>
           )}
+
+          {catalog.pageCount > 1 ? <nav className="productChemistryPagination" aria-label="Product Chemistry pages">
+            {catalog.page > 1 ? <a href={pageHref(catalog.page - 1)}>← Previous</a> : <span />}
+            <strong>Page {catalog.page.toLocaleString()} of {catalog.pageCount.toLocaleString()}</strong>
+            {catalog.page < catalog.pageCount ? <a href={pageHref(catalog.page + 1)}>Next →</a> : <span />}
+          </nav> : null}
 
           {catalog.hasCannlytics ? <div className="productChemistryAttribution">
             <strong>Cannlytics attribution.</strong> Some Product Chemistry records are normalized from the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. GeoWeedo normalizes field names, product identities, and analyte naming; original source or COA links are retained when supplied by the dataset.
