@@ -12,6 +12,36 @@ function sameText(left: unknown, right: unknown) {
   return Boolean(a && b && a === b);
 }
 
+function comparable(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function cleanScLabsProductName(value: string) {
+  let text = clean(value) || '';
+  if (!text) return value;
+
+  // Public PhytoFacts headings can append a chemistry summary and "Powered By"
+  // text to the product title. That data belongs in analytes, not the catalog name.
+  text = text
+    .replace(/\s*\(\s*C-\s*-?\d+(?:\.\d+)?%[\s\S]*$/i, '')
+    .replace(/\s+Powered By\b[\s\S]*$/i, '')
+    .trim();
+
+  // Some PhytoFacts pages repeat the full product title twice before the stats.
+  // Collapse only exact normalized duplicate halves so legitimate names are kept.
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let split = Math.ceil(words.length / 2); split < words.length; split += 1) {
+    const left = words.slice(0, split).join(' ');
+    const right = words.slice(split).join(' ');
+    if (right.split(/\s+/).length >= 3 && comparable(left) === comparable(right)) {
+      text = left;
+      break;
+    }
+  }
+
+  return clean(text) || value;
+}
+
 function titleCaseSlug(value: string) {
   return value
     .split(/[-_]+/)
@@ -53,7 +83,7 @@ export function normalizeScLabsDate(value?: string | null) {
   if (!text) return null;
   const cleaned = text.replace(/\b(\d{1,2})(?:st|nd|rd|th)\b/gi, '$1');
   const parsed = new Date(cleaned);
-  return Number.isNaN(parsed.getTime()) ? text : parsed.toISOString();
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 /**
@@ -64,15 +94,17 @@ export function normalizeScLabsDate(value?: string | null) {
  * explicit brand data, the product heading, or the public catalog slug.
  */
 export function normalizeScLabsPublicSample(sample: ScLabsNormalizedSample): ScLabsNormalizedSample {
+  const productName = cleanScLabsProductName(sample.productName);
   const currentBrand = clean(sample.brandName);
   const licensedBusiness = clean(sample.producerName) || currentBrand;
-  const inferredBrand = inferScLabsConsumerBrand(sample.sourceUrl, sample.productName);
+  const inferredBrand = inferScLabsConsumerBrand(sample.sourceUrl, productName);
   const brandName = currentBrand && licensedBusiness && !sameText(currentBrand, licensedBusiness)
     ? currentBrand
     : inferredBrand;
 
   return {
     ...sample,
+    productName,
     brandName,
     producerName: licensedBusiness,
     collectedAt: normalizeScLabsDate(sample.collectedAt),
