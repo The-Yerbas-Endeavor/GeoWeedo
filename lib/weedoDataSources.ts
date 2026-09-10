@@ -81,6 +81,8 @@ export function failSourceUpdate(sourceId: WeedoDataSourceId, error: unknown) {
 }
 
 function countScLabs(db: any) {
+  const hasTable = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='cannabis_batches'`).get();
+  if (!hasTable) return { records: 0, products: 0, secondaryCount: 0, secondaryLabel: 'licensed businesses' };
   const row = db.prepare(`
     SELECT COUNT(*) AS records,
            COUNT(DISTINCT product_id) AS products,
