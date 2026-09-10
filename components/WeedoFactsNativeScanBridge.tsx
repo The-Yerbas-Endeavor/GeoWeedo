@@ -35,7 +35,13 @@ export default function WeedoFactsNativeScanBridge() {
     root.classList.add('geoweedo-native-weedo-scanner');
 
     const handleClick = async (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target.closest('.weedoFactsScanButton') : null;
+      // Only intercept the primary barcode/QR scan button. The reconstruction
+      // section deliberately reuses .weedoFactsScanButton styling for its
+      // "Scan product label" photo capture button, and that must continue to
+      // reach its own <input type="file" capture="environment"> handler.
+      const target = event.target instanceof Element
+        ? event.target.closest('.weedoFactsScanActions .weedoFactsScanButton')
+        : null;
       if (!target) return;
 
       event.preventDefault();
