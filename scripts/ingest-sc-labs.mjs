@@ -1,4 +1,5 @@
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../lib/scLabs.ts';
+import { normalizeScLabsPublicSample } from '../lib/scLabsPublicIdentity.ts';
 
 const sourceUrl = process.argv[2]?.trim();
 
@@ -18,8 +19,9 @@ if (!isScLabsSampleUrl(sourceUrl)) {
 
 console.log(`Fetching SC Labs sample: ${sourceUrl}`);
 try {
-  const sample = await fetchScLabsSample(sourceUrl);
+  const sample = normalizeScLabsPublicSample(await fetchScLabsSample(sourceUrl));
   console.log(`Sample ${sample.sampleId}: ${sample.brandName ? `${sample.brandName} - ` : ''}${sample.productName}`);
+  console.log(`Licensed business: ${sample.producerName || 'not exposed'}${sample.producerLicenseNumber ? ` (${sample.producerLicenseNumber})` : ''}`);
   console.log(`Batch: ${sample.batchNumber || 'not exposed'} | UID: ${sample.uid || 'not exposed'} | analytes: ${sample.analytes.length}`);
   const result = ingestScLabsSample(sample);
   console.log(`Weedo Facts ingestion complete: product=${result.productId} batch=${result.batchId} analytes=${result.analyteCount}`);
