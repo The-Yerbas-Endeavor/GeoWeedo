@@ -117,6 +117,85 @@ function defaultQueries() {
   return queries;
 }
 
+function relaxedQueries() {
+  const shortYear = String(year).slice(-2);
+  return [
+    `\"client.sclabs.com\" \"PhytoFacts\" \"${year}\"`,
+    `\"SC Labs\" \"PhytoFacts\" \"${year}\"`,
+    `\"client.sclabs.com\" \"Sample ID\" \"${shortYear}\"`,
+    `\"SC Labs\" \"Date Issued\" \"${year}\" \"PhytoFacts\"`,
+    `client.sclabs.com phytofacts ${year}`,
+  ];
+}
+
+function extractLocs(xml) {
+  return [...String(xml || '').matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)]
+    .map(match => match[1].replace(/&amp;/g, '&').trim())
+    .filter(Boolean);
+}
+
+async function fetchText(url, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { Accept: 'application/xml,text/xml,text/plain,text/html;q=0.8,*/*;q=0.5', 'User-Agent': 'GeoWeedo/1.0 SC Labs public catalog discovery' },
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function discoverFromSitemaps(urls) {
+  const queue = [
+    'https://client.sclabs.com/sitemap.xml',
+    'https://client.sclabs.com/sitemap_index.xml',
+  ];
+  const seen = new Set();
+  let sitemapDocuments = 0;
+  let additions = 0;
+
+  while (queue.length && seen.size < 40 && urls.size < limit) {
+    const sitemapUrl = queue.shift();
+    if (!sitemapUrl || seen.has(sitemapUrl)) continue;
+    seen.add(sitemapUrl);
+
+    const xml = await fetchText(sitemapUrl);
+    if (!xml) continue;
+    sitemapDocuments += 1;
+
+    for (const location of extractLocs(xml)) {
+      if (isScLabsSampleUrl(location)) {
+        if (!urls.has(location)) additions += 1;
+        urls.add(location);
+        if (urls.size >= limit) break;
+        continue;
+      }
+
+      try {
+        const parsed = new URL(location);
+        if (/(^|\.)sclabs\.com$/i.test(parsed.hostname) && /\.xml(?:$|\?)/i.test(parsed.pathname + parsed.search) && !seen.has(location)) {
+          queue.push(location);
+        }
+      } catch {}
+    }
+
+    if (urls.size < limit) await sleep(250);
+  }
+
+  if (sitemapDocuments) {
+    console.log(`SC Labs sitemap discovery: ${sitemapDocuments} sitemap document${sitemapDocuments === 1 ? '' : 's'}, +${additions} PhytoFacts URLs`);
+  }
+  return additions;
+}
+
 function sampleDate(sample) {
   const value = sample.testedAt || sample.collectedAt || null;
   if (!value) return null;
@@ -131,13 +210,9 @@ function summarize(sample) {
   return `${brand} | ${sample.productName} | licensed business: ${business}${license} | sample ${sample.sampleId}`;
 }
 
-async function discoverUrls() {
-  const urls = new Set(seedUrls);
-  const queries = customQueries.length ? customQueries : defaultQueries();
-  if (seedUrls.length) console.log(`Starting with ${seedUrls.length} existing/manual SC Labs public source URL${seedUrls.length === 1 ? '' : 's'}.`);
-  if (!String(process.env.SEARXNG_URL || '').trim()) return { urls, queries: [] };
-
-  console.log(`Discovering SC Labs public PhytoFacts pages with ${queries.length} search queries...`);
+async function runSearchQueries(urls, queries, label) {
+  let totalAdditions = 0;
+  console.log(`${label} with ${queries.length} search queries...`);
   for (const query of queries) {
     for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
       try {
@@ -150,6 +225,7 @@ async function discoverUrls() {
           urls.add(link);
           if (urls.size >= limit) break;
         }
+        totalAdditions += additions;
         console.log(`  page ${pageNumber}: ${query} -> ${results.length} results, +${additions} SC Labs URLs`);
       } catch (error) {
         console.warn(`  discovery warning: ${error instanceof Error ? error.message : error}`);
@@ -159,6 +235,27 @@ async function discoverUrls() {
     }
     if (urls.size >= limit) break;
   }
+  return totalAdditions;
+}
+
+async function discoverUrls() {
+  const urls = new Set(seedUrls);
+  const queries = customQueries.length ? customQueries : defaultQueries();
+  if (seedUrls.length) console.log(`Starting with ${seedUrls.length} existing/manual SC Labs public source URL${seedUrls.length === 1 ? '' : 's'}.`);
+
+  await discoverFromSitemaps(urls);
+  if (urls.size >= limit) return { urls, queries };
+
+  if (!String(process.env.SEARXNG_URL || '').trim()) return { urls, queries: [] };
+
+  const beforeSearch = urls.size;
+  await runSearchQueries(urls, queries, 'Discovering SC Labs public PhytoFacts pages');
+
+  if (!customQueries.length && urls.size === beforeSearch && urls.size < limit) {
+    console.log('Strict SearXNG site queries found no new SC Labs pages; retrying with broader public-web queries...');
+    await runSearchQueries(urls, relaxedQueries(), 'Retrying SC Labs discovery');
+  }
+
   return { urls, queries };
 }
 
