@@ -1,0 +1,99 @@
+name: GeoWeedo Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/mobile-android-ios
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'public/**'
+      - 'mobile-shell/**'
+      - 'scripts/mobile-bootstrap.sh'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/mobile-android.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'public/**'
+      - 'mobile-shell/**'
+      - 'scripts/mobile-bootstrap.sh'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/mobile-android.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geoweedo-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Build APK + AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Bootstrap Capacitor Android
+        run: |
+          chmod +x scripts/mobile-bootstrap.sh
+          ./scripts/mobile-bootstrap.sh android
+
+      - name: Show Android build configuration
+        run: |
+          grep -nE 'minSdkVersion|compileSdkVersion|targetSdkVersion' android/variables.gradle || true
+          java -version
+          node --version
+          npm --version
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Build unsigned release AAB
+        working-directory: android
+        run: ./gradlew --no-daemon bundleRelease
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/geoweedo-debug.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab artifacts/geoweedo-release-unsigned.aab
+          sha256sum artifacts/* > artifacts/SHA256SUMS.txt
+          ls -lh artifacts
+
+      - name: Upload GeoWeedo Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: geoweedo-android-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
