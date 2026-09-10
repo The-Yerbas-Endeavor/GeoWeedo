@@ -28,6 +28,13 @@ export default function WeedoFactsNativeScanBridge() {
     const capacitor = getCapacitor();
     if (!capacitor?.isNativePlatform?.()) return;
 
+    // Android should use the same in-page ZXing/BarcodeDetector camera scanner
+    // as geoweedo.com. The Capacitor barcode plugin opens its own native scanner
+    // activity, so our GeoWeedo overlay (including the thin green scan line) is
+    // not part of that view. Let the normal Scan package click reach
+    // WeedoFactsLookup.startScanner() so the APK and mobile website stay aligned.
+    if (capacitor.getPlatform?.() === 'android') return;
+
     const scanner = capacitor.Plugins?.CapacitorBarcodeScanner;
     if (!scanner?.scanBarcode) return;
 
