@@ -49,6 +49,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
 
   const verifiedBatch = Boolean(record.batchId && record.source?.verified);
   const provenance = [record.labName, record.producerName].filter(Boolean).join(' · ');
+  const findNearbyHref = `/?product=${encodeURIComponent(record.productId)}`;
 
   return (
     <main className={`landing-shell ${styles.shell}`}>
@@ -66,6 +67,10 @@ export default async function ProductListingPage({ params, searchParams }: Props
           <div className={styles.proofLine}>
             <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'VERIFIED LAB RECORD' : 'PRODUCT RECORD'}</span>
             {provenance ? <span>{provenance}</span> : null}
+          </div>
+          <div className={styles.availabilityAction}>
+            <a className={styles.findNearby} href={findNearbyHref}>📍 Find this product near me</a>
+            <small>Shows dispensaries with an active GeoWeedo menu listing for this exact product.</small>
           </div>
         </section>
 
