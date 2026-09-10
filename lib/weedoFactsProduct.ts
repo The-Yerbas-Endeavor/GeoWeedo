@@ -26,15 +26,21 @@ export type ProductChemistryCatalogFilters = {
   brand?: string | null;
   business?: string | null;
   type?: string | null;
+  page?: number | null;
+  pageSize?: number | null;
 };
 
 export type ProductChemistryCatalog = {
   listings: WeedoFactsListingSummary[];
   totalListings: number;
+  matchingListings: number;
   productCount: number;
   brandCount: number;
   businessCount: number;
   hasCannlytics: boolean;
+  page: number;
+  pageSize: number;
+  pageCount: number;
   brands: string[];
   businesses: string[];
   productTypes: string[];
@@ -126,39 +132,8 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
   };
 }
 
-export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
-  ensureWeedoFactsSchema();
-  const db = getDatabase();
-  const rows = db.prepare(`
-    SELECT
-      p.id AS product_id,
-      p.brand_name,
-      p.product_name,
-      p.product_type,
-      p.net_contents,
-      b.id AS batch_id,
-      b.batch_number,
-      b.coa_number,
-      b.lab_name,
-      b.producer_name,
-      b.producer_license_number,
-      b.tested_at,
-      b.overall_status,
-      b.source_type,
-      b.source_name,
-      b.source_url,
-      COUNT(a.id) AS analyte_count
-    FROM cannabis_batches b
-    JOIN cannabis_products p ON p.id = b.product_id
-    LEFT JOIN cannabis_analytes a ON a.batch_id = b.id
-    WHERE b.verified = 1
-    GROUP BY b.id
-    ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
-             p.product_name COLLATE NOCASE,
-             p.brand_name COLLATE NOCASE
-  `).all() as any[];
-
-  return rows.map(row => ({
+function mapListing(row: any): WeedoFactsListingSummary {
+  return {
     productId: row.product_id,
     batchId: row.batch_id,
     brandName: row.brand_name,
@@ -176,54 +151,134 @@ export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
     sourceName: row.source_name,
     sourceUrl: row.source_url,
     analyteCount: Number(row.analyte_count || 0),
-  }));
+  };
 }
 
-function uniqueSorted(values: Array<string | null>) {
-  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+const LISTING_SELECT = `
+  SELECT
+    p.id AS product_id,
+    p.brand_name,
+    p.product_name,
+    p.product_type,
+    p.net_contents,
+    b.id AS batch_id,
+    b.batch_number,
+    b.coa_number,
+    b.lab_name,
+    b.producer_name,
+    b.producer_license_number,
+    b.tested_at,
+    b.overall_status,
+    b.source_type,
+    b.source_name,
+    b.source_url,
+    (SELECT COUNT(*) FROM cannabis_analytes a WHERE a.batch_id = b.id) AS analyte_count
+  FROM cannabis_batches b
+  JOIN cannabis_products p ON p.id = b.product_id
+`;
+
+export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
+  ensureWeedoFactsSchema();
+  const db = getDatabase();
+  const rows = db.prepare(`${LISTING_SELECT}
+    WHERE b.verified = 1
+    ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+             p.product_name COLLATE NOCASE,
+             p.brand_name COLLATE NOCASE
+  `).all() as any[];
+  return rows.map(mapListing);
 }
 
 function normalizedSearch(value: unknown) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function distinctValues(db: any, column: string) {
+  const allowed = new Set(['p.brand_name', 'b.producer_name', 'p.product_type']);
+  if (!allowed.has(column)) return [];
+  const rows = db.prepare(`
+    SELECT DISTINCT ${column} AS value
+    FROM cannabis_batches b
+    JOIN cannabis_products p ON p.id = b.product_id
+    WHERE b.verified = 1 AND ${column} IS NOT NULL AND TRIM(${column}) <> ''
+    ORDER BY value COLLATE NOCASE
+  `).all() as any[];
+  return rows.map(row => String(row.value));
+}
+
 export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilters = {}): ProductChemistryCatalog {
-  const all = listWeedoFactsListings();
+  ensureWeedoFactsSchema();
+  const db = getDatabase();
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
   const business = String(filters.business || '').trim();
   const type = String(filters.type || '').trim();
+  const pageSize = Math.max(10, Math.min(100, Math.floor(Number(filters.pageSize || 50)) || 50));
 
-  const listings = all.filter(row => {
-    if (brand && row.brandName !== brand) return false;
-    if (business && row.producerName !== business) return false;
-    if (type && row.productType !== type) return false;
-    if (!q) return true;
-    const haystack = normalizedSearch([
-      row.productName,
-      row.brandName,
-      row.producerName,
-      row.producerLicenseNumber,
-      row.productType,
-      row.batchNumber,
-      row.coaNumber,
-      row.labName,
-      row.sourceName,
-    ].filter(Boolean).join(' '));
-    return q.split(/\s+/).every(token => haystack.includes(token));
-  });
+  const conditions = ['b.verified = 1'];
+  const params: Array<string | number> = [];
+  if (brand) { conditions.push('p.brand_name = ?'); params.push(brand); }
+  if (business) { conditions.push('b.producer_name = ?'); params.push(business); }
+  if (type) { conditions.push('p.product_type = ?'); params.push(type); }
+
+  const searchExpression = `LOWER(
+    COALESCE(p.product_name,'') || ' ' || COALESCE(p.brand_name,'') || ' ' ||
+    COALESCE(b.producer_name,'') || ' ' || COALESCE(b.producer_license_number,'') || ' ' ||
+    COALESCE(p.product_type,'') || ' ' || COALESCE(b.batch_number,'') || ' ' ||
+    COALESCE(b.coa_number,'') || ' ' || COALESCE(b.lab_name,'') || ' ' || COALESCE(b.source_name,'')
+  )`;
+  for (const token of q.split(/\s+/).filter(Boolean)) {
+    conditions.push(`${searchExpression} LIKE ?`);
+    params.push(`%${token}%`);
+  }
+  const where = conditions.join(' AND ');
+
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) AS total_listings,
+      COUNT(DISTINCT b.product_id) AS product_count,
+      COUNT(DISTINCT CASE WHEN p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> '' THEN p.brand_name END) AS brand_count,
+      COUNT(DISTINCT CASE WHEN b.producer_name IS NOT NULL AND TRIM(b.producer_name) <> '' THEN b.producer_name END) AS business_count,
+      MAX(CASE WHEN b.source_name = 'Cannlytics' THEN 1 ELSE 0 END) AS has_cannlytics
+    FROM cannabis_batches b
+    JOIN cannabis_products p ON p.id = b.product_id
+    WHERE b.verified = 1
+  `).get() as any;
+
+  const matched = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM cannabis_batches b
+    JOIN cannabis_products p ON p.id = b.product_id
+    WHERE ${where}
+  `).get(...params) as any;
+  const matchingListings = Number(matched?.count || 0);
+  const pageCount = Math.max(1, Math.ceil(matchingListings / pageSize));
+  const requestedPage = Math.max(1, Math.floor(Number(filters.page || 1)) || 1);
+  const page = Math.min(requestedPage, pageCount);
+  const offset = (page - 1) * pageSize;
+
+  const rows = db.prepare(`${LISTING_SELECT}
+    WHERE ${where}
+    ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+             p.product_name COLLATE NOCASE,
+             p.brand_name COLLATE NOCASE
+    LIMIT ? OFFSET ?
+  `).all(...params, pageSize, offset) as any[];
 
   return {
-    listings,
-    totalListings: all.length,
-    productCount: new Set(all.map(row => row.productId)).size,
-    brandCount: new Set(all.map(row => row.brandName).filter(Boolean)).size,
-    businessCount: new Set(all.map(row => row.producerName).filter(Boolean)).size,
-    hasCannlytics: all.some(row => row.sourceName === 'Cannlytics'),
-    brands: uniqueSorted(all.map(row => row.brandName)),
-    businesses: uniqueSorted(all.map(row => row.producerName)),
-    productTypes: uniqueSorted(all.map(row => row.productType)),
+    listings: rows.map(mapListing),
+    totalListings: Number(stats?.total_listings || 0),
+    matchingListings,
+    productCount: Number(stats?.product_count || 0),
+    brandCount: Number(stats?.brand_count || 0),
+    businessCount: Number(stats?.business_count || 0),
+    hasCannlytics: Boolean(stats?.has_cannlytics),
+    page,
+    pageSize,
+    pageCount,
+    brands: distinctValues(db, 'p.brand_name'),
+    businesses: distinctValues(db, 'b.producer_name'),
+    productTypes: distinctValues(db, 'p.product_type'),
   };
 }
 
