@@ -28,11 +28,23 @@ export default function SiteHeader() {
           <span className="geoweedo-header-tagline">WEEDO SEARCH · WEEDO FIND · WEEDO PLAY</span>
         </span>
       </a>
-      <div className="topbar-links">
+
+      <div className="nav-actions">
         {links.map(([href, label]) => (
-          <a href={href} key={href}>{label}</a>
+          <a key={href} className="ghost nav-link" href={href}>{label}</a>
         ))}
+        <a className="primary nav-link" href="/account">Account</a>
       </div>
+
+      <details className="mobile-nav-menu">
+        <summary aria-label="Open GeoWeedo menu">Menu</summary>
+        <div className="mobile-nav-popover">
+          {links.map(([href, label]) => (
+            <a key={href} className="ghost nav-link" href={href}>{label}</a>
+          ))}
+          <a className="primary nav-link" href="/account">Account</a>
+        </div>
+      </details>
     </nav>
   );
 }
