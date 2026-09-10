@@ -1,5 +1,6 @@
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsLookup from '../../components/WeedoFactsLookup';
+import WeedoFactsNativeScanBridge from '../../components/WeedoFactsNativeScanBridge';
 import WeedoFactsReconstruction from '../../components/WeedoFactsReconstruction';
 import './weedo-facts.css';
 import './coa-upload.css';
@@ -32,6 +33,7 @@ export default function WeedoFactsPage() {
           </div>
         </section>
 
+        <WeedoFactsNativeScanBridge />
         <WeedoFactsLookup />
         <WeedoFactsReconstruction />
 
