@@ -64,6 +64,20 @@ function ensureSourceSchema() {
     );
   `);
 
+  if (tableExists(db, 'cannabis_batches')) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS cannabis_batches_verified_tested_idx ON cannabis_batches(verified, tested_at DESC);
+      CREATE INDEX IF NOT EXISTS cannabis_batches_source_verified_idx ON cannabis_batches(source_name, verified);
+      CREATE INDEX IF NOT EXISTS cannabis_batches_producer_idx ON cannabis_batches(producer_name);
+    `);
+  }
+  if (tableExists(db, 'cannabis_products')) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS cannabis_products_brand_idx ON cannabis_products(brand_name);
+      CREATE INDEX IF NOT EXISTS cannabis_products_type_idx ON cannabis_products(product_type);
+    `);
+  }
+
   const now = new Date().toISOString();
   const insert = db.prepare(`
     INSERT OR IGNORE INTO cannabis_data_sources
