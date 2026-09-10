@@ -12,7 +12,7 @@
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "bash scripts/create-admin.sh",
     "weedo:ingest:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-sc-labs.mjs",
-    "weedo:import:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/import-sc-labs-public.mjs",
+    "weedo:import:sc-labs": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-sc-labs-public.mjs",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
