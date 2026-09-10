@@ -35,7 +35,7 @@ On the Mac used for iOS development:
 ./scripts/mobile-bootstrap.sh ios
 ```
 
-The bootstrap pins Capacitor 8.5.0 and generates the native projects. Review and commit the resulting `package.json`, `package-lock.json`, `android/`, and `ios/` changes.
+The bootstrap pins Capacitor 8.5.0 and installs the native App, Geolocation, Haptics, Network, Share and Barcode Scanner plugins. It also applies the Android/iOS permissions required for location and product scanning.
 
 Open the projects with:
 
@@ -43,6 +43,32 @@ Open the projects with:
 npx cap open android
 npx cap open ios
 ```
+
+## Implemented shared native layer
+
+The shared browser-safe adapter lives in `lib/native.ts`. It intentionally avoids scattering Capacitor calls throughout individual pages.
+
+Implemented:
+
+- native runtime/platform detection
+- Android hardware back-button handling
+- Android root-screen exit behavior
+- native geolocation permission/request flow with browser fallback
+- native share sheet with Web Share / clipboard fallback
+- haptic impact, selection and notification feedback helpers
+- native network status lookup and live connectivity events
+- global offline UI state via `data-native-network`
+- Weedo Facts native barcode/QR scanning
+- reusable `WeedoFactsNativeScanner` component
+
+Events available to the web UI:
+
+- `geoweedo:native-ready`
+- `geoweedo:native-network`
+- `geoweedo:native-back`
+- `geoweedo:weedo-facts-scanned`
+
+The Weedo Facts scanner uses the rear camera and ML Kit on Android and emits the scanned value/format for the product/batch lookup layer to consume.
 
 ## Release roadmap
 
@@ -64,17 +90,33 @@ npx cap open ios
 
 ### Mobile 0.2 — device integrations
 
+Completed:
+
 - Native geolocation permission flow
 - Native share sheet
-- Haptics for game interactions
-- Deep links / universal links / Android app links
+- Haptics foundation
 - Camera permission plumbing
-- Push-notification foundation
 - Network/offline state UI
+- Android hardware back handling
+
+Remaining:
+
+- Deep links / universal links / Android app links
+- Push-notification foundation
+- External browser handoff policy
+- Status/system bar polish
 
 ### Mobile 0.3 — Weedo Facts
 
-- Barcode/QR scanner
+Completed foundation:
+
+- Native barcode/QR scanner
+- Reusable Scan Product control
+- Camera permissions on Android/iOS
+- Scan-result event for product/batch lookup integration
+
+Remaining product integration:
+
 - Product identification
 - Exact batch/lot lookup where supported
 - COA/lab report display
@@ -110,11 +152,11 @@ npx cap open ios
 
 For new Google Play submissions after August 31, 2026, the Android app must target Android 16 / API level 36 or higher. Set the generated Android project accordingly before Play submission and re-check the requirement immediately before release.
 
-Recommended starting policy:
+Current native policy:
 
 - `targetSdkVersion`: 36 or newer required by Play at release time
 - `compileSdkVersion`: at least the target SDK
-- `minSdkVersion`: choose after device-coverage testing; Android 9/10-era support is a reasonable starting discussion, not a fixed requirement
+- `minSdkVersion`: 26 because the official Capacitor barcode-scanner plugin requires it
 - Distribution artifact: signed `.aab`
 
 ## iOS requirements
@@ -123,22 +165,31 @@ App Store Connect submissions currently need to be built with Xcode 26 or later 
 
 The iOS build must be generated, signed and archived on macOS with Xcode.
 
-## Native features planned
+Configured privacy descriptions:
 
-The native layer should eventually own or mediate:
+- Camera — Weedo Facts barcode/QR scanning
+- Location When In Use — nearby dispensaries and location-based game features
+- Location Always And When In Use — compatibility description required by the current location plugin stack; GeoWeedo does not currently implement background tracking
 
-- Camera and barcode/QR scanning
-- Precise/approximate geolocation permission handling
-- Push notifications
-- Haptic feedback
-- Share sheet
-- App/universal links
-- External browser handoff
-- Network state
-- Status bar/system bar appearance
-- Optional biometric re-authentication for sensitive account actions
+## Native API examples
 
-The web application should remain authoritative for accounts, gameplay state, dispensary data, sponsorships, Weedo Facts data, product/COA records and server-side business rules.
+```ts
+import {
+  getCurrentNativePosition,
+  getNativeNetworkStatus,
+  nativeHaptic,
+  nativeShare,
+  scanWeedoFactsCode,
+} from '@/lib/native';
+
+const position = await getCurrentNativePosition();
+await nativeHaptic('success');
+await nativeShare({ title: 'GeoWeedo', url: window.location.href });
+const network = await getNativeNetworkStatus();
+const scan = await scanWeedoFactsCode();
+```
+
+The web application remains authoritative for accounts, gameplay state, dispensary data, sponsorships, Weedo Facts data, product/COA records and server-side business rules.
 
 ## Deep-link plan
 
@@ -158,17 +209,17 @@ GeoWeedo mobile should initially emphasize discovery, gameplay, product informat
 
 ## Release checklist
 
-1. Generate and commit native projects.
-2. Set Android API target required by current Play policy.
+1. Generate and validate native projects in CI.
+2. Keep Android API target aligned with current Play policy.
 3. Configure Android signing and Play App Signing.
 4. Configure Apple bundle ID, team and signing.
 5. Add Android App Links and iOS Universal Links.
-6. Add native geolocation/share/haptics/network integrations.
-7. Add Weedo Facts camera scanner before or shortly after initial public release, depending on review readiness.
+6. Integrate `WeedoFactsNativeScanner` into the Weedo Facts product/batch flow.
+7. Add push notification foundation if needed for launch.
 8. Test account creation/login/logout and session persistence.
 9. Test all three GeoWeedo games on small and large phones.
 10. Test MapLibre gestures, map pins, dialogs, keyboard and orientation behavior.
-11. Test offline/network-loss behavior.
+11. Test native location, sharing, haptics and offline/network-loss behavior.
 12. Validate privacy disclosures against actual permissions and data collection.
 13. Create Play Store and App Store assets/screenshots.
 14. Use Google Play internal/closed testing and Apple TestFlight before production.
