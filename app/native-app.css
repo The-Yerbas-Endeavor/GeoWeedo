@@ -3,15 +3,20 @@ html.geoweedo-native-app {
   --geoweedo-safe-right: env(safe-area-inset-right, 0px);
   --geoweedo-safe-bottom: env(safe-area-inset-bottom, 0px);
   --geoweedo-safe-left: env(safe-area-inset-left, 0px);
-}
-
-html.geoweedo-native-app,
-html.geoweedo-native-app body {
   min-height: 100%;
-  overscroll-behavior-y: none;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
 }
 
 html.geoweedo-native-app body {
+  min-height: 100dvh;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
   padding-left: var(--geoweedo-safe-left);
   padding-right: var(--geoweedo-safe-right);
 }
