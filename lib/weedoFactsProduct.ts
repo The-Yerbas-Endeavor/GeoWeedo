@@ -193,6 +193,19 @@ function normalizedSearch(value: unknown) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function businessDisplayScore(value: string) {
+  const letters = value.replace(/[^A-Za-z]/g, '');
+  if (!letters) return 0;
+  let score = 0;
+  if (letters !== letters.toUpperCase() && letters !== letters.toLowerCase()) score += 10;
+  const expectedAcronyms = new Set(['LLC', 'LLP', 'LP', 'LTD', 'INC', 'CO', 'CORP', 'PLC', 'DBA']);
+  for (const rawToken of value.split(/\s+/)) {
+    const token = rawToken.replace(/[^A-Za-z]/g, '');
+    if (token.length > 2 && token === token.toUpperCase() && !expectedAcronyms.has(token)) score -= 1;
+  }
+  return score;
+}
+
 function distinctValues(db: any, column: string) {
   const allowed = new Set(['p.brand_name', 'b.producer_name', 'p.product_type']);
   if (!allowed.has(column)) return [];
@@ -203,7 +216,16 @@ function distinctValues(db: any, column: string) {
     WHERE b.verified = 1 AND ${column} IS NOT NULL AND TRIM(${column}) <> ''
     ORDER BY value COLLATE NOCASE
   `).all() as any[];
-  return rows.map(row => String(row.value));
+  const values = rows.map(row => String(row.value));
+  if (column !== 'b.producer_name') return values;
+
+  const grouped = new Map<string, string>();
+  for (const value of values) {
+    const key = value.trim().toLowerCase();
+    const current = grouped.get(key);
+    if (!current || businessDisplayScore(value) > businessDisplayScore(current)) grouped.set(key, value);
+  }
+  return [...grouped.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilters = {}): ProductChemistryCatalog {
@@ -218,7 +240,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
   const conditions = ['b.verified = 1'];
   const params: Array<string | number> = [];
   if (brand) { conditions.push('p.brand_name = ?'); params.push(brand); }
-  if (business) { conditions.push('b.producer_name = ?'); params.push(business); }
+  if (business) { conditions.push('b.producer_name = ? COLLATE NOCASE'); params.push(business); }
   if (type) { conditions.push('p.product_type = ?'); params.push(type); }
 
   const searchExpression = `LOWER(
@@ -238,7 +260,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
       COUNT(*) AS total_listings,
       COUNT(DISTINCT b.product_id) AS product_count,
       COUNT(DISTINCT CASE WHEN p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> '' THEN p.brand_name END) AS brand_count,
-      COUNT(DISTINCT CASE WHEN b.producer_name IS NOT NULL AND TRIM(b.producer_name) <> '' THEN b.producer_name END) AS business_count,
+      COUNT(DISTINCT CASE WHEN b.producer_name IS NOT NULL AND TRIM(b.producer_name) <> '' THEN LOWER(TRIM(b.producer_name)) END) AS business_count,
       MAX(CASE WHEN b.source_name = 'Cannlytics' THEN 1 ELSE 0 END) AS has_cannlytics
     FROM cannabis_batches b
     JOIN cannabis_products p ON p.id = b.product_id
