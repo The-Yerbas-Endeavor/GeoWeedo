@@ -34,9 +34,24 @@ configure_native() {
 }
 
 add_android() {
+  # The mobile branch currently treats android/ as generated output. If a
+  # previous/partial bootstrap left an incomplete platform directory behind,
+  # cap sync will reuse it and expected Capacitor template files can remain
+  # missing. Regenerate that incomplete platform before syncing.
+  if [[ -d android && ! -f android/variables.gradle ]]; then
+    echo "Android platform is incomplete (missing android/variables.gradle); regenerating it."
+    rm -rf android
+  fi
+
   if [[ ! -d android ]]; then
     npx cap add android
   fi
+
+  [[ -f android/variables.gradle ]] || {
+    echo "ERROR: Capacitor Android generation did not create android/variables.gradle" >&2
+    exit 1
+  }
+
   npx cap sync android
   configure_native android
   echo "Android project ready: $ROOT_DIR/android"
