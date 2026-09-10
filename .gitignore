@@ -9,3 +9,9 @@ data/source-updates/
 public/uploads/dispensaries/
 public/maplibre/
 npm-debug.log*
+
+# Android/mobile build artifacts belong in GoeWeedo-Mobile.
+*.apk
+*.aab
+artifacts/
+android/**/build/
