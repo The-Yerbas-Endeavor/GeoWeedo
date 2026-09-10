@@ -8,9 +8,11 @@ on:
     paths:
       - 'app/**'
       - 'components/**'
+      - 'lib/**'
       - 'public/**'
       - 'mobile-shell/**'
       - 'scripts/mobile-bootstrap.sh'
+      - 'scripts/mobile-configure-native.mjs'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -21,9 +23,11 @@ on:
     paths:
       - 'app/**'
       - 'components/**'
+      - 'lib/**'
       - 'public/**'
       - 'mobile-shell/**'
       - 'scripts/mobile-bootstrap.sh'
+      - 'scripts/mobile-configure-native.mjs'
       - 'capacitor.config.ts'
       - 'package.json'
       - 'package-lock.json'
