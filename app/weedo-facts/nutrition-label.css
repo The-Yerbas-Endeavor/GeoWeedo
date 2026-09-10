@@ -204,7 +204,21 @@
   .weedoFactsCard .weedoFactsStatus{max-width:none;justify-self:start}
   .weedoFactsCard h2{font-size:clamp(2.25rem,13vw,3.6rem)}
   .weedoFactsCard .weedoFactsOverallStatus{align-items:flex-start}
-  .weedoFactsCard .weedoFactsRow{grid-template-columns:minmax(0,1fr) auto;gap:10px}
-  .weedoFactsCard .weedoFactsRow strong{white-space:normal}
+  .weedoFactsCard .weedoFactsRow{
+    grid-template-columns:minmax(105px,42%) minmax(0,58%);
+    align-items:start;
+    gap:12px;
+  }
+  .weedoFactsCard .weedoFactsRow span,
+  .weedoFactsCard .weedoFactsRow strong{
+    min-width:0;
+    overflow-wrap:break-word;
+    word-break:normal;
+  }
+  .weedoFactsCard .weedoFactsRow span{overflow-wrap:normal}
+  .weedoFactsCard .weedoFactsRow strong{
+    white-space:normal;
+    line-height:1.25;
+  }
   .weedoFactsCard .weedoFactsBatchHistory{margin-left:-16px;margin-right:-16px;margin-bottom:-18px;padding-left:16px;padding-right:16px}
 }
