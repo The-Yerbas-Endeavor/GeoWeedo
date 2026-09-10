@@ -15,6 +15,9 @@ export type WeedoFactsListingSummary = {
   producerLicenseNumber: string | null;
   testedAt: string | null;
   overallStatus: string | null;
+  sourceType: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
   analyteCount: number;
 };
 
@@ -31,6 +34,7 @@ export type ProductChemistryCatalog = {
   productCount: number;
   brandCount: number;
   businessCount: number;
+  hasCannlytics: boolean;
   brands: string[];
   businesses: string[];
   productTypes: string[];
@@ -140,6 +144,9 @@ export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
       b.producer_license_number,
       b.tested_at,
       b.overall_status,
+      b.source_type,
+      b.source_name,
+      b.source_url,
       COUNT(a.id) AS analyte_count
     FROM cannabis_batches b
     JOIN cannabis_products p ON p.id = b.product_id
@@ -165,6 +172,9 @@ export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
     producerLicenseNumber: row.producer_license_number,
     testedAt: row.tested_at,
     overallStatus: row.overall_status,
+    sourceType: row.source_type,
+    sourceName: row.source_name,
+    sourceUrl: row.source_url,
     analyteCount: Number(row.analyte_count || 0),
   }));
 }
@@ -199,6 +209,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
       row.batchNumber,
       row.coaNumber,
       row.labName,
+      row.sourceName,
     ].filter(Boolean).join(' '));
     return q.split(/\s+/).every(token => haystack.includes(token));
   });
@@ -209,6 +220,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
     productCount: new Set(all.map(row => row.productId)).size,
     brandCount: new Set(all.map(row => row.brandName).filter(Boolean)).size,
     businessCount: new Set(all.map(row => row.producerName).filter(Boolean)).size,
+    hasCannlytics: all.some(row => row.sourceName === 'Cannlytics'),
     brands: uniqueSorted(all.map(row => row.brandName)),
     businesses: uniqueSorted(all.map(row => row.producerName)),
     productTypes: uniqueSorted(all.map(row => row.productType)),
