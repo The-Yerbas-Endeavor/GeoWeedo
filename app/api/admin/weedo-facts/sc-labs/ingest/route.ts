@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { fetchScLabsSample, ingestScLabsSample } from '@/lib/scLabs';
+import { normalizeScLabsPublicSample } from '@/lib/scLabsPublicIdentity';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
   const sourceUrl = String(body?.sourceUrl || '').trim();
   if (!sourceUrl) return NextResponse.json({ error: 'sourceUrl is required.' }, { status: 400 });
   try {
-    const sample = await fetchScLabsSample(sourceUrl);
+    const sample = normalizeScLabsPublicSample(await fetchScLabsSample(sourceUrl));
     const result = ingestScLabsSample(sample);
     return NextResponse.json({ ok: true, result, sample: {
       sampleId: sample.sampleId,
@@ -23,6 +24,8 @@ export async function POST(request: NextRequest) {
       coaNumber: sample.coaNumber || null,
       testedAt: sample.testedAt || null,
       overallStatus: sample.overallStatus || null,
+      producerName: sample.producerName || null,
+      producerLicenseNumber: sample.producerLicenseNumber || null,
       analyteCount: sample.analytes.length,
       sourceUrl: sample.sourceUrl,
     }});
