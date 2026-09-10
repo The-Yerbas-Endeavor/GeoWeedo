@@ -266,7 +266,7 @@ export function ingestKannapediaCultivar(cultivar: KannapediaCultivar) {
     db.prepare(`
       INSERT INTO cannabis_cultivars
         (id,rsp_id,name,normalized_name,registrant,sample_name,accession_date,reported_sex,report_type,dna_source,plant_type,rarity,rarity_percentile,heterozygosity,genetics_json,source_name,source_url,raw_text,first_seen_at,last_seen_at,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Kannapedia',?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Kannapedia',?,?,?,?,?,?)
     `).run(id, cultivar.rspId, cultivar.name, normalized, cultivar.registrant, cultivar.sampleName, cultivar.accessionDate,
       cultivar.reportedSex, cultivar.reportType, cultivar.dnaSource, cultivar.plantType, cultivar.rarity, cultivar.rarityPercentile,
       cultivar.heterozygosity, JSON.stringify(cultivar.genetics || {}), cultivar.sourceUrl, cultivar.rawText, now, now, now, now);
