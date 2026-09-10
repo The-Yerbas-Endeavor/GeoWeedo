@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../lib/scLabs.ts';
 import { normalizeScLabsPublicSample } from '../lib/scLabsPublicIdentity.ts';
+import { getDatabase } from '../lib/sqlite.ts';
+import { ensureWeedoFactsSchema } from '../lib/weedoFacts.ts';
 
 function loadEnvFile(filename = '.env.local') {
   const target = path.resolve(process.cwd(), filename);
@@ -36,6 +38,21 @@ function argValue(name, fallback) {
   return argValues(name).at(-1) ?? fallback;
 }
 
+function existingScLabsPublicUrls() {
+  try {
+    ensureWeedoFactsSchema();
+    const db = getDatabase();
+    const rows = db.prepare(`
+      SELECT DISTINCT source_url
+      FROM cannabis_batches
+      WHERE source_name = 'SC Labs' AND source_url IS NOT NULL AND source_url <> ''
+    `).all();
+    return rows.map(row => String(row.source_url || '').trim()).filter(isScLabsSampleUrl);
+  } catch {
+    return [];
+  }
+}
+
 const dryRun = process.argv.includes('--dry-run');
 const currentYear = new Date().getUTCFullYear();
 const year = Number(argValue('--year', String(currentYear)));
@@ -43,7 +60,7 @@ const sinceText = String(argValue('--since', `${year}-01-01`));
 const since = new Date(`${sinceText}T00:00:00Z`);
 const limit = Math.max(1, Math.min(1000, Number(argValue('--limit', '250')) || 250));
 const pages = Math.max(1, Math.min(5, Number(argValue('--pages', '2')) || 2));
-const seedUrls = argValues('--url').filter(isScLabsSampleUrl);
+const seedUrls = [...new Set([...existingScLabsPublicUrls(), ...argValues('--url').filter(isScLabsSampleUrl)])];
 const customQueries = argValues('--query');
 
 if (!Number.isFinite(year) || Number.isNaN(since.getTime())) {
@@ -117,6 +134,7 @@ function summarize(sample) {
 async function discoverUrls() {
   const urls = new Set(seedUrls);
   const queries = customQueries.length ? customQueries : defaultQueries();
+  if (seedUrls.length) console.log(`Starting with ${seedUrls.length} existing/manual SC Labs public source URL${seedUrls.length === 1 ? '' : 's'}.`);
   if (!String(process.env.SEARXNG_URL || '').trim()) return { urls, queries: [] };
 
   console.log(`Discovering SC Labs public PhytoFacts pages with ${queries.length} search queries...`);
