@@ -12,13 +12,16 @@ type ProductMatch={menuItemId:string;productId:string|null;batchId:string|null;i
 type ProductDispensary={id:string;name:string;city:string|null;region:string|null;country:string|null;latitude:number;longitude:number;matches:ProductMatch[]};
 
 function formatPrice(match:ProductMatch){if(match.priceCents===null)return null;try{return new Intl.NumberFormat(undefined,{style:'currency',currency:match.currency||'USD'}).format(match.priceCents/100);}catch{return `$${(match.priceCents/100).toFixed(2)}`;}}
+function clearProductParam(){const url=new URL(window.location.href);url.searchParams.delete('product');url.searchParams.delete('productId');window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`);}
 
 function ProductAwareMap(props:Props){
  const rootRef=useRef<HTMLDivElement|null>(null);
  const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
  const[query,setQuery]=useState(''),[debouncedQuery,setDebouncedQuery]=useState(''),[resultQuery,setResultQuery]=useState('');
+ const[exactProductId,setExactProductId]=useState(''),[exactProductLabel,setExactProductLabel]=useState('');
  const[results,setResults]=useState<ProductDispensary[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
 
+ useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=String(params.get('product')||params.get('productId')||'').trim();if(id){setExactProductId(id);document.body.classList.add('geoweedo-findo-active');window.setTimeout(()=>document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click(),0);}},[]);
  useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(query.trim()),260);return()=>window.clearTimeout(timer);},[query]);
  useEffect(()=>{
   const root=rootRef.current;if(!root)return;
@@ -26,15 +29,16 @@ function ProductAwareMap(props:Props){
   sync();const observer=new MutationObserver(sync);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});return()=>observer.disconnect();
  },[]);
  useEffect(()=>{
-  const q=debouncedQuery.trim();
-  if(q.length<2){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
+  const exactId=exactProductId.trim(),q=debouncedQuery.trim();
+  if(!exactId&&q.length<2){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
   const controller=new AbortController();setLoading(true);setError('');
-  fetch(`/api/dispensaries/product-search?q=${encodeURIComponent(q)}`,{cache:'no-store',signal:controller.signal})
+  const endpoint=exactId?`/api/dispensaries/product-search?productId=${encodeURIComponent(exactId)}`:`/api/dispensaries/product-search?q=${encodeURIComponent(q)}`;
+  fetch(endpoint,{cache:'no-store',signal:controller.signal})
    .then(async response=>{const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Product search failed.');return data;})
-   .then(data=>{const next=Array.isArray(data.dispensaries)?data.dispensaries:[];setResults(next);setResultQuery(q);setLoading(false);rootRef.current?.querySelector<HTMLButtonElement>('.map-location-close')?.click();})
-   .catch(err=>{if(controller.signal.aborted)return;setResults([]);setResultQuery(q);setLoading(false);setError(err instanceof Error?err.message:'Product search failed.');});
+   .then(data=>{const next=Array.isArray(data.dispensaries)?data.dispensaries:[];const label=exactId?String(data.product?.label||data.product?.productName||'Selected product'):q;setResults(next);setResultQuery(label);if(exactId)setExactProductLabel(label);setLoading(false);rootRef.current?.querySelector<HTMLButtonElement>('.map-location-close')?.click();window.setTimeout(()=>{const panel=rootRef.current?.querySelector<HTMLElement>('.map-browser-panel');if(panel)return;const button=Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>('.map-browser-tools button')||[]).find(item=>/^Browse list\s*\(/i.test(item.textContent?.trim()||''));button?.click();},20);})
+   .catch(err=>{if(controller.signal.aborted)return;setResults([]);setResultQuery('');setLoading(false);setError(err instanceof Error?err.message:'Product search failed.');});
   return()=>controller.abort();
- },[debouncedQuery]);
+ },[debouncedQuery,exactProductId]);
 
  const productFilterActive=resultQuery.length>=2&&!loading&&!error;
  const resultMap=useMemo(()=>new Map(results.map(item=>[String(item.id),item])),[results]);
@@ -49,13 +53,15 @@ function ProductAwareMap(props:Props){
  },[productFilterActive,props.locations,results]);
  const productCountries=useMemo(()=>new Set(productLocations.map(item=>item.country).filter(Boolean)).size,[productLocations]);
  const selectedMatch=resultMap.get(selectedLocationId);
+ const inputValue=exactProductId?(exactProductLabel||'Selected Weedo Facts product'):query;
+ const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');clearProductParam();};
  const searchControl=toolbar?createPortal(<div className="map-product-search" style={{display:'flex',alignItems:'center',gap:6,position:'relative'}}>
-   <input className="map-product-search-input" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search product or brand" aria-label="Search product or brand" autoComplete="off" style={{minWidth:180,maxWidth:280}}/>
-   {query?<button type="button" onClick={()=>{setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');}} aria-label="Clear product search" title="Clear product search">×</button>:null}
-   {loading?<span style={{fontSize:12,whiteSpace:'nowrap'}}>Searching products…</span>:productFilterActive?<span style={{fontSize:12,whiteSpace:'nowrap'}}>{results.length} {results.length===1?'store':'stores'}</span>:error?<span style={{fontSize:12,whiteSpace:'nowrap'}} title={error}>Product search unavailable</span>:null}
+   <input className="map-product-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search product or brand" aria-label="Search product or brand" autoComplete="off" style={{minWidth:180,maxWidth:280}}/>
+   {inputValue?<button type="button" onClick={clearSearch} aria-label="Clear product search" title="Clear product search">×</button>:null}
+   {loading?<span style={{fontSize:12,whiteSpace:'nowrap'}}>Finding product…</span>:productFilterActive?<span style={{fontSize:12,whiteSpace:'nowrap'}}>{exactProductId?'Exact product · ':''}{results.length} {results.length===1?'store':'stores'}</span>:error?<span style={{fontSize:12,whiteSpace:'nowrap'}} title={error}>Product search unavailable</span>:null}
   </div>,toolbar):null;
  const matchCard=locationCard&&selectedMatch?createPortal(<div className="map-location-product-matches" style={{marginTop:12,padding:'10px 12px',borderRadius:10,background:'rgba(72,160,91,.12)',border:'1px solid rgba(103,214,110,.28)'}}>
-   <strong style={{display:'block',marginBottom:6}}>🌿 PRODUCT MATCHES</strong>
+   <strong style={{display:'block',marginBottom:6}}>🌿 {exactProductId?'THIS PRODUCT':'PRODUCT MATCHES'}</strong>
    {selectedMatch.matches.slice(0,4).map(match=><div key={match.menuItemId} style={{padding:'6px 0',borderTop:'1px solid rgba(255,255,255,.08)'}}>
     <div style={{fontWeight:800}}>{match.brandName?`${match.brandName} · `:''}{match.itemName}</div>
     <small>{[match.variant,match.packageSize,formatPrice(match),match.inventoryStatus&&match.inventoryStatus!=='unknown'?match.inventoryStatus.replace(/_/g,' '):null].filter(Boolean).join(' · ')||'Listed on dispensary menu'}{match.verified?' · ✓ source-backed':''}</small>
