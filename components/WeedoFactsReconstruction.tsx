@@ -152,32 +152,32 @@ export default function WeedoFactsReconstruction() {
     setError('');
     setMessage('');
     const scanned = currentBarcode();
-    if (!/^\d{8,14}$/.test(scanned)) {
-      setError('Scan or enter a UPC/EAN barcode above first.');
-      return;
+
+    if (/^\d{8,14}$/.test(scanned)) {
+      setUpc(scanned);
+      try {
+        const response = await fetch(`/api/weedo-facts/reconstruct?upc=${encodeURIComponent(scanned)}`, { cache: 'no-store' });
+        const body = await response.json();
+        if (response.ok && body?.found && body?.reconstruction) {
+          setResult(body.reconstruction);
+          setLabelText('');
+          setMessage('GeoWeedo already has a saved public-source reconstruction for this barcode.');
+          return;
+        }
+      } catch {}
+    } else {
+      setUpc('');
     }
-    setUpc(scanned);
 
-    try {
-      const response = await fetch(`/api/weedo-facts/reconstruct?upc=${encodeURIComponent(scanned)}`, { cache: 'no-store' });
-      const body = await response.json();
-      if (response.ok && body?.found && body?.reconstruction) {
-        setResult(body.reconstruction);
-        setLabelText('');
-        setMessage('GeoWeedo already has a saved public-source reconstruction for this barcode.');
-        return;
-      }
-    } catch {}
-
+    // Label capture must not depend on having a barcode first. The image is read
+    // locally, and the recognized text can be preserved until a UPC/EAN is supplied.
     fileRef.current?.click();
   }
 
   async function processLabelPhoto(file: File) {
     const scanned = upc || currentBarcode();
-    if (!/^\d{8,14}$/.test(scanned)) {
-      setError('Scan or enter a UPC/EAN barcode above first.');
-      return;
-    }
+    const hasBarcode = /^\d{8,14}$/.test(scanned);
+    if (hasBarcode) setUpc(scanned);
 
     setBusy(true);
     setError('');
@@ -203,6 +203,12 @@ export default function WeedoFactsReconstruction() {
         return;
       }
 
+      if (!hasBarcode) {
+        setError('');
+        setMessage('Label read successfully. Scan or enter the UPC/EAN above, then tap Re-run reconstruction.');
+        return;
+      }
+
       await reconstruct(scanned, text);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Product label reconstruction failed.');
@@ -216,7 +222,7 @@ export default function WeedoFactsReconstruction() {
   async function reconstruct(barcode = upc || currentBarcode(), text = labelText) {
     const normalized = String(barcode || '').replace(/\D/g, '');
     if (!/^\d{8,14}$/.test(normalized)) {
-      setError('Scan or enter a UPC/EAN barcode above first.');
+      setError('Scan or enter a UPC/EAN barcode above, then re-run reconstruction.');
       return;
     }
     if (text.trim().length < 8) {
@@ -258,7 +264,7 @@ export default function WeedoFactsReconstruction() {
         <div>
           <span className="weedoFactsEyebrow">UNKNOWN BARCODE RECOVERY</span>
           <h2>Reconstruct an unlisted cannabis product</h2>
-          <p>If the barcode is valid but GeoWeedo has no listing, photograph the printed package label. Fill most of the frame with the label, keep the text horizontal, and avoid glare. GeoWeedo reads the label locally, then compares useful product, batch, manufacturer and potency evidence with public sources.</p>
+          <p>If GeoWeedo has no listing, photograph the printed package label. Fill most of the frame with the label, keep the text horizontal, and avoid glare. GeoWeedo reads the label locally, then compares useful product, batch, manufacturer and potency evidence with public sources. A UPC/EAN can be added before or after the label photo.</p>
         </div>
         <button type="button" className="weedoFactsScanButton" onClick={start} disabled={busy}>{busy ? 'Working…' : '📷 Scan product label'}</button>
       </div>
@@ -275,7 +281,7 @@ export default function WeedoFactsReconstruction() {
         }}
       />
 
-      <p className="weedoFactsReconstructionPrivacy">The label photo is OCR-read in the browser. GeoWeedo sends recognized text and the barcode to its reconstruction API; the photo itself is not uploaded.</p>
+      <p className="weedoFactsReconstructionPrivacy">The label photo is OCR-read in the browser. GeoWeedo sends recognized text and the barcode, when available, to its reconstruction API; the photo itself is not uploaded.</p>
 
       {message ? <p className="weedoFactsSuccess">{message}</p> : null}
       {error ? <p className="weedoFactsError">{error}</p> : null}
