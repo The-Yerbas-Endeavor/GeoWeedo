@@ -85,6 +85,42 @@
 }
 .proofVerified{background:#7ed957;color:#081108}
 .proofPending{border:1px solid rgba(255,255,255,.17);color:#d8e4d9}
+.availabilityAction{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+  margin-top:20px;
+}
+.findNearby{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:46px;
+  padding:12px 18px;
+  border:1px solid rgba(126,217,87,.72);
+  border-radius:13px;
+  background:linear-gradient(135deg,#7ed957,#4fc466);
+  color:#071108;
+  text-decoration:none;
+  font-size:.92rem;
+  font-weight:950;
+  letter-spacing:.01em;
+  box-shadow:0 10px 28px rgba(79,196,102,.20);
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;
+}
+.findNearby:hover{
+  transform:translateY(-1px);
+  filter:brightness(1.04);
+  box-shadow:0 14px 34px rgba(79,196,102,.27);
+}
+.findNearby:focus-visible{outline:3px solid rgba(255,255,255,.8);outline-offset:3px}
+.availabilityAction small{
+  max-width:540px;
+  color:rgba(220,233,222,.62);
+  font-size:.7rem;
+  line-height:1.45;
+}
 
 .factsFocus{
   width:min(860px,100%);
@@ -173,6 +209,9 @@
   .productIntro{margin-bottom:14px;padding:0 8px}
   .productIntro h1{font-size:clamp(2.7rem,16vw,5rem)}
   .proofLine{font-size:.62rem}
+  .availabilityAction{margin-top:16px;padding:0 4px}
+  .findNearby{width:100%;min-height:48px}
+  .availabilityAction small{font-size:.66rem}
   .factsHeading{padding:0 10px}
   .factsHeading p{font-size:.79rem}
   .factsStage{padding:8px;border-radius:20px 20px 38px 20px}
