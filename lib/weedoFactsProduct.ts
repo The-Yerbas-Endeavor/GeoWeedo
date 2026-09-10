@@ -12,9 +12,28 @@ export type WeedoFactsListingSummary = {
   coaNumber: string | null;
   labName: string | null;
   producerName: string | null;
+  producerLicenseNumber: string | null;
   testedAt: string | null;
   overallStatus: string | null;
   analyteCount: number;
+};
+
+export type ProductChemistryCatalogFilters = {
+  q?: string | null;
+  brand?: string | null;
+  business?: string | null;
+  type?: string | null;
+};
+
+export type ProductChemistryCatalog = {
+  listings: WeedoFactsListingSummary[];
+  totalListings: number;
+  productCount: number;
+  brandCount: number;
+  businessCount: number;
+  brands: string[];
+  businesses: string[];
+  productTypes: string[];
 };
 
 function analytesForBatch(batchId: string) {
@@ -118,6 +137,7 @@ export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
       b.coa_number,
       b.lab_name,
       b.producer_name,
+      b.producer_license_number,
       b.tested_at,
       b.overall_status,
       COUNT(a.id) AS analyte_count
@@ -142,10 +162,57 @@ export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
     coaNumber: row.coa_number,
     labName: row.lab_name,
     producerName: row.producer_name,
+    producerLicenseNumber: row.producer_license_number,
     testedAt: row.tested_at,
     overallStatus: row.overall_status,
     analyteCount: Number(row.analyte_count || 0),
   }));
+}
+
+function uniqueSorted(values: Array<string | null>) {
+  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+}
+
+function normalizedSearch(value: unknown) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilters = {}): ProductChemistryCatalog {
+  const all = listWeedoFactsListings();
+  const q = normalizedSearch(filters.q);
+  const brand = String(filters.brand || '').trim();
+  const business = String(filters.business || '').trim();
+  const type = String(filters.type || '').trim();
+
+  const listings = all.filter(row => {
+    if (brand && row.brandName !== brand) return false;
+    if (business && row.producerName !== business) return false;
+    if (type && row.productType !== type) return false;
+    if (!q) return true;
+    const haystack = normalizedSearch([
+      row.productName,
+      row.brandName,
+      row.producerName,
+      row.producerLicenseNumber,
+      row.productType,
+      row.batchNumber,
+      row.coaNumber,
+      row.labName,
+    ].filter(Boolean).join(' '));
+    return q.split(/\s+/).every(token => haystack.includes(token));
+  });
+
+  return {
+    listings,
+    totalListings: all.length,
+    productCount: new Set(all.map(row => row.productId)).size,
+    brandCount: new Set(all.map(row => row.brandName).filter(Boolean)).size,
+    businessCount: new Set(all.map(row => row.producerName).filter(Boolean)).size,
+    brands: uniqueSorted(all.map(row => row.brandName)),
+    businesses: uniqueSorted(all.map(row => row.producerName)),
+    productTypes: uniqueSorted(all.map(row => row.productType)),
+  };
 }
 
 /**
