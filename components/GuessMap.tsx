@@ -15,14 +15,14 @@ function formatPrice(match:ProductMatch){if(match.priceCents===null)return null;
 
 function ProductAwareMap(props:Props){
  const rootRef=useRef<HTMLDivElement|null>(null);
- const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null);
+ const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
  const[query,setQuery]=useState(''),[debouncedQuery,setDebouncedQuery]=useState(''),[resultQuery,setResultQuery]=useState('');
  const[results,setResults]=useState<ProductDispensary[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
 
  useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(query.trim()),260);return()=>window.clearTimeout(timer);},[query]);
  useEffect(()=>{
   const root=rootRef.current;if(!root)return;
-  const sync=()=>{setToolbar(root.querySelector<HTMLElement>('.map-browser-tools'));setLocationCard(root.querySelector<HTMLElement>('.map-location-card'));};
+  const sync=()=>{const nextToolbar=root.querySelector<HTMLElement>('.map-browser-tools');const nextCard=root.querySelector<HTMLElement>('.map-location-card');setToolbar(nextToolbar);setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');};
   sync();const observer=new MutationObserver(sync);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});return()=>observer.disconnect();
  },[]);
  useEffect(()=>{
@@ -48,8 +48,7 @@ function ProductAwareMap(props:Props){
   }).filter(item=>Number.isFinite(item.lat)&&Number.isFinite(item.lng));
  },[productFilterActive,props.locations,results]);
  const productCountries=useMemo(()=>new Set(productLocations.map(item=>item.country).filter(Boolean)).size,[productLocations]);
- const selectedId=locationCard?.dataset.locationId||'';
- const selectedMatch=resultMap.get(selectedId);
+ const selectedMatch=resultMap.get(selectedLocationId);
  const searchControl=toolbar?createPortal(<div className="map-product-search" style={{display:'flex',alignItems:'center',gap:6,position:'relative'}}>
    <input className="map-product-search-input" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search product or brand" aria-label="Search product or brand" autoComplete="off" style={{minWidth:180,maxWidth:280}}/>
    {query?<button type="button" onClick={()=>{setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');}} aria-label="Clear product search" title="Clear product search">×</button>:null}
