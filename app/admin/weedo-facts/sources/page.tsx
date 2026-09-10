@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import styles from './sources.module.css';
 
+type Region = {
+  code: string;
+  label: string;
+  upstreamRecords: number;
+  importedRecords: number;
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastError: string | null;
+};
+
 type Source = {
   id: string;
   label: string;
@@ -15,8 +25,10 @@ type Source = {
   lastError: string | null;
   records: number;
   products: number;
+  primaryLabel?: string;
   secondaryCount: number;
   secondaryLabel: string;
+  regions?: Region[];
 };
 
 function formatDate(value: string | null) {
@@ -37,6 +49,7 @@ export default function WeedoFactsSourcesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
+  const [selectedRegions, setSelectedRegions] = useState<Record<string,string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -60,14 +73,15 @@ export default function WeedoFactsSourcesPage() {
     return () => window.clearInterval(timer);
   }, [sources, load]);
 
-  async function updateSource(sourceId: string) {
-    setBusy(sourceId);
+  async function updateSource(sourceId: string, region?: string) {
+    const busyKey = region ? `${sourceId}:${region}` : sourceId;
+    setBusy(busyKey);
     setError('');
     try {
       const response = await fetch('/api/admin/weedo-facts/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId }),
+        body: JSON.stringify({ sourceId, region: region || null }),
       });
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const body = await response.json();
@@ -95,45 +109,73 @@ export default function WeedoFactsSourcesPage() {
     {loading ? <div className={styles.loading}>Loading source status…</div> : null}
 
     <section className={styles.grid}>
-      {sources.map(source => <article className={styles.card} key={source.id}>
-        <div className={styles.cardHead}>
-          <div>
-            <span className={styles.kind}>{source.kind}</span>
-            <h2>{source.label}</h2>
+      {sources.map(source => {
+        const selectedRegion = selectedRegions[source.id] || '';
+        const selected = source.regions?.find(region => region.code === selectedRegion);
+        const sourceBusy = source.state === 'running' || busy === source.id || busy.startsWith(`${source.id}:`);
+        return <article className={styles.card} key={source.id}>
+          <div className={styles.cardHead}>
+            <div>
+              <span className={styles.kind}>{source.kind}</span>
+              <h2>{source.label}</h2>
+            </div>
+            <span className={`${styles.state} ${stateClass(source.state)}`}>{source.state}</span>
           </div>
-          <span className={`${styles.state} ${stateClass(source.state)}`}>{source.state}</span>
-        </div>
-        <p className={styles.description}>{source.description}</p>
+          <p className={styles.description}>{source.description}</p>
 
-        <div className={styles.stats}>
-          <div><strong>{source.records.toLocaleString()}</strong><span>records</span></div>
-          <div><strong>{source.products.toLocaleString()}</strong><span>{source.id === 'sc-labs' ? 'products' : 'cultivars'}</span></div>
-          <div><strong>{source.secondaryCount.toLocaleString()}</strong><span>{source.secondaryLabel}</span></div>
-        </div>
+          <div className={styles.stats}>
+            <div><strong>{source.records.toLocaleString()}</strong><span>records</span></div>
+            <div><strong>{source.products.toLocaleString()}</strong><span>{source.primaryLabel || 'products'}</span></div>
+            <div><strong>{source.secondaryCount.toLocaleString()}</strong><span>{source.secondaryLabel}</span></div>
+          </div>
 
-        <dl>
-          <dt>Last started</dt><dd>{formatDate(source.lastStartedAt)}</dd>
-          <dt>Last completed</dt><dd>{formatDate(source.lastCompletedAt)}</dd>
-          <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open public source ↗</a></dd>
-        </dl>
+          <dl>
+            <dt>Last started</dt><dd>{formatDate(source.lastStartedAt)}</dd>
+            <dt>Last completed</dt><dd>{formatDate(source.lastCompletedAt)}</dd>
+            <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open public source ↗</a></dd>
+          </dl>
 
-        {source.lastError ? <div className={styles.sourceError}>{source.lastError}</div> : null}
+          {source.lastError ? <div className={styles.sourceError}>{source.lastError}</div> : null}
 
-        <button
-          type="button"
-          className={styles.update}
-          disabled={source.state === 'running' || busy === source.id}
-          onClick={() => updateSource(source.id)}
-        >
-          {source.state === 'running' || busy === source.id ? 'Updating…' : `Update ${source.label}`}
-        </button>
-        {source.state === 'running' ? <p className={styles.runningNote}>The update is running in the background. This page refreshes automatically.</p> : null}
-      </article>)}
+          {source.regions?.length ? <>
+            <div className={styles.regionControl}>
+              <label>
+                <span>State dataset</span>
+                <select value={selectedRegion} onChange={event => setSelectedRegions(current => ({ ...current, [source.id]: event.target.value }))}>
+                  <option value="">Choose a state…</option>
+                  {source.regions.map(region => <option key={region.code} value={region.code}>
+                    {region.label} · {region.upstreamRecords.toLocaleString()} upstream · {region.importedRecords.toLocaleString()} imported
+                  </option>)}
+                </select>
+              </label>
+              {selected ? <p>{selected.label}: <strong>{selected.upstreamRecords.toLocaleString()}</strong> upstream records · <strong>{selected.importedRecords.toLocaleString()}</strong> currently tracked in GeoWeedo · last completed {formatDate(selected.lastCompletedAt)}.</p> : <p>Choose one state at a time. GeoWeedo will cache the source file, upsert changed records, skip unchanged rows, and preserve stronger direct-lab evidence.</p>}
+            </div>
+            <details className={styles.regionStatus}>
+              <summary>View all Cannlytics state checkpoints</summary>
+              <div className={styles.regionTable}>
+                {source.regions.map(region => <div key={region.code}>
+                  <strong>{region.code.toUpperCase()}</strong><span>{region.label}</span><span>{region.importedRecords.toLocaleString()} / {region.upstreamRecords.toLocaleString()}</span><span>{formatDate(region.lastCompletedAt)}</span>
+                </div>)}
+              </div>
+            </details>
+          </> : null}
+
+          <button
+            type="button"
+            className={styles.update}
+            disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
+            onClick={() => updateSource(source.id, selectedRegion || undefined)}
+          >
+            {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `Update ${selected.label}` : `Update ${source.label}`}
+          </button>
+          {source.state === 'running' ? <p className={styles.runningNote}>The update is running in the background. This page refreshes automatically.</p> : null}
+        </article>;
+      })}
     </section>
 
     <section className={styles.evidence}>
       <h2>Evidence separation</h2>
-      <p><strong>SC Labs</strong> feeds verified laboratory batch chemistry into Product Chemistry. <strong>Kannapedia</strong> feeds cultivar genetics and registrant-reported chemistry into Cultivar Genetics. Kannapedia chemistry is never promoted to verified lab-batch evidence.</p>
+      <p><strong>SC Labs</strong> feeds direct public laboratory batch chemistry. <strong>Cannlytics</strong> feeds normalized public laboratory and regulatory results under CC BY 4.0; GeoWeedo preserves the upstream source and does not overwrite stronger direct-lab evidence. <strong>Kannapedia</strong> remains a separate cultivar-genetics source, and its registrant-reported chemistry is never promoted to verified lab-batch evidence.</p>
     </section>
   </main>;
 }
