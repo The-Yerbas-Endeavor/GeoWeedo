@@ -4,6 +4,7 @@ export default function SiteHeader() {
     ['/leaderboard', 'Leaderboard'],
     ['/weedo-facts', 'Weedo Facts'],
     ['/product-chemistry', 'Product Chemistry'],
+    ['/cultivars', 'Cultivar Genetics'],
     ['/rewards', 'YERB rewards'],
     ['/for-dispensaries', 'For dispensaries'],
     ['/about', 'About'],
