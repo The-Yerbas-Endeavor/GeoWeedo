@@ -27,7 +27,8 @@ function inventoryAvailable(value: unknown) {
   return !['out_of_stock', 'sold_out', 'unavailable', 'discontinued', 'inactive'].includes(normalized);
 }
 
-function matchScore(row: any, query: string) {
+function matchScore(row: any, query: string, exactProduct: boolean) {
+  if (exactProduct) return 1000 + (row.item_verified ? 8 : 0);
   const q = query.toLowerCase();
   const item = String(row.item_name || '').toLowerCase();
   const menuBrand = String(row.menu_brand_name || '').toLowerCase();
@@ -45,13 +46,25 @@ function matchScore(row: any, query: string) {
 
 export async function GET(request: NextRequest) {
   const query = normalizeQuery(String(request.nextUrl.searchParams.get('q') || ''));
+  const productId = normalizeQuery(String(request.nextUrl.searchParams.get('productId') || ''));
   const terms = searchTerms(query);
-  if (query.length < 2 || !terms.length) {
-    return NextResponse.json({ query, count: 0, dispensaries: [] }, { headers: { 'Cache-Control': 'no-store' } });
+  if (!productId && (query.length < 2 || !terms.length)) {
+    return NextResponse.json({ query, product: null, count: 0, dispensaries: [] }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   ensureWeedoMenuSchema();
   const db = getDatabase();
+  let product: any = null;
+  if (productId) {
+    product = db.prepare(`
+      SELECT id, product_name, brand_name, product_type, net_contents
+      FROM cannabis_products
+      WHERE id = ?
+      LIMIT 1
+    `).get(productId) as any;
+    if (!product) return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
+  }
+
   const searchable = `LOWER(
     COALESCE(mi.item_name, '') || ' ' ||
     COALESCE(mi.brand_name, '') || ' ' ||
@@ -66,7 +79,8 @@ export async function GET(request: NextRequest) {
     COALESCE(b.uid, '')
   )`;
   const termConditions = terms.map(() => `${searchable} LIKE ?`).join(' AND ');
-  const params = terms.map(term => `%${term}%`);
+  const matchCondition = productId ? 'mi.product_id = ?' : termConditions;
+  const params = productId ? [productId] : terms.map(term => `%${term}%`);
 
   const rows = db.prepare(`
     SELECT
@@ -106,7 +120,7 @@ export async function GET(request: NextRequest) {
       AND d.verified = 1
       AND d.latitude IS NOT NULL
       AND d.longitude IS NOT NULL
-      AND ${termConditions}
+      AND ${matchCondition}
     ORDER BY mi.verified DESC, COALESCE(mi.source_updated_at, mi.updated_at) DESC
     LIMIT ${MAX_ROWS}
   `).all(...params) as any[];
@@ -150,7 +164,7 @@ export async function GET(request: NextRequest) {
       sourceUrl: row.source_url || null,
       sourceUpdatedAt: row.source_updated_at || null,
       batchNumber: row.batch_number || null,
-      score: matchScore(row, query),
+      score: matchScore(row, query, Boolean(productId)),
     });
   }
 
@@ -163,6 +177,14 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     query,
+    product: product ? {
+      id: product.id,
+      productName: product.product_name,
+      brandName: product.brand_name || null,
+      productType: product.product_type || null,
+      netContents: product.net_contents || null,
+      label: [product.brand_name, product.product_name].filter(Boolean).join(' · '),
+    } : null,
     count: dispensaries.length,
     dispensaries,
   }, { headers: { 'Cache-Control': 'no-store' } });
