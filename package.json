@@ -14,7 +14,7 @@
     "weedo:ingest:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-sc-labs.mjs",
     "weedo:import:sc-labs": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-sc-labs-public.mjs",
     "weedo:import:kannapedia": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-kannapedia-public.mjs",
-    "weedo:import:cannlytics": "python3 scripts/import-cannlytics-public.py",
+    "weedo:import:cannlytics": "python3 scripts/import-cannlytics-safe.py",
     "searxng:enable-engines": "sudo bash scripts/configure-searxng-engines.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
