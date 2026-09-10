@@ -7,4 +7,5 @@ data/runtime/
 data/source-cache/
 data/source-updates/
 public/uploads/dispensaries/
+public/maplibre/
 npm-debug.log*
