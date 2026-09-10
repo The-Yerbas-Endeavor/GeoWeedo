@@ -25,6 +25,13 @@ function formatDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function stateClass(state: Source['state']) {
+  if (state === 'running') return styles.running;
+  if (state === 'success') return styles.success;
+  if (state === 'error') return styles.errorState;
+  return '';
+}
+
 export default function WeedoFactsSourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +101,7 @@ export default function WeedoFactsSourcesPage() {
             <span className={styles.kind}>{source.kind}</span>
             <h2>{source.label}</h2>
           </div>
-          <span className={`${styles.state} ${styles[source.state]}`}>{source.state}</span>
+          <span className={`${styles.state} ${stateClass(source.state)}`}>{source.state}</span>
         </div>
         <p className={styles.description}>{source.description}</p>
 
