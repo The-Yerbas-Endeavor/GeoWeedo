@@ -99,7 +99,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             <div>
               <span className="weedoFactsEyebrow">VERIFIED CATALOG</span>
               <h2 id="product-chemistry-listings-heading">Product Chemistry catalog</h2>
-              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a verified batch record.</p>
+              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a verified batch record with source provenance.</p>
             </div>
             <span className="nutritionalFactsCount">
               {catalog.listings.length}{filtersActive ? ` of ${catalog.totalListings}` : ''} {catalog.listings.length === 1 ? 'batch' : 'batches'}
@@ -164,6 +164,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                       <span><strong>Batch / COA:</strong> {identity}</span>
                       {listing.labName ? <span><strong>Lab:</strong> {listing.labName}</span> : null}
                       {tested ? <span><strong>Tested:</strong> {tested}</span> : null}
+                      {listing.sourceName ? <span><strong>Source:</strong> {listing.sourceName}{listing.sourceName === 'Cannlytics' ? ' · normalized public dataset' : ''}</span> : null}
                       <span><strong>Analytes:</strong> {listing.analyteCount}</span>
                     </span>
                     <span className="nutritionalFactsOpen">View chemistry →</span>
@@ -176,6 +177,10 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               {filtersActive ? 'No verified Product Chemistry listings match these filters.' : 'No verified Product Chemistry listings are available yet.'}
             </div>
           )}
+
+          {catalog.hasCannlytics ? <div className="productChemistryAttribution">
+            <strong>Cannlytics attribution.</strong> Some Product Chemistry records are normalized from the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. GeoWeedo normalizes field names, product identities, and analyte naming; original source or COA links are retained when supplied by the dataset.
+          </div> : null}
         </section>
       </div>
     </main>
