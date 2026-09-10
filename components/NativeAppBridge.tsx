@@ -1,23 +1,16 @@
 'use client';
 
 import { useEffect } from 'react';
-
-declare global {
-  interface Window {
-    Capacitor?: {
-      isNativePlatform?: () => boolean;
-      getPlatform?: () => string;
-    };
-  }
-}
+import { getNativePlatform, installNativeListeners, isNativeApp } from '@/lib/native';
 
 export default function NativeAppBridge() {
   useEffect(() => {
-    const capacitor = window.Capacitor;
-    if (!capacitor?.isNativePlatform?.()) return;
+    if (!isNativeApp()) return;
 
-    const platform = capacitor.getPlatform?.() || 'native';
+    const platform = getNativePlatform();
     const root = document.documentElement;
+    let removeNativeListeners: (() => void) | undefined;
+    let disposed = false;
 
     root.dataset.nativeApp = 'true';
     root.dataset.nativePlatform = platform;
@@ -29,9 +22,24 @@ export default function NativeAppBridge() {
       }),
     );
 
+    void installNativeListeners()
+      .then((remove) => {
+        if (disposed) {
+          remove();
+          return;
+        }
+        removeNativeListeners = remove;
+      })
+      .catch((error) => {
+        console.warn('[GeoWeedo native] listener setup failed', error);
+      });
+
     return () => {
+      disposed = true;
+      removeNativeListeners?.();
       delete root.dataset.nativeApp;
       delete root.dataset.nativePlatform;
+      delete root.dataset.nativeNetwork;
       root.classList.remove('geoweedo-native-app', `geoweedo-native-${platform}`);
     };
   }, []);
