@@ -9,17 +9,17 @@
   button,a,input,select,summary{touch-action:manipulation}
   button,.ghost,.secondary,.primary,.nav-link{min-height:44px}
 
-  /* Compact app header */
-  .site-topbar{height:56px!important;min-height:56px!important;padding:0 max(10px,env(safe-area-inset-left)) 0 max(10px,env(safe-area-inset-right))!important;overflow:visible!important}
+  /* Compact app header. Keep the entire header stacking context above gameplay/map cards so the hamburger popover can never be painted underneath them. */
+  .site-topbar{position:relative!important;z-index:1000!important;isolation:isolate;height:56px!important;min-height:56px!important;padding:0 max(10px,env(safe-area-inset-left)) 0 max(10px,env(safe-area-inset-right))!important;overflow:visible!important}
   .site-topbar>.nav-actions{display:none!important}
   .geoweedo-header-icon{width:30px!important;height:30px!important;flex-basis:30px!important}
   .geoweedo-header-wordmark{font-size:15px!important;letter-spacing:.06em!important}
-  .mobile-nav-menu{display:block;position:relative;margin-left:auto}
-  .mobile-nav-menu summary{list-style:none;display:grid;place-items:center;width:44px;height:44px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05);color:var(--text);font-size:0;cursor:pointer}
+  .mobile-nav-menu{display:block;position:relative;z-index:1001;margin-left:auto}
+  .mobile-nav-menu summary{position:relative;z-index:1002;list-style:none;display:grid;place-items:center;width:44px;height:44px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05);color:var(--text);font-size:0;cursor:pointer}
   .mobile-nav-menu summary::-webkit-details-marker{display:none}
   .mobile-nav-menu summary::before{content:'☰';font-size:22px;line-height:1}
   .mobile-nav-menu[open] summary::before{content:'×';font-size:28px}
-  .mobile-nav-popover{position:absolute;z-index:100;top:50px;right:0;width:min(270px,calc(100vw - 20px));padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:16px;background:rgba(11,14,12,.98);box-shadow:0 22px 60px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
+  .mobile-nav-popover{position:absolute;z-index:1003;top:50px;right:0;width:min(270px,calc(100vw - 20px));padding:8px;border:1px solid rgba(255,255,255,.14);border-radius:16px;background:rgba(11,14,12,.98);box-shadow:0 22px 60px rgba(0,0,0,.5);backdrop-filter:blur(14px)}
   .mobile-nav-popover .nav-link{display:flex!important;width:100%;justify-content:flex-start;margin:0;padding:12px 14px;border:0;border-radius:10px;background:transparent;font-size:14px}
   .mobile-nav-popover .nav-link:hover,.mobile-nav-popover .nav-link:focus-visible{background:rgba(103,214,110,.1);outline:none}
   .mobile-nav-popover .primary{background:var(--accent);color:#081108;margin-top:4px;justify-content:center}
