@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lookupWeedoFacts } from '../../../../lib/weedoFacts';
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../../../../lib/scLabs';
+import { normalizeScLabsPublicSample } from '../../../../lib/scLabsPublicIdentity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (isScLabsSampleUrl(identifier)) {
-      const sample = await fetchScLabsSample(identifier);
+      const sample = normalizeScLabsPublicSample(await fetchScLabsSample(identifier));
       const ingestion = ingestScLabsSample(sample);
       const record = lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' });
       return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: 'sc_labs_public_page', ingestion });
