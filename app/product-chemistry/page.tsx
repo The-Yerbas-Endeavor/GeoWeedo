@@ -73,11 +73,11 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
           <h1>Product Chemistry</h1>
           <p className="weedoFactsLead">
-            Search verified cannabis product and batch chemistry by product, consumer brand, licensed business, product type, batch, COA, or laboratory data.
+            Search source-backed cannabis product and batch chemistry by product, consumer brand, licensed business, product type, batch, COA, or laboratory data.
           </p>
           <div className="productChemistryStats" aria-label="Product Chemistry catalog totals">
             <div><strong>{catalog.productCount.toLocaleString()}</strong><span>Products</span></div>
-            <div><strong>{catalog.totalListings.toLocaleString()}</strong><span>Verified batches</span></div>
+            <div><strong>{catalog.totalListings.toLocaleString()}</strong><span>Sourced batches</span></div>
             <div><strong>{catalog.brandCount.toLocaleString()}</strong><span>Consumer brands</span></div>
             <div><strong>{catalog.businessCount.toLocaleString()}</strong><span>Licensed businesses</span></div>
           </div>
@@ -87,7 +87,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           !record ? (
             <section className="weedoFactsEmpty">
               <strong>Product Chemistry not found.</strong>
-              <p>This product or verified batch is not available in GeoWeedo.</p>
+              <p>This product or batch is not available in GeoWeedo.</p>
               <a className="weedoFactsCoaLink" href="/product-chemistry">View all Product Chemistry →</a>
             </section>
           ) : (
@@ -112,9 +112,9 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
         <section className="nutritionalFactsIndex" aria-labelledby="product-chemistry-listings-heading">
           <div className="nutritionalFactsIndexHead">
             <div>
-              <span className="weedoFactsEyebrow">VERIFIED CATALOG</span>
+              <span className="weedoFactsEyebrow">SOURCE-BACKED CATALOG</span>
               <h2 id="product-chemistry-listings-heading">Product Chemistry catalog</h2>
-              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a verified batch record with source provenance.</p>
+              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a batch record with source provenance.</p>
             </div>
             <span className="nutritionalFactsCount">
               {catalog.matchingListings ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingListings.toLocaleString()}` : '0'} {catalog.matchingListings === 1 ? 'batch' : 'batches'}
@@ -190,7 +190,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             </div>
           ) : (
             <div className="nutritionalFactsEmptyIndex">
-              {filtersActive ? 'No verified Product Chemistry listings match these filters.' : 'No verified Product Chemistry listings are available yet.'}
+              {filtersActive ? 'No Product Chemistry listings match these filters.' : 'No Product Chemistry listings are available yet.'}
             </div>
           )}
 
