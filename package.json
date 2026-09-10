@@ -13,6 +13,7 @@
     "admin:create": "bash scripts/create-admin.sh",
     "weedo:ingest:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-sc-labs.mjs",
     "weedo:import:sc-labs": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-sc-labs-public.mjs",
+    "searxng:enable-engines": "sudo bash scripts/configure-searxng-engines.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
     "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
