@@ -84,7 +84,10 @@ async function searchSearxng(query, pageNumber) {
   endpoint.searchParams.set('q', query);
   endpoint.searchParams.set('format', 'json');
   endpoint.searchParams.set('language', 'en');
-  endpoint.searchParams.set('safesearch', '1');
+  // Cannabis lab records are legitimate public technical data, but search-engine
+  // SafeSearch filters can suppress them entirely. Disable SafeSearch only for
+  // this dedicated SC Labs discovery job so those public PhytoFacts pages can be found.
+  endpoint.searchParams.set('safesearch', '0');
   endpoint.searchParams.set('pageno', String(pageNumber));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
