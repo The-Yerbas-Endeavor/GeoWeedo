@@ -97,7 +97,7 @@ function chemistryRows(text: string) {
 
 function extractSection(html: string, heading: string) {
   const headingPattern = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = html.match(new RegExp(`<h[2-5][^>]*>[^<]*${headingPattern}[^<]*<\\/h[2-5]>([\\s\\S]*?)(?=<h[2-5][^>]*>|$)`, 'i'));
+  const match = html.match(new RegExp(`<h[2-5][^>]*>[\\s\\S]*?${headingPattern}[\\s\\S]*?<\\/h[2-5]>([\\s\\S]*?)(?=<h[2-5][^>]*>|$)`, 'i'));
   if (!match) return null;
   return clean(htmlText(match[1]).slice(0, 3000));
 }
@@ -112,7 +112,8 @@ export function parseKannapediaPage(html: string, sourceUrl: string): Kannapedia
   const text = htmlText(html);
   const rspMatch = sourceUrl.match(/\/strains\/rsp(\d+)/i) || text.match(/\bRSP\s*(\d+)\b/i);
   const rspId = rspMatch?.[1] || '';
-  const name = clean(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' ')) || '';
+  const headingHtml = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '';
+  const name = clean(htmlText(headingHtml)) || '';
   if (!rspId || !name) throw new Error('Kannapedia page did not expose a cultivar name and RSP ID.');
 
   const labels = ['Sample Name','Accession Date','Reported Plant Sex','Report Type','DNA Extracted From','Heterozygosity','Chemical Information','Cannabinoids','Terpenoids','Rarity'];
@@ -306,6 +307,8 @@ function productCandidateName(productName: string, brandName?: string | null) {
 
 export function rebuildProductCultivarLinks() {
   const db = ensureCultivarSchema();
+  const hasProducts = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='cannabis_products'`).get();
+  if (!hasProducts) return 0;
   const now = new Date().toISOString();
   db.prepare('DELETE FROM cannabis_product_cultivar_links').run();
   const products = db.prepare('SELECT id, brand_name, product_name FROM cannabis_products').all() as any[];
