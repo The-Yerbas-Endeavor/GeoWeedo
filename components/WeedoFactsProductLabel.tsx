@@ -24,6 +24,19 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
+function retailIdCoaHref(value?: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value, 'https://geoweedo.com');
+    const host = url.hostname.toLowerCase();
+    if (!['1a4.com', 'www.1a4.com', 'app.1a4.com', 'www.app.1a4.com'].includes(host)) return null;
+    if (!/^\/landingpage\//i.test(url.pathname)) return null;
+    return `/api/weedo-facts/coa/retail-id?source=${encodeURIComponent(url.toString())}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsRecord }) {
   const sourcedBatch = Boolean(record.batchId && record.source?.verified);
   const directLabBatch = sourcedBatch && record.source?.type === 'lab';
@@ -39,6 +52,9 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
   const hasChemistry = Boolean(record.cannabinoids?.length || record.terpenes?.length);
   const collected = formatDate(record.collectedAt);
   const tested = formatDate(record.testedAt);
+  const sourceHref = record.coaUrl || record.source?.url || null;
+  const refreshedRetailIdCoaHref = directLabBatch ? retailIdCoaHref(sourceHref) : null;
+  const coaHref = refreshedRetailIdCoaHref || sourceHref;
 
   return (
     <article className="weedoFactsCard weedoFactsProductCard">
@@ -98,7 +114,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
         </div>
       </section>
 
-      {(record.coaUrl || record.source?.url) ? <a className="weedoFactsCoaLink" href={record.coaUrl || record.source.url || '#'} target="_blank" rel="noreferrer">{normalizedDataset ? 'View source / COA ↗' : directLabBatch ? 'View original lab source ↗' : 'View source record ↗'}</a> : null}
+      {coaHref ? <a className="weedoFactsCoaLink" href={coaHref} target="_blank" rel="noreferrer">{refreshedRetailIdCoaHref ? 'View original COA / lab report ↗' : normalizedDataset ? 'View source / COA ↗' : directLabBatch ? 'View original lab source ↗' : 'View source record ↗'}</a> : null}
       {record.productId ? <WeedoFactsBatchHistory productId={record.productId} currentBatchId={record.batchId} /> : null}
     </article>
   );
