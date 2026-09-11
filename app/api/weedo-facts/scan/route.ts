@@ -194,9 +194,11 @@ export async function POST(request: NextRequest) {
 
     if (isRetailId1A4Url(identifier)) {
       const pathRetailId = retailIdFrom1A4Url(identifier);
+      // Long landing URLs expose the UID directly. Short 1A4 URLs do not, so
+      // use the already-persisted QR identifier as the local fallback key.
       const localRecord = normalizeEvidenceRecord(pathRetailId
         ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
-        : null);
+        : lookupWeedoFacts({ identifier, identifierType: 'qr' }));
 
       let retailId: RetailId1A4Record;
       try {
@@ -205,8 +207,8 @@ export async function POST(request: NextRequest) {
         retailId = await fetchRetailIdWithRetry(identifier);
       } catch (error) {
         // 1A4 is a source, not the sole owner of data already ingested by
-        // GeoWeedo. If we know this UID locally, keep the scan useful while the
-        // public source is slow or temporarily unavailable.
+        // GeoWeedo. If this UID/QR is known locally, keep the scan useful while
+        // the public source is slow or temporarily unavailable.
         if (localRecord) {
           persistedQr = persistQrScan({
             qrValue: identifier,
@@ -214,7 +216,7 @@ export async function POST(request: NextRequest) {
             productId: localRecord.productId,
             batchId: localRecord.batchId,
             sourceUrl: identifier,
-            externalIdentifier: pathRetailId,
+            externalIdentifier: pathRetailId || localRecord.uid,
             title: localRecord.productName,
             brandName: localRecord.brandName,
             productName: localRecord.productName,
@@ -234,7 +236,7 @@ export async function POST(request: NextRequest) {
             resolvedBy: isDirectLabRecord(localRecord)
               ? 'metrc_retail_id_verified_lab_cache'
               : 'metrc_retail_id_cache',
-            linkedIdentifier: pathRetailId,
+            linkedIdentifier: pathRetailId || localRecord.uid || identifier,
             linkedToGeoWeedo: true,
             refresh: { ok: false, error: refreshError(error) },
             persistedQr,
