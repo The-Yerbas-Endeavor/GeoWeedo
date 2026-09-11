@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
     if (!product) return invalid('Product was not found.');
     const price = priceRaw ? Number(priceRaw) : null;
     if (price !== null && (!Number.isFinite(price) || price < 0 || price > 100000)) return invalid('Price must be a valid non-negative amount.');
+    const verified = Boolean((body as any).verified && sourceUrl);
 
     const itemId = addDispensaryMenuItem({
       dispensaryId,
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
       sourceType: sourceUrl ? 'menu_source' : 'admin-manual',
       sourceUrl,
       sourceUpdatedAt: new Date().toISOString(),
-      verified: Boolean(sourceUrl),
+      verified,
     });
     return NextResponse.json({ itemId, menuItems: listDispensaryMenu(dispensaryId) }, { status: 201 });
   }
