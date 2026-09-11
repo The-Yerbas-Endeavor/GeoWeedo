@@ -159,6 +159,7 @@ export async function scanWeedoFactsCode(): Promise<WeedoFactsScanResult> {
     throw new Error('Native Weedo Facts scanning is available in the GeoWeedo Android and iOS apps.');
   }
 
+  const platform = getNativePlatform();
   const result = await scanner.scanBarcode({
     hint: 17,
     scanInstructions: 'Scan a product barcode or QR code',
@@ -169,7 +170,7 @@ export async function scanWeedoFactsCode(): Promise<WeedoFactsScanResult> {
     cancelButtonAccessibilityLabel: 'Cancel product scan',
     torchButtonOnAccessibilityLabel: 'Turn scanner light off',
     torchButtonOffAccessibilityLabel: 'Turn scanner light on',
-    android: { scanningLibrary: 'mlkit' },
+    ...(platform === 'android' ? { android: { scanningLibrary: 'zxing' } } : {}),
   });
 
   const value = String(result?.ScanResult || '').trim();
