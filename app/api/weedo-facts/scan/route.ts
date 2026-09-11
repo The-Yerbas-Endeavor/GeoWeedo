@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { lookupWeedoFacts } from '../../../../lib/weedoFacts';
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../../../../lib/scLabs';
 import { normalizeScLabsPublicSample } from '../../../../lib/scLabsPublicIdentity';
+import { fetchRetailId1A4, isRetailId1A4Url } from '../../../../lib/retailId1a4';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,21 @@ export async function POST(request: NextRequest) {
       const ingestion = ingestScLabsSample(sample);
       const record = lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' });
       return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: 'sc_labs_public_page', ingestion });
+    }
+
+    if (isRetailId1A4Url(identifier)) {
+      const retailId = await fetchRetailId1A4(identifier);
+      const record = retailId.retailId
+        ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
+        : null;
+      return NextResponse.json({
+        ok: true,
+        found: Boolean(record),
+        record,
+        resolvedBy: 'metrc_retail_id',
+        externalRecord: retailId,
+        linkedIdentifier: retailId.retailId,
+      });
     }
 
     const requestedType = String(body?.type || '').trim().toLowerCase();
