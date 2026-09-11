@@ -70,7 +70,6 @@ function findOrCreateRetailProduct(source: RetailId1A4Record) {
   const db = ensureSchema();
   const retailId = clean(source.retailId);
 
-  // Reuse a product already linked to this regulatory identifier first.
   if (retailId) {
     const linked = db.prepare(`
       SELECT p.id
@@ -91,9 +90,6 @@ function findOrCreateRetailProduct(source: RetailId1A4Record) {
     if (batchLinked?.product_id) return String(batchLinked.product_id);
   }
 
-  // Only create a canonical product when the Retail ID page supplies a useful
-  // product/cultivar identity. Do not create placeholder products from generic
-  // Retail ID page titles.
   const rawName = clean(source.title) || clean(source.cultivar);
   if (!rawName || /^(?:metrc\s+)?retail\s*id(?:\s+product)?$/i.test(rawName)) return null;
   const productName = rawName.slice(0, 240);
@@ -150,6 +146,7 @@ export function persistQrScan(input: {
   testedAt?: string | null;
   coaUrl?: string | null;
   resolvedPayload?: unknown;
+  countScan?: boolean;
 }): PersistedQrScan {
   const db = ensureSchema();
   const qrValue = String(input.qrValue || '').trim();
@@ -157,6 +154,7 @@ export function persistQrScan(input: {
   const now = new Date().toISOString();
   const payload = input.resolvedPayload === undefined ? null : JSON.stringify(input.resolvedPayload);
   const existing = db.prepare('SELECT id FROM cannabis_qr_scans WHERE qr_value=? LIMIT 1').get(qrValue) as any;
+  const countScan = input.countScan !== false;
 
   if (existing?.id) {
     db.prepare(`
@@ -178,8 +176,8 @@ export function persistQrScan(input: {
         tested_at=COALESCE(?,tested_at),
         coa_url=COALESCE(?,coa_url),
         resolved_payload_json=COALESCE(?,resolved_payload_json),
-        last_seen_at=?,
-        scan_count=scan_count+1
+        last_seen_at=CASE WHEN ?=1 THEN ? ELSE last_seen_at END,
+        scan_count=scan_count+?
       WHERE id=?
     `).run(
       qrHost(qrValue), input.resolver,
@@ -189,7 +187,7 @@ export function persistQrScan(input: {
       input.producerName || null, input.producerLicenseNumber || null,
       input.labName || null, input.labLicenseNumber || null,
       input.testedAt || null, input.coaUrl || null, payload,
-      now, existing.id,
+      countScan ? 1 : 0, now, countScan ? 1 : 0, existing.id,
     );
   } else {
     const id = `qr-${randomUUID()}`;
@@ -228,7 +226,7 @@ export function persistQrScan(input: {
   };
 }
 
-export function persistRetailId1A4Scan(qrValue: string, source: RetailId1A4Record, linked?: { productId?: string | null; batchId?: string | null }) {
+export function persistRetailId1A4Scan(qrValue: string, source: RetailId1A4Record, linked?: { productId?: string | null; batchId?: string | null }, countScan = true) {
   const productId = linked?.productId || findOrCreateRetailProduct(source);
   return persistQrScan({
     qrValue,
@@ -246,5 +244,6 @@ export function persistRetailId1A4Scan(qrValue: string, source: RetailId1A4Recor
     testedAt: source.testedAt,
     coaUrl: source.coaUrl,
     resolvedPayload: source,
+    countScan,
   });
 }
