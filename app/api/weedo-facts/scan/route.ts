@@ -73,8 +73,6 @@ function validQrPayload(identifier: string) {
       return url.protocol === 'https:' || url.protocol === 'http:';
     } catch { return false; }
   }
-  // QR codes may contain regulatory IDs or compact text rather than URLs.
-  // Reject control-character payloads while keeping ordinary decoded QR data.
   return identifier.length >= 3 && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(identifier);
 }
 
@@ -90,8 +88,6 @@ export async function POST(request: NextRequest) {
   let persistedQr: ReturnType<typeof persistQrScan> | null = null;
 
   try {
-    // A successfully decoded QR should never be ephemeral. Save the raw payload
-    // first, then enrich the same record as external/local resolution succeeds.
     if (isQr && validQrPayload(identifier)) {
       persistedQr = persistQrScan({
         qrValue: identifier,
@@ -127,6 +123,7 @@ export async function POST(request: NextRequest) {
           testedAt: record?.testedAt || null,
           coaUrl: record?.coaUrl || identifier,
           resolvedPayload: sample,
+          countScan: false,
         });
       }
       return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: 'sc_labs_public_page', ingestion, persistedQr });
@@ -140,7 +137,7 @@ export async function POST(request: NextRequest) {
       persistedQr = persistRetailId1A4Scan(identifier, retailId, {
         productId: linkedRecord?.productId || null,
         batchId: linkedRecord?.batchId || null,
-      });
+      }, false);
       const record = linkedRecord || retailIdFallbackRecord(retailId, persistedQr.productId);
       return NextResponse.json({
         ok: true,
@@ -173,12 +170,11 @@ export async function POST(request: NextRequest) {
         labLicenseNumber: record?.labLicenseNumber || null,
         testedAt: record?.testedAt || null,
         coaUrl: record?.coaUrl || null,
+        countScan: false,
       });
     }
     return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: identifierType || 'auto', persistedQr });
   } catch (error) {
-    // If the QR itself was valid and decoded, its raw value was already saved.
-    // Resolver failures should not discard the scan.
     return NextResponse.json({
       ok: false,
       error: error instanceof Error ? error.message : 'Weedo Facts scan failed.',
