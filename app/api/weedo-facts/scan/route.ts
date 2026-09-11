@@ -98,6 +98,10 @@ function canonicalRetailIdUrl(value: string) {
   try {
     const url = new URL(value);
     if (!isRetailId1A4Url(value)) return value;
+    // Preserve 1a4.com/<short-token> links so the Retail ID adapter can resolve
+    // their real landing page. Only canonicalize URLs that already expose the
+    // public /landingpage/<id>/<index> route.
+    if (!/^\/landingpage\//i.test(url.pathname)) return url.toString();
     url.protocol = 'https:';
     url.hostname = 'app.1a4.com';
     url.port = '';
