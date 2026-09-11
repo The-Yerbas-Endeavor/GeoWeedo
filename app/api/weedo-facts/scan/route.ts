@@ -78,6 +78,14 @@ function validQrPayload(identifier: string) {
   return identifier.length >= 3 && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(identifier);
 }
 
+function normalizeEvidenceRecord(record: any) {
+  if (!record) return record;
+  if (record.batchId && record.source?.verified && record.source?.type !== 'lab' && record.matchLevel === 'exact_batch') {
+    return { ...record, matchLevel: 'source_backed' };
+  }
+  return record;
+}
+
 function isDirectLabRecord(record: any) {
   return Boolean(record?.batchId && record?.source?.verified && record?.source?.type === 'lab');
 }
@@ -109,7 +117,7 @@ export async function POST(request: NextRequest) {
     if (isScLabsSampleUrl(identifier)) {
       const sample = normalizeScLabsPublicSample(await fetchScLabsSample(identifier));
       const ingestion = ingestScLabsSample(sample);
-      const record = lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' });
+      const record = normalizeEvidenceRecord(lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' }));
       if (isQr) {
         persistedQr = persistQrScan({
           qrValue: identifier,
@@ -137,9 +145,9 @@ export async function POST(request: NextRequest) {
 
     if (isRetailId1A4Url(identifier)) {
       const pathRetailId = retailIdFrom1A4Url(identifier);
-      const localRecord = pathRetailId
+      const localRecord = normalizeEvidenceRecord(pathRetailId
         ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
-        : null;
+        : null);
 
       // A direct lab batch is already the strongest evidence we can resolve for
       // this UID, so it can return immediately. Regulatory/public batches must
@@ -187,9 +195,9 @@ export async function POST(request: NextRequest) {
       // lab evidence. Promote that same UID batch to source_type='lab'.
       const coaIngestion = await ingestRetailIdCoaEvidence(retailId, productId);
 
-      const linkedRecord = retailId.retailId
+      const linkedRecord = normalizeEvidenceRecord(retailId.retailId
         ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
-        : null;
+        : null);
 
       persistedQr = persistRetailId1A4Scan(identifier, retailId, {
         productId: linkedRecord?.productId || coaIngestion.productId || ingestion.productId || null,
@@ -215,7 +223,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const record = lookupWeedoFacts({ identifier, identifierType });
+    const record = normalizeEvidenceRecord(lookupWeedoFacts({ identifier, identifierType }));
     if (isQr && persistedQr) {
       persistedQr = persistQrScan({
         qrValue: identifier,
