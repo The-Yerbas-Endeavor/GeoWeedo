@@ -13,15 +13,35 @@ type IngestResult = {
   reason?: string;
 };
 
-function potency(value: string | null, label: string) {
-  if (!value) return null;
-  const match = value.match(/(-?\d+(?:\.\d+)?)\s*(%|MG|G|UG|MCG)?(?:\s+PER\s+(PACKAGE|SERVING|UNIT))?/i);
-  if (!match) return null;
-  const number = Number(match[1]);
-  if (!Number.isFinite(number)) return null;
-  const rawUnit = String(match[2] || '').toLowerCase();
-  const per = String(match[3] || '').toLowerCase();
-  return { name: label, value: number, unit: rawUnit ? `${rawUnit}${per ? `/${per}` : ''}` : null };
+function compatible(existing: unknown, incoming: unknown) {
+  const left = String(existing ?? '').trim();
+  const right = String(incoming ?? '').trim();
+  return !left || !right || left.localeCompare(right, undefined, { sensitivity: 'accent' }) === 0;
+}
+
+function enrichProductIdentity(product: any, source: RetailId1A4Record) {
+  const db = getDatabase();
+  const brandName = String(source.brandName || '').trim() || null;
+  const productType = String(source.productType || '').trim() || null;
+  const netContents = String(source.netContents || '').trim() || null;
+  const nextBrand = product.brand_name || brandName;
+  const nextType = product.product_type || productType;
+  const nextContents = product.net_contents || netContents;
+  const normalized = `${nextBrand || ''} ${product.product_name}`.trim().toLowerCase();
+
+  if (
+    nextBrand !== product.brand_name ||
+    nextType !== product.product_type ||
+    nextContents !== product.net_contents ||
+    normalized !== product.normalized_name
+  ) {
+    db.prepare(`UPDATE cannabis_products
+      SET brand_name=?, product_type=?, net_contents=?, normalized_name=?, updated_at=?
+      WHERE id=?`)
+      .run(nextBrand, nextType, nextContents, normalized, new Date().toISOString(), product.id);
+    return db.prepare('SELECT * FROM cannabis_products WHERE id=?').get(product.id) as any;
+  }
+  return product;
 }
 
 function findOrCreateProduct(source: RetailId1A4Record) {
@@ -30,10 +50,20 @@ function findOrCreateProduct(source: RetailId1A4Record) {
   const brandName = String(source.brandName || '').trim() || null;
   const normalized = `${brandName || ''} ${productName}`.trim().toLowerCase();
   let product = db.prepare('SELECT * FROM cannabis_products WHERE normalized_name=? LIMIT 1').get(normalized) as any;
-  if (!product && !brandName) {
-    product = db.prepare(`SELECT * FROM cannabis_products WHERE brand_name IS NULL AND product_name=? COLLATE NOCASE LIMIT 1`).get(productName) as any;
+
+  if (!product) {
+    const candidates = db.prepare(`SELECT * FROM cannabis_products
+      WHERE product_name=? COLLATE NOCASE
+      ORDER BY updated_at DESC`).all(productName) as any[];
+    const compatibleCandidates = candidates.filter(row =>
+      compatible(row.brand_name, brandName) &&
+      compatible(row.product_type, source.productType) &&
+      compatible(row.net_contents, source.netContents),
+    );
+    if (compatibleCandidates.length === 1) product = compatibleCandidates[0];
   }
-  if (product) return product;
+
+  if (product) return enrichProductIdentity(product, source);
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -56,7 +86,8 @@ function addSourceIdentifiers(batchId: string, source: RetailId1A4Record, now: s
 }
 
 function recordSource(batchId: string, source: RetailId1A4Record, now: string) {
-  getDatabase().prepare(`INSERT INTO cannabis_coa_sources
+  const db = getDatabase();
+  db.prepare(`INSERT INTO cannabis_coa_sources
     (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at)
     VALUES (?,?,?,?,?,?,?,?,?,1,?)`)
     .run(
@@ -82,7 +113,7 @@ function recordSource(batchId: string, source: RetailId1A4Record, now: string) {
         thcText: source.thcText,
         cbdText: source.cbdText,
       }),
-      'retail-id-1a4-v2',
+      'retail-id-1a4-v3',
       now,
       now,
     );
@@ -150,13 +181,10 @@ export function ingestRetailId1A4(source: RetailId1A4Record): IngestResult {
       now,
     );
 
-  const insertAnalyte = db.prepare(`INSERT INTO cannabis_analytes
-    (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
-  for (const row of [potency(source.thcText, 'THC'), potency(source.cbdText, 'CBD')].filter(Boolean) as Array<{name:string;value:number;unit:string|null}>) {
-    insertAnalyte.run(crypto.randomUUID(), batchId, 'cannabinoid', row.name, row.value, row.unit, null, null, null, null, null, now);
-  }
-
+  // Source-backed Retail ID data establishes package/product identity only.
+  // Chemistry is promoted into cannabis_analytes exclusively by a verified lab
+  // ingestion path (for example ingestRetailIdCoaEvidence) so an incomplete or
+  // unverified QR can never become canonical product chemistry by itself.
   addSourceIdentifiers(batchId, source, now);
   recordSource(batchId, source, now);
   return { batchId, productId: product.id, created: true, preservedExisting: false };
