@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { getDatabase } from '@/lib/sqlite';
 import { createWeedoFactsProduct, ensureWeedoFactsSchema } from '@/lib/weedoFacts';
+import { ensureWeedoFactsQrSchema } from '@/lib/weedoFactsQrPersistence';
 import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu } from '@/lib/weedoMenus';
 
 export const runtime = 'nodejs';
@@ -15,6 +16,7 @@ function optional(value: unknown) { const v = text(value); return v || null; }
 
 function ensure() {
   ensureWeedoFactsSchema();
+  ensureWeedoFactsQrSchema();
   ensureWeedoMenuSchema();
   return getDatabase();
 }
@@ -37,6 +39,72 @@ function productRows(search = '') {
   `).all(...params) as any[];
 }
 
+function verifiedProductRows() {
+  const db = ensure();
+  return db.prepare(`
+    SELECT
+      p.id,
+      p.brand_name,
+      p.product_name,
+      p.product_type,
+      p.net_contents,
+      p.updated_at,
+      COUNT(DISTINCT b.id) AS verified_batch_count,
+      MAX(b.tested_at) AS latest_tested_at,
+      (SELECT COUNT(*) FROM cannabis_qr_scans q WHERE q.product_id=p.id) AS qr_count,
+      COALESCE((SELECT SUM(q.scan_count) FROM cannabis_qr_scans q WHERE q.product_id=p.id),0) AS qr_scan_events,
+      (SELECT b2.uid FROM cannabis_batches b2 WHERE b2.product_id=p.id AND b2.verified=1 AND LOWER(b2.source_type)='lab' ORDER BY COALESCE(b2.tested_at,b2.updated_at) DESC LIMIT 1) AS latest_uid,
+      (SELECT b2.coa_number FROM cannabis_batches b2 WHERE b2.product_id=p.id AND b2.verified=1 AND LOWER(b2.source_type)='lab' ORDER BY COALESCE(b2.tested_at,b2.updated_at) DESC LIMIT 1) AS latest_coa_number,
+      (SELECT b2.lab_name FROM cannabis_batches b2 WHERE b2.product_id=p.id AND b2.verified=1 AND LOWER(b2.source_type)='lab' ORDER BY COALESCE(b2.tested_at,b2.updated_at) DESC LIMIT 1) AS latest_lab_name,
+      (SELECT b2.overall_status FROM cannabis_batches b2 WHERE b2.product_id=p.id AND b2.verified=1 AND LOWER(b2.source_type)='lab' ORDER BY COALESCE(b2.tested_at,b2.updated_at) DESC LIMIT 1) AS latest_status
+    FROM cannabis_products p
+    JOIN cannabis_batches b ON b.product_id=p.id AND b.verified=1 AND LOWER(b.source_type)='lab'
+    GROUP BY p.id
+    ORDER BY COALESCE(MAX(b.tested_at),p.updated_at) DESC, p.product_name COLLATE NOCASE
+  `).all() as any[];
+}
+
+function qrScanRows() {
+  const db = ensure();
+  return db.prepare(`
+    SELECT
+      q.id,
+      q.qr_value,
+      q.qr_host,
+      q.resolver,
+      q.product_id,
+      q.batch_id,
+      q.external_identifier,
+      q.title,
+      q.brand_name,
+      q.product_name,
+      q.product_type,
+      q.producer_name,
+      q.lab_name,
+      q.tested_at,
+      q.coa_url,
+      q.first_seen_at,
+      q.last_seen_at,
+      q.scan_count,
+      p.brand_name AS canonical_brand_name,
+      p.product_name AS canonical_product_name,
+      p.product_type AS canonical_product_type,
+      p.net_contents AS canonical_net_contents,
+      b.batch_number,
+      b.uid,
+      b.coa_number,
+      b.overall_status,
+      b.lab_name AS canonical_lab_name,
+      b.verified AS batch_verified,
+      b.source_type AS batch_source_type,
+      CASE WHEN b.verified=1 AND LOWER(COALESCE(b.source_type,''))='lab' THEN 1 ELSE 0 END AS verified_lab_batch
+    FROM cannabis_qr_scans q
+    LEFT JOIN cannabis_products p ON p.id=q.product_id
+    LEFT JOIN cannabis_batches b ON b.id=q.batch_id
+    ORDER BY q.last_seen_at DESC, q.first_seen_at DESC
+  `).all() as any[];
+}
+
 function dispensaryRows() {
   return ensure().prepare(`
     SELECT id,name,city,region,country
@@ -53,12 +121,19 @@ export async function GET(request: NextRequest) {
   const db = ensure();
   const stats = {
     products: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0),
+    verifiedProducts: Number((db.prepare(`SELECT COUNT(DISTINCT product_id) AS n FROM cannabis_batches WHERE verified=1 AND LOWER(source_type)='lab'`).get() as any)?.n || 0),
+    verifiedBatches: Number((db.prepare(`SELECT COUNT(*) AS n FROM cannabis_batches WHERE verified=1 AND LOWER(source_type)='lab'`).get() as any)?.n || 0),
+    qrCodes: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_qr_scans').get() as any)?.n || 0),
+    qrScanEvents: Number((db.prepare('SELECT COALESCE(SUM(scan_count),0) AS n FROM cannabis_qr_scans').get() as any)?.n || 0),
+    unlinkedQrs: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_qr_scans WHERE product_id IS NULL OR batch_id IS NULL').get() as any)?.n || 0),
     menuItems: Number((db.prepare('SELECT COUNT(*) AS n FROM dispensary_menu_items WHERE active=1').get() as any)?.n || 0),
     storesWithMenus: Number((db.prepare('SELECT COUNT(DISTINCT m.dispensary_id) AS n FROM dispensary_menus m JOIN dispensary_menu_items mi ON mi.menu_id=m.id WHERE m.active=1 AND mi.active=1').get() as any)?.n || 0),
   };
   return NextResponse.json({
     stats,
     products: productRows(search),
+    verifiedProducts: verifiedProductRows(),
+    qrScans: qrScanRows(),
     dispensaries: dispensaryRows(),
     menuItems: dispensaryId ? listDispensaryMenu(dispensaryId) : [],
   }, { headers: { 'Cache-Control': 'no-store' } });
