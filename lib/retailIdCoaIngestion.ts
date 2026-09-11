@@ -155,8 +155,8 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
         coaUrl,
       };
     } catch {
-      // The signed Retail ID lab payload below is still usable evidence even if
-      // a downstream lab-page parser temporarily fails.
+      // The structured Retail ID lab payload below is still usable evidence even
+      // if a downstream lab-page parser temporarily fails.
     }
   }
 
@@ -259,7 +259,7 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
   const insert = db.prepare(`
     INSERT INTO cannabis_analytes
       (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at)
-    VALUES (?,?,?,?,?,?,NULL,NULL,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,NULL,NULL,?,?,?,?)
   `);
   for (const row of analytes) {
     const duplicate = db.prepare(`
