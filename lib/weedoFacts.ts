@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDatabase } from './sqlite.ts';
 
-export type WeedoFactsMatchLevel = 'exact_batch' | 'product_only' | 'community_unverified';
+export type WeedoFactsMatchLevel = 'exact_batch' | 'source_backed' | 'product_only' | 'community_unverified';
 
 export type WeedoFactsLookup = {
   identifier: string;
@@ -149,7 +149,7 @@ function directVerifiedBatch(db: any, identifier: string, identifierType?: Weedo
   const selectByField = (field: 'uid' | 'coa_number') => db.prepare(`
     SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
     FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
-    WHERE b.${field} = ?
+    WHERE b.${field} = ? COLLATE NOCASE
     ORDER BY b.verified DESC, b.tested_at DESC
     LIMIT 1
   `).get(identifier) as any;
@@ -158,7 +158,7 @@ function directVerifiedBatch(db: any, identifier: string, identifierType?: Weedo
     const rows = db.prepare(`
       SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
       FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
-      WHERE b.batch_number = ?
+      WHERE b.batch_number = ? COLLATE NOCASE
       ORDER BY b.verified DESC, b.tested_at DESC
       LIMIT 2
     `).all(identifier) as any[];
@@ -184,7 +184,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
     FROM cannabis_batch_identifiers i
     JOIN cannabis_batches b ON b.id = i.batch_id
     JOIN cannabis_products p ON p.id = b.product_id
-    WHERE i.identifier_value = ?
+    WHERE i.identifier_value = ? COLLATE NOCASE
       AND (? IS NULL OR i.identifier_type = ?)
     ORDER BY i.verified DESC, b.verified DESC, b.tested_at DESC
     LIMIT 1
@@ -194,7 +194,8 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
 
   if (directBatch) {
     const analytes = getAnalytes(directBatch.id);
-    const exactBatch = Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified);
+    const sourceBacked = Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified);
+    const exactLabBatch = sourceBacked && String(directBatch.source_type || '').toLowerCase() === 'lab';
     return {
       productId: directBatch.product_id,
       batchId: directBatch.id,
@@ -202,7 +203,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       productName: directBatch.product_name,
       productType: directBatch.product_type,
       netContents: directBatch.net_contents,
-      matchLevel: exactBatch ? 'exact_batch' : 'community_unverified',
+      matchLevel: exactLabBatch ? 'exact_batch' : sourceBacked ? 'source_backed' : 'community_unverified',
       batchNumber: directBatch.batch_number,
       uid: directBatch.uid,
       coaNumber: directBatch.coa_number,
@@ -218,7 +219,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       cannabinoids: analytes.filter(a => a.group_name === 'cannabinoid').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       terpenes: analytes.filter(a => a.group_name === 'terpene').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       safetyTests: analytes.filter(a => !['cannabinoid', 'terpene'].includes(a.group_name)).map(a => ({ category: a.group_name, analyte: a.analyte_name, status: a.status, value: a.value, unit: a.unit, limitValue: a.limit_value, limitUnit: a.limit_unit })),
-      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: exactBatch },
+      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: sourceBacked },
     };
   }
 
