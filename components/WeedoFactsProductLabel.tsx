@@ -26,8 +26,10 @@ function formatDate(value?: string | null) {
 
 export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsRecord }) {
   const sourcedBatch = Boolean(record.batchId && record.source?.verified);
-  const normalizedDataset = record.source?.type === 'public_dataset' || record.source?.name === 'Cannlytics';
-  const directLabBatch = sourcedBatch && !normalizedDataset;
+  const directLabBatch = sourcedBatch && record.source?.type === 'lab';
+  const normalizedDataset = sourcedBatch && (record.source?.type === 'public_dataset' || record.source?.name === 'Cannlytics');
+  const regulatorySource = sourcedBatch && record.source?.type === 'regulatory_public';
+  const sourceBackedBatch = sourcedBatch && !directLabBatch;
   const statusText = String(record.overallStatus || '').trim();
   const failed = /fail/i.test(statusText);
   const cannabinoidRows = filterHeadlineTotals(record.cannabinoids, 'cannabinoid');
@@ -47,7 +49,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
           <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p>
         </div>
         <span className={`weedoFactsStatus ${sourcedBatch ? 'verified' : 'partial'}`}>
-          {directLabBatch ? '✓ Verified lab batch' : normalizedDataset && sourcedBatch ? '✓ Source-backed batch data' : 'Product record — batch needed'}
+          {directLabBatch ? '✓ Verified lab batch' : sourceBackedBatch ? '✓ Source-backed batch data' : 'Product record — batch needed'}
         </span>
       </div>
 
@@ -57,9 +59,17 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
         <p className="weedoFactsProductNotice">
           This listing shows a verified lab batch for this product. Match the batch / lot or UID on your package before treating these values as your exact package results.
         </p>
-      ) : normalizedDataset && sourcedBatch ? (
+      ) : regulatorySource ? (
+        <p className="weedoFactsProductNotice">
+          This batch is source-backed by the regulatory Retail ID record. GeoWeedo will promote it to a verified lab batch when an authenticated COA for this exact UID / batch is available.
+        </p>
+      ) : normalizedDataset ? (
         <p className="weedoFactsProductNotice">
           This batch chemistry was normalized from the {record.source?.name || 'public dataset'} and retains its source provenance. Match the batch / lot or UID on your package before treating these values as your exact package results.
+        </p>
+      ) : sourceBackedBatch ? (
+        <p className="weedoFactsProductNotice">
+          This batch has source-backed evidence, but GeoWeedo has not authenticated a direct lab COA for it yet.
         </p>
       ) : (
         <p className="weedoFactsProductNotice warning">
@@ -88,7 +98,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
         </div>
       </section>
 
-      {(record.coaUrl || record.source?.url) ? <a className="weedoFactsCoaLink" href={record.coaUrl || record.source.url || '#'} target="_blank" rel="noreferrer">{normalizedDataset ? 'View source / COA ↗' : 'View original lab source ↗'}</a> : null}
+      {(record.coaUrl || record.source?.url) ? <a className="weedoFactsCoaLink" href={record.coaUrl || record.source.url || '#'} target="_blank" rel="noreferrer">{normalizedDataset ? 'View source / COA ↗' : directLabBatch ? 'View original lab source ↗' : 'View source record ↗'}</a> : null}
       {record.productId ? <WeedoFactsBatchHistory productId={record.productId} currentBatchId={record.batchId} /> : null}
     </article>
   );
