@@ -50,8 +50,10 @@ function minimizeSearchPanels(active:boolean){
   if(browser)browser.setAttribute('aria-label',active?'Browse dispensaries — minimized search results':'Browse dispensaries');
 }
 
+function internalMapSearch(){return document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input:not(.map-unified-search-input)');}
+
 function syncSearchPanels(){
-  const input=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');
+  const input=internalMapSearch();
   const active=Boolean(input?.value.trim())||document.body.classList.contains(SEARCH_ACTIVE_CLASS);
   const browser=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
   browser?.classList.toggle('map-browser-panel-search-minimized',active);
@@ -62,10 +64,10 @@ function removeLegacyPromoSearch(card:HTMLElement){card.querySelectorAll<HTMLEle
 
 function bindMapSearch(input:HTMLInputElement){
   if(input.dataset.zipSearchBound==='1')return;
-  input.dataset.zipSearchBound='1';input.placeholder='Search dispensary or ZIP code';input.setAttribute('aria-label','Search dispensary or ZIP code');
+  input.dataset.zipSearchBound='1';input.placeholder='Search dispensary, product, brand or ZIP';input.setAttribute('aria-label','Internal map search');
   let lookupTimer:number|undefined,lastZip='';
   input.addEventListener('input',()=>{
-    window.clearTimeout(lookupTimer);const value=input.value.trim();minimizeSearchPanels(Boolean(value));
+    window.clearTimeout(lookupTimer);const value=input.value.trim();minimizeSearchPanels(Boolean(value)||document.body.classList.contains(SEARCH_ACTIVE_CLASS));
     const zipMatch=value.match(/^\d{5}(?:-\d{4})?$/);
     if(!zipMatch){if(lastZip)window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));lastZip='';input.removeAttribute('title');return;}
     const zip=zipMatch[0].slice(0,5);if(zip===lastZip)return;
@@ -104,7 +106,7 @@ export default function HomeMapUiCleanup(){
       panel.querySelector<HTMLButtonElement>('.map-browser-panel-head button')?.click();
     };
     const initializePromo=()=>{if(promoInitialized)return;const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();};
-    const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input');if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
+    const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=internalMapSearch();if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
     const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo Weedo on the dispensary map"]'))window.setTimeout(activateFindo,0);};
     const onChange=(event:Event)=>{const target=event.target;if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]')&&target.value!=='all')minimizeGameplayCard();};
     document.addEventListener('click',onClick);document.addEventListener('change',onChange);
