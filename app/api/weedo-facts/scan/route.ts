@@ -90,6 +90,10 @@ function isDirectLabRecord(record: any) {
   return Boolean(record?.batchId && record?.source?.verified && record?.source?.type === 'lab');
 }
 
+function refreshError(error: unknown) {
+  return error instanceof Error ? error.message : 'Retail ID refresh failed.';
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const identifier = String(body?.identifier || '').trim();
@@ -149,50 +153,57 @@ export async function POST(request: NextRequest) {
         ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
         : null);
 
-      // A direct lab batch is already the strongest evidence we can resolve for
-      // this UID, so it can return immediately. Regulatory/public batches must
-      // still refresh the Retail ID page because a COA may now be available.
-      if (isDirectLabRecord(localRecord)) {
-        persistedQr = persistQrScan({
-          qrValue: identifier,
-          resolver: 'metrc_retail_id',
-          productId: localRecord.productId,
-          batchId: localRecord.batchId,
-          sourceUrl: identifier,
-          externalIdentifier: pathRetailId,
-          title: localRecord.productName,
-          brandName: localRecord.brandName,
-          productName: localRecord.productName,
-          productType: localRecord.productType,
-          producerName: localRecord.producerName,
-          producerLicenseNumber: localRecord.producerLicenseNumber,
-          labName: localRecord.labName,
-          labLicenseNumber: localRecord.labLicenseNumber,
-          testedAt: localRecord.testedAt,
-          coaUrl: localRecord.coaUrl,
-          countScan: false,
-        });
-        return NextResponse.json({
-          ok: true,
-          found: true,
-          record: localRecord,
-          resolvedBy: 'metrc_retail_id_verified_lab_cache',
-          linkedIdentifier: pathRetailId,
-          linkedToGeoWeedo: true,
-          persistedQr,
-        });
+      let retailId: RetailId1A4Record;
+      try {
+        // Always refresh a 1A4 QR from its public data API. A previously verified
+        // batch may have only partial analytes, or 1A4 may expose richer/newer
+        // COA data on a later scan.
+        retailId = await fetchRetailId1A4(identifier);
+      } catch (error) {
+        // If the public source is temporarily unavailable, preserve a useful
+        // scan experience by falling back to an already verified local lab batch.
+        if (isDirectLabRecord(localRecord)) {
+          persistedQr = persistQrScan({
+            qrValue: identifier,
+            resolver: 'metrc_retail_id',
+            productId: localRecord.productId,
+            batchId: localRecord.batchId,
+            sourceUrl: identifier,
+            externalIdentifier: pathRetailId,
+            title: localRecord.productName,
+            brandName: localRecord.brandName,
+            productName: localRecord.productName,
+            productType: localRecord.productType,
+            producerName: localRecord.producerName,
+            producerLicenseNumber: localRecord.producerLicenseNumber,
+            labName: localRecord.labName,
+            labLicenseNumber: localRecord.labLicenseNumber,
+            testedAt: localRecord.testedAt,
+            coaUrl: localRecord.coaUrl,
+            countScan: false,
+          });
+          return NextResponse.json({
+            ok: true,
+            found: true,
+            record: localRecord,
+            resolvedBy: 'metrc_retail_id_verified_lab_cache',
+            linkedIdentifier: pathRetailId,
+            linkedToGeoWeedo: true,
+            refresh: { ok: false, error: refreshError(error) },
+            persistedQr,
+          });
+        }
+        throw error;
       }
 
-      const retailId = await fetchRetailId1A4(identifier);
       if (pathRetailId) retailId.retailId = pathRetailId;
 
-      // First persist the source-backed Retail ID product/batch identity. This
-      // deliberately does not make a regulatory record a direct lab record.
+      // Persist or reuse the source-backed Retail ID product/batch identity first.
       const ingestion = ingestRetailId1A4(retailId);
       const productId = localRecord?.productId || ingestion.productId || null;
 
-      // An exact package UID + reachable COA + named lab is direct batch-level
-      // lab evidence. Promote that same UID batch to source_type='lab'.
+      // Exact package UID + named lab + structured COA evidence (or reachable
+      // original COA URL) promotes/enriches the same UID as a verified lab batch.
       const coaIngestion = await ingestRetailIdCoaEvidence(retailId, productId);
 
       const linkedRecord = normalizeEvidenceRecord(retailId.retailId
@@ -219,6 +230,7 @@ export async function POST(request: NextRequest) {
         coaIngestion,
         linkedIdentifier: retailId.retailId,
         linkedToGeoWeedo: Boolean(linkedRecord),
+        refresh: { ok: true },
         persistedQr,
       });
     }
