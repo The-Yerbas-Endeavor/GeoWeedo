@@ -1,0 +1,96 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/mobile-android-ios
+    paths:
+      - '.github/workflows/mobile-android.yml'
+      - 'capacitor.config.ts'
+      - 'mobile-shell/**'
+      - 'scripts/mobile-bootstrap.sh'
+      - 'scripts/mobile-configure-native.mjs'
+      - 'components/WeedoFactsNativeScanBridge.tsx'
+      - 'components/NativeAppBridge.tsx'
+      - 'lib/native.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Generate and sync Android project
+        run: bash scripts/mobile-bootstrap.sh android
+
+      - name: Verify native barcode scanner is installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const p=require('./node_modules/@capacitor/barcode-scanner/package.json'); console.log('@capacitor/barcode-scanner', p.version)"
+          test -d android
+          test -f android/gradlew
+          grep -R "barcode-scanner\|CapacitorBarcodeScanner" -n android node_modules/@capacitor/barcode-scanner | head -50 || true
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+
+          mkdir -p dist/android
+          cp "$APK" dist/android/GeoWeedo-debug.apk
+          sha256sum dist/android/GeoWeedo-debug.apk > dist/android/GeoWeedo-debug.apk.sha256
+
+          echo "APK size: $(du -h dist/android/GeoWeedo-debug.apk | cut -f1)"
+          cat dist/android/GeoWeedo-debug.apk.sha256
+
+      - name: Upload GeoWeedo APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: geoweedo-android-apk-${{ github.run_number }}
+          path: |
+            dist/android/GeoWeedo-debug.apk
+            dist/android/GeoWeedo-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
