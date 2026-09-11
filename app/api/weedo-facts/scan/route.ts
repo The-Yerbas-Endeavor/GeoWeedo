@@ -4,6 +4,7 @@ import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../../
 import { normalizeScLabsPublicSample } from '../../../../lib/scLabsPublicIdentity';
 import { fetchRetailId1A4, isRetailId1A4Url, retailIdFrom1A4Url, type RetailId1A4Record } from '../../../../lib/retailId1a4';
 import { ingestRetailId1A4 } from '../../../../lib/retailId1a4Ingest';
+import { ingestRetailIdCoaEvidence } from '../../../../lib/retailIdCoaIngestion';
 import { persistQrScan, persistRetailId1A4Scan } from '../../../../lib/weedoFactsQrPersistence';
 
 export const runtime = 'nodejs';
@@ -77,6 +78,10 @@ function validQrPayload(identifier: string) {
   return identifier.length >= 3 && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(identifier);
 }
 
+function isDirectLabRecord(record: any) {
+  return Boolean(record?.batchId && record?.source?.verified && record?.source?.type === 'lab');
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const identifier = String(body?.identifier || '').trim();
@@ -132,14 +137,14 @@ export async function POST(request: NextRequest) {
 
     if (isRetailId1A4Url(identifier)) {
       const pathRetailId = retailIdFrom1A4Url(identifier);
-
-      // Retail ID URLs expose a stable package UID in the path. Resolve it
-      // locally first so an existing lab/public batch is instant and does not
-      // depend on the external landing page being reachable.
       const localRecord = pathRetailId
         ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
         : null;
-      if (localRecord) {
+
+      // A direct lab batch is already the strongest evidence we can resolve for
+      // this UID, so it can return immediately. Regulatory/public batches must
+      // still refresh the Retail ID page because a COA may now be available.
+      if (isDirectLabRecord(localRecord)) {
         persistedQr = persistQrScan({
           qrValue: identifier,
           resolver: 'metrc_retail_id',
@@ -163,7 +168,7 @@ export async function POST(request: NextRequest) {
           ok: true,
           found: true,
           record: localRecord,
-          resolvedBy: 'metrc_retail_id_uid',
+          resolvedBy: 'metrc_retail_id_verified_lab_cache',
           linkedIdentifier: pathRetailId,
           linkedToGeoWeedo: true,
           persistedQr,
@@ -173,17 +178,22 @@ export async function POST(request: NextRequest) {
       const retailId = await fetchRetailId1A4(identifier);
       if (pathRetailId) retailId.retailId = pathRetailId;
 
-      // Persist a canonical product/batch only when the public page exposes a
-      // reliable product/item identity. Cultivar-only pages remain source-backed
-      // QR evidence and do not create potentially-wrong canonical products.
+      // First persist the source-backed Retail ID product/batch identity. This
+      // deliberately does not make a regulatory record a direct lab record.
       const ingestion = ingestRetailId1A4(retailId);
+      const productId = localRecord?.productId || ingestion.productId || null;
+
+      // An exact package UID + reachable COA + named lab is direct batch-level
+      // lab evidence. Promote that same UID batch to source_type='lab'.
+      const coaIngestion = await ingestRetailIdCoaEvidence(retailId, productId);
+
       const linkedRecord = retailId.retailId
         ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
         : null;
 
       persistedQr = persistRetailId1A4Scan(identifier, retailId, {
-        productId: linkedRecord?.productId || ingestion.productId || null,
-        batchId: linkedRecord?.batchId || ingestion.batchId || null,
+        productId: linkedRecord?.productId || coaIngestion.productId || ingestion.productId || null,
+        batchId: linkedRecord?.batchId || coaIngestion.batchId || ingestion.batchId || null,
       }, false);
 
       const record = linkedRecord || retailIdFallbackRecord(retailId, persistedQr.productId);
@@ -191,11 +201,14 @@ export async function POST(request: NextRequest) {
         ok: true,
         found: true,
         record,
-        resolvedBy: linkedRecord
-          ? (ingestion.created ? 'metrc_retail_id_ingested' : 'metrc_retail_id_linked')
-          : 'metrc_retail_id_public_page',
+        resolvedBy: coaIngestion.verifiedBatch
+          ? 'metrc_retail_id_verified_coa'
+          : linkedRecord
+            ? (ingestion.created ? 'metrc_retail_id_ingested' : 'metrc_retail_id_linked')
+            : 'metrc_retail_id_public_page',
         externalRecord: retailId,
         ingestion,
+        coaIngestion,
         linkedIdentifier: retailId.retailId,
         linkedToGeoWeedo: Boolean(linkedRecord),
         persistedQr,
