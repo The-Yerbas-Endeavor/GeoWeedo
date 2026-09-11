@@ -22,7 +22,7 @@ function ensure() {
 function productRows(search = '') {
   const db = ensure();
   const q = search.trim().toLowerCase();
-  const params: unknown[] = [];
+  const params: string[] = [];
   const where = q ? `WHERE LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?` : '';
   if (q) params.push(`%${q}%`);
   return db.prepare(`
