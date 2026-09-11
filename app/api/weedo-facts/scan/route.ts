@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { lookupWeedoFacts } from '../../../../lib/weedoFacts';
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from '../../../../lib/scLabs';
 import { normalizeScLabsPublicSample } from '../../../../lib/scLabsPublicIdentity';
-import { fetchRetailId1A4, isRetailId1A4Url, type RetailId1A4Record } from '../../../../lib/retailId1a4';
+import { fetchRetailId1A4, isRetailId1A4Url, retailIdFrom1A4Url, type RetailId1A4Record } from '../../../../lib/retailId1a4';
+import { ingestRetailId1A4 } from '../../../../lib/retailId1a4Ingest';
 import { persistQrScan, persistRetailId1A4Scan } from '../../../../lib/weedoFactsQrPersistence';
 
 export const runtime = 'nodejs';
@@ -25,14 +26,14 @@ function potency(value: string | null, label: string) {
 function retailIdFallbackRecord(source: RetailId1A4Record, productId?: string | null) {
   const cannabinoids = [potency(source.thcText, 'THC'), potency(source.cbdText, 'CBD')].filter(Boolean);
   return {
-    productId: productId || `retail-id:${source.retailId || source.serial || 'unknown'}`,
+    productId: productId || '',
     batchId: null,
-    brandName: null,
-    productName: source.title || source.cultivar || 'Metrc Retail ID product',
-    productType: null,
-    netContents: null,
-    matchLevel: 'product_only',
-    batchNumber: null,
+    brandName: source.brandName,
+    productName: source.productName || source.cultivar || 'Metrc Retail ID product',
+    productType: source.productType,
+    netContents: source.netContents,
+    matchLevel: 'source_backed',
+    batchNumber: source.batchNumber,
     uid: source.retailId,
     coaNumber: null,
     coaUrl: source.coaUrl,
@@ -43,12 +44,12 @@ function retailIdFallbackRecord(source: RetailId1A4Record, productId?: string | 
     testedAt: source.testedAt,
     collectedAt: null,
     receivedAt: null,
-    overallStatus: null,
+    overallStatus: source.overallStatus,
     cannabinoids,
     terpenes: [],
     safetyTests: [],
     source: {
-      type: 'regulatory_retail_id',
+      type: 'regulatory_public',
       name: 'Metrc Retail ID',
       url: source.url,
       verified: true,
@@ -130,21 +131,71 @@ export async function POST(request: NextRequest) {
     }
 
     if (isRetailId1A4Url(identifier)) {
+      const pathRetailId = retailIdFrom1A4Url(identifier);
+
+      // Retail ID URLs expose a stable package UID in the path. Resolve it
+      // locally first so an existing lab/public batch is instant and does not
+      // depend on the external landing page being reachable.
+      const localRecord = pathRetailId
+        ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
+        : null;
+      if (localRecord) {
+        persistedQr = persistQrScan({
+          qrValue: identifier,
+          resolver: 'metrc_retail_id',
+          productId: localRecord.productId,
+          batchId: localRecord.batchId,
+          sourceUrl: identifier,
+          externalIdentifier: pathRetailId,
+          title: localRecord.productName,
+          brandName: localRecord.brandName,
+          productName: localRecord.productName,
+          productType: localRecord.productType,
+          producerName: localRecord.producerName,
+          producerLicenseNumber: localRecord.producerLicenseNumber,
+          labName: localRecord.labName,
+          labLicenseNumber: localRecord.labLicenseNumber,
+          testedAt: localRecord.testedAt,
+          coaUrl: localRecord.coaUrl,
+          countScan: false,
+        });
+        return NextResponse.json({
+          ok: true,
+          found: true,
+          record: localRecord,
+          resolvedBy: 'metrc_retail_id_uid',
+          linkedIdentifier: pathRetailId,
+          linkedToGeoWeedo: true,
+          persistedQr,
+        });
+      }
+
       const retailId = await fetchRetailId1A4(identifier);
+      if (pathRetailId) retailId.retailId = pathRetailId;
+
+      // Persist a canonical product/batch only when the public page exposes a
+      // reliable product/item identity. Cultivar-only pages remain source-backed
+      // QR evidence and do not create potentially-wrong canonical products.
+      const ingestion = ingestRetailId1A4(retailId);
       const linkedRecord = retailId.retailId
         ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
         : null;
+
       persistedQr = persistRetailId1A4Scan(identifier, retailId, {
-        productId: linkedRecord?.productId || null,
-        batchId: linkedRecord?.batchId || null,
+        productId: linkedRecord?.productId || ingestion.productId || null,
+        batchId: linkedRecord?.batchId || ingestion.batchId || null,
       }, false);
+
       const record = linkedRecord || retailIdFallbackRecord(retailId, persistedQr.productId);
       return NextResponse.json({
         ok: true,
         found: true,
         record,
-        resolvedBy: linkedRecord ? 'metrc_retail_id_linked' : 'metrc_retail_id_public_page',
+        resolvedBy: linkedRecord
+          ? (ingestion.created ? 'metrc_retail_id_ingested' : 'metrc_retail_id_linked')
+          : 'metrc_retail_id_public_page',
         externalRecord: retailId,
+        ingestion,
         linkedIdentifier: retailId.retailId,
         linkedToGeoWeedo: Boolean(linkedRecord),
         persistedQr,
