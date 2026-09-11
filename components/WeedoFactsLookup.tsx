@@ -252,7 +252,7 @@ export default function WeedoFactsLookup() {
       {result?.found === false ? (
         <div className="weedoFactsEmpty">
           <strong>No Weedo Facts record yet.</strong>
-          <p>Try the package lab QR, batch/lot, UID, or original COA. If GeoWeedo still does not know it, upload the official SC Labs COA or submit the package details below for review.</p>
+          <p>GeoWeedo does not know this scan yet. Add what you can read from the package below. A batch/lot, source link, or supporting COA can help verify it, but none of those are required to start the record.</p>
           <UnknownContribution identifier={identifier} identifierType={inferIdentifierType(identifier)} />
         </div>
       ) : null}
@@ -339,13 +339,26 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
     }
   }
 
+  const canSubmit = Boolean(productName.trim() || brandName.trim() || batchNumber.trim() || coaUrl.trim() || notes.trim() || coaUploadId);
+
   return (
     <form className="weedoFactsContribution" onSubmit={submitContribution}>
       <h3>Add this scan to GeoWeedo</h3>
-      <div className="weedoFactsCoaUpload">
+      <p className="weedoFactsContributionIntro">Add the product details visible on the package. GeoWeedo can start with partial information and keep improving the record as stronger product, batch, regulatory, or lab evidence becomes available.</p>
+
+      <div className="weedoFactsContributionGrid">
+        <label>Brand<input value={brandName} onChange={(event) => setBrandName(event.target.value)} /></label>
+        <label>Product name<input value={productName} onChange={(event) => setProductName(event.target.value)} /></label>
+        <label>Batch / lot<input value={batchNumber} onChange={(event) => setBatchNumber(event.target.value)} /></label>
+        <label>COA / source URL<input value={coaUrl} onChange={(event) => setCoaUrl(event.target.value)} placeholder="https://…" /></label>
+      </div>
+      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Anything visible on the package that may help identify or verify this product or batch" /></label>
+
+      <details className="weedoFactsCoaUpload">
+        <summary>Optional: attach supporting lab COA PDF</summary>
         <div>
-          <strong>Official SC Labs COA PDF</strong>
-          <p>Upload the original certificate and GeoWeedo will parse its sample, batch, UID, lab status, cannabinoids and supported compliance results as review evidence.</p>
+          <strong>Supporting lab evidence</strong>
+          <p>A COA is optional. GeoWeedo's automatic PDF parser currently recognizes SC Labs certificates; other lab records can still be linked with the COA/source URL while additional parsers are added.</p>
         </div>
         <input
           type="file"
@@ -356,7 +369,7 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
             setCoaParsed(null);
           }}
         />
-        <button type="button" onClick={uploadCoa} disabled={!coaFile || coaUploading}>{coaUploading ? 'Parsing COA…' : coaUploadId ? 'COA attached ✓' : 'Upload & parse COA'}</button>
+        <button type="button" onClick={uploadCoa} disabled={!coaFile || coaUploading}>{coaUploading ? 'Parsing COA…' : coaUploadId ? 'COA attached ✓' : 'Attach & parse COA'}</button>
         {coaParsed ? (
           <div className="weedoFactsCoaParsed">
             {coaParsed.sampleId ? <span>Sample <strong>{coaParsed.sampleId}</strong></span> : null}
@@ -367,16 +380,9 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
             <span>Parsed analytes <strong>{coaParsed.analyteCount ?? 0}</strong></span>
           </div>
         ) : null}
-      </div>
+      </details>
 
-      <div className="weedoFactsContributionGrid">
-        <label>Brand<input value={brandName} onChange={(event) => setBrandName(event.target.value)} /></label>
-        <label>Product name<input value={productName} onChange={(event) => setProductName(event.target.value)} /></label>
-        <label>Batch / lot<input value={batchNumber} onChange={(event) => setBatchNumber(event.target.value)} /></label>
-        <label>COA URL<input value={coaUrl} onChange={(event) => setCoaUrl(event.target.value)} placeholder="https://…" /></label>
-      </div>
-      <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Anything visible on the package that may help verify this product or batch" /></label>
-      <button type="submit" disabled={saving || (!productName.trim() && !coaUploadId)}>{saving ? 'Submitting…' : coaUploadId ? 'Submit scan + COA for review' : 'Submit for review'}</button>
+      <button type="submit" disabled={saving || !canSubmit}>{saving ? 'Submitting…' : coaUploadId ? 'Add scan + supporting COA' : 'Add this scan'}</button>
       {saveError ? <p className="weedoFactsError">{saveError} {saveError.startsWith('Login required') ? <a href="/account">Log in or create an account</a> : null}</p> : null}
       {message ? <p className="weedoFactsSuccess">{message}</p> : null}
     </form>
