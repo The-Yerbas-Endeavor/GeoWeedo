@@ -25,6 +25,23 @@ function validHttpUrl(value: string | null) {
   }
 }
 
+function embeddedCoaData(source: RetailId1A4Record) {
+  const raw = source.rawPayload as any;
+  const data = raw?.coaCard?.data;
+  if (data && typeof data === 'object') return data as Record<string, any>;
+  if (typeof data !== 'string' || !data.trim()) return null;
+  try {
+    const parsed = JSON.parse(data);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, any> : null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceOverallStatus(source: RetailId1A4Record) {
+  return clean(source.overallStatus) || clean(embeddedCoaData(source)?.labTestingStateName);
+}
+
 async function verifyCoaSource(url: string) {
   try {
     const response = await fetch(url, {
@@ -126,6 +143,7 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
   const coaUrl = clean(source.coaUrl);
   const labName = clean(source.labName);
   const coaDocumentId = clean(source.coaDocumentId ?? source.coaNumber);
+  const overallStatus = sourceOverallStatus(source);
   const embeddedLabCoa = Boolean(validRetailUid(uid) && labName && coaDocumentId);
 
   if (!productId || !validRetailUid(uid) || !labName || (!embeddedLabCoa && (!coaUrl || !validHttpUrl(coaUrl)))) {
@@ -206,7 +224,7 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
       clean(source.facility),
       clean(source.facilityLicense),
       clean(source.testedAt),
-      clean(source.overallStatus),
+      overallStatus,
       labName,
       finalSourceUrl,
       now,
@@ -241,7 +259,7 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
       clean(source.facility),
       clean(source.facilityLicense),
       clean(source.testedAt),
-      clean(source.overallStatus),
+      overallStatus,
       labName,
       finalSourceUrl,
       now,
@@ -285,6 +303,26 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
     }
   }
 
+  // Early versions of the Retail ID importer stored a generic THC summary row.
+  // Once the structured payload provides Total THC, remove only the exact-value
+  // legacy alias. Detailed cannabinoids such as Delta-9 THC remain untouched.
+  if (Array.isArray(source.analytes) && source.analytes.length) {
+    db.prepare(`
+      DELETE FROM cannabis_analytes
+      WHERE batch_id=?
+        AND group_name='cannabinoid'
+        AND analyte_name='THC' COLLATE NOCASE
+        AND EXISTS (
+          SELECT 1 FROM cannabis_analytes AS rich
+          WHERE rich.batch_id=cannabis_analytes.batch_id
+            AND rich.group_name='cannabinoid'
+            AND rich.analyte_name='Total THC' COLLATE NOCASE
+            AND rich.value IS cannabis_analytes.value
+            AND COALESCE(rich.unit,'')=COALESCE(cannabis_analytes.unit,'')
+        )
+    `).run(batchId);
+  }
+
   return {
     verifiedBatch: true,
     reason: embeddedLabCoa ? 'embedded_regulatory_lab_coa' as const : 'authenticated_regulatory_coa' as const,
@@ -294,5 +332,6 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
     coaUrl: coaUrl || source.url,
     coaDocumentId,
     labName,
+    overallStatus,
   };
 }
