@@ -94,6 +94,47 @@ function refreshError(error: unknown) {
   return error instanceof Error ? error.message : 'Retail ID refresh failed.';
 }
 
+function canonicalRetailIdUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (!isRetailId1A4Url(value)) return value;
+    url.protocol = 'https:';
+    url.hostname = 'app.1a4.com';
+    url.port = '';
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function usableRetailIdData(record: RetailId1A4Record) {
+  return Boolean(
+    record.productName || record.brandName || record.productType || record.netContents ||
+    record.batchNumber || record.facility || record.facilityLicense || record.labName ||
+    record.labLicense || record.coaDocumentId || record.testedAt || record.analytes.length,
+  );
+}
+
+async function fetchRetailIdWithRetry(identifier: string) {
+  const sourceUrl = canonicalRetailIdUrl(identifier);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await fetchRetailId1A4(sourceUrl);
+      if (!usableRetailIdData(record)) {
+        throw new Error('Retail ID data API returned no product or lab data.');
+      }
+      // Preserve the QR/landing URL that was actually scanned as the public
+      // source URL even when we canonicalize the API host internally.
+      return { ...record, url: identifier };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Retail ID refresh failed.');
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const identifier = String(body?.identifier || '').trim();
@@ -155,14 +196,14 @@ export async function POST(request: NextRequest) {
 
       let retailId: RetailId1A4Record;
       try {
-        // Always refresh a 1A4 QR from its public data API. A previously verified
-        // batch may have only partial analytes, or 1A4 may expose richer/newer
-        // COA data on a later scan.
-        retailId = await fetchRetailId1A4(identifier);
+        // Always refresh a 1A4 QR from its public data API. Retry short-lived
+        // upstream failures/empty payloads before using the local GeoWeedo copy.
+        retailId = await fetchRetailIdWithRetry(identifier);
       } catch (error) {
-        // If the public source is temporarily unavailable, preserve a useful
-        // scan experience by falling back to an already verified local lab batch.
-        if (isDirectLabRecord(localRecord)) {
+        // 1A4 is a source, not the sole owner of data already ingested by
+        // GeoWeedo. If we know this UID locally, keep the scan useful while the
+        // public source is slow or temporarily unavailable.
+        if (localRecord) {
           persistedQr = persistQrScan({
             qrValue: identifier,
             resolver: 'metrc_retail_id',
@@ -186,7 +227,9 @@ export async function POST(request: NextRequest) {
             ok: true,
             found: true,
             record: localRecord,
-            resolvedBy: 'metrc_retail_id_verified_lab_cache',
+            resolvedBy: isDirectLabRecord(localRecord)
+              ? 'metrc_retail_id_verified_lab_cache'
+              : 'metrc_retail_id_cache',
             linkedIdentifier: pathRetailId,
             linkedToGeoWeedo: true,
             refresh: { ok: false, error: refreshError(error) },
