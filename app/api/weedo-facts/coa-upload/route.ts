@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const requestedType = String(form.get('identifierType') || 'unknown').trim().toLowerCase();
     const identifierType = allowedTypes.has(requestedType) ? requestedType : 'unknown';
     if (!identifierValue || identifierValue.length > 2048) return NextResponse.json({ error: 'A valid scanned identifier is required.' }, { status: 400 });
-    if (!(upload instanceof File)) return NextResponse.json({ error: 'Choose an official SC Labs COA PDF.' }, { status: 400 });
+    if (!(upload instanceof File)) return NextResponse.json({ error: 'Choose a supported COA PDF.' }, { status: 400 });
     if (upload.size < 5 || upload.size > MAX_PDF_BYTES) return NextResponse.json({ error: 'COA PDF must be between 5 bytes and 15 MB.' }, { status: 413 });
     if (upload.type && upload.type !== 'application/pdf') return NextResponse.json({ error: 'Only PDF uploads are accepted.' }, { status: 415 });
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         analyteCount: parsed.analytes.length,
         analyteGroups,
       },
-      message: `Official SC Labs COA parsed with ${parsed.analytes.length} report rows and attached as pending evidence.`,
+      message: `COA parsed with ${parsed.analytes.length} report rows and attached as pending evidence.`,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to parse this COA PDF.' }, { status: 400 });
