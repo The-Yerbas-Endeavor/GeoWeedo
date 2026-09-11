@@ -11,26 +11,45 @@ type Props={guess:LatLng|null;actual?:LatLng|null;revealed?:boolean;onGuess:(gue
 type ProductMatch={menuItemId:string;productId:string|null;batchId:string|null;itemName:string;brandName:string|null;category:string|null;variant:string|null;packageSize:string|null;priceCents:number|null;currency:string;inventoryStatus:string;verified:boolean;sourceUpdatedAt:string|null;batchNumber:string|null;score:number};
 type ProductDispensary={id:string;name:string;city:string|null;region:string|null;country:string|null;latitude:number;longitude:number;matches:ProductMatch[]};
 
+const ZIP_QUERY=/^\d{5}(?:-\d{4})?$/;
+const SEARCH_ACTIVE_CLASS='geoweedo-map-search-active';
+
 function formatPrice(match:ProductMatch){if(match.priceCents===null)return null;try{return new Intl.NumberFormat(undefined,{style:'currency',currency:match.currency||'USD'}).format(match.priceCents/100);}catch{return `$${(match.priceCents/100).toFixed(2)}`;}}
 function clearProductParam(){const url=new URL(window.location.href);url.searchParams.delete('product');url.searchParams.delete('productId');window.history.replaceState({},'',`${url.pathname}${url.search}${url.hash}`);}
+function setNativeInputValue(input:HTMLInputElement,value:string){const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;if(setter)setter.call(input,value);else input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));}
+function textMatchesLocation(item:MapLocation,query:string){return `${item.name} ${item.city||''} ${item.region||''} ${item.country||''}`.toLowerCase().includes(query.toLowerCase());}
 
 function ProductAwareMap(props:Props){
  const rootRef=useRef<HTMLDivElement|null>(null);
- const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
+ const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[legacySearchInput,setLegacySearchInput]=useState<HTMLInputElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
  const[query,setQuery]=useState(''),[debouncedQuery,setDebouncedQuery]=useState(''),[resultQuery,setResultQuery]=useState('');
  const[exactProductId,setExactProductId]=useState(''),[exactProductLabel,setExactProductLabel]=useState('');
  const[results,setResults]=useState<ProductDispensary[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
 
- useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=String(params.get('product')||params.get('productId')||'').trim();if(id){setExactProductId(id);document.body.classList.add('geoweedo-findo-active');window.setTimeout(()=>document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click(),0);}},[]);
+ useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=String(params.get('product')||params.get('productId')||'').trim();if(id){setExactProductId(id);document.body.classList.add('geoweedo-findo-active',SEARCH_ACTIVE_CLASS);window.setTimeout(()=>document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click(),0);}},[]);
  useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(query.trim()),260);return()=>window.clearTimeout(timer);},[query]);
  useEffect(()=>{
   const root=rootRef.current;if(!root)return;
-  const sync=()=>{const nextToolbar=root.querySelector<HTMLElement>('.map-browser-tools');const nextCard=root.querySelector<HTMLElement>('.map-location-card');setToolbar(nextToolbar);setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');};
+  const sync=()=>{
+   const nextToolbar=root.querySelector<HTMLElement>('.map-browser-tools');
+   const nextLegacy=nextToolbar?.querySelector<HTMLInputElement>('input:not(.map-unified-search-input)')||null;
+   if(nextLegacy){nextLegacy.style.display='none';nextLegacy.setAttribute('aria-hidden','true');nextLegacy.tabIndex=-1;nextLegacy.dataset.unifiedSearchInternal='1';}
+   const nextCard=root.querySelector<HTMLElement>('.map-location-card');
+   setToolbar(nextToolbar);setLegacySearchInput(nextLegacy);setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');
+  };
   sync();const observer=new MutationObserver(sync);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});return()=>observer.disconnect();
  },[]);
  useEffect(()=>{
-  const exactId=exactProductId.trim(),q=debouncedQuery.trim();
-  if(!exactId&&q.length<2){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
+  if(!legacySearchInput)return;
+  const value=query.trim();
+  if(ZIP_QUERY.test(value)){if(legacySearchInput.value!==value)setNativeInputValue(legacySearchInput,value);}
+  else if(legacySearchInput.value)setNativeInputValue(legacySearchInput,'');
+  const active=Boolean(value||exactProductId);document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
+  if(active)document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click();
+ },[query,exactProductId,legacySearchInput]);
+ useEffect(()=>{
+  const exactId=exactProductId.trim(),q=debouncedQuery.trim(),isZip=ZIP_QUERY.test(q);
+  if(!exactId&&(q.length<2||isZip)){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
   const controller=new AbortController();setLoading(true);setError('');
   const endpoint=exactId?`/api/dispensaries/product-search?productId=${encodeURIComponent(exactId)}`:`/api/dispensaries/product-search?q=${encodeURIComponent(q)}`;
   fetch(endpoint,{cache:'no-store',signal:controller.signal})
@@ -40,25 +59,26 @@ function ProductAwareMap(props:Props){
   return()=>controller.abort();
  },[debouncedQuery,exactProductId]);
 
- const productFilterActive=resultQuery.length>=2&&!loading&&!error;
  const resultMap=useMemo(()=>new Map(results.map(item=>[String(item.id),item])),[results]);
- const productLocations=useMemo(()=>{
-  if(!productFilterActive)return props.locations||[];
-  const originals=new Map((props.locations||[]).map(item=>[String(item.id),item]));
-  return results.map(result=>{
-   const original=originals.get(String(result.id));
-   if(original)return original;
-   return {id:result.id,name:result.name,lat:Number(result.latitude),lng:Number(result.longitude),city:result.city||'',region:result.region||'',country:result.country||'USA',approved:true,enabled:true,imageryReady:false,source:'Dispensary menu'} as MapLocation;
-  }).filter(item=>Number.isFinite(item.lat)&&Number.isFinite(item.lng));
- },[productFilterActive,props.locations,results]);
- const productCountries=useMemo(()=>new Set(productLocations.map(item=>item.country).filter(Boolean)).size,[productLocations]);
+ const activeTextQuery=!exactProductId&&!ZIP_QUERY.test(debouncedQuery.trim())&&debouncedQuery.trim().length>=2?debouncedQuery.trim():'';
+ const unifiedFilterActive=Boolean(exactProductId&&resultQuery)||Boolean(activeTextQuery);
+ const combinedLocations=useMemo(()=>{
+  const originals=props.locations||[];
+  if(!unifiedFilterActive)return originals;
+  const originalById=new Map(originals.map(item=>[String(item.id),item]));
+  const combined=new Map<string,MapLocation>();
+  if(!exactProductId&&activeTextQuery){for(const item of originals){if(textMatchesLocation(item,activeTextQuery))combined.set(String(item.id),item);}}
+  for(const result of results){const original=originalById.get(String(result.id));const item=original||({id:result.id,name:result.name,lat:Number(result.latitude),lng:Number(result.longitude),city:result.city||'',region:result.region||'',country:result.country||'USA',approved:true,enabled:true,imageryReady:false,source:'Dispensary menu'} as MapLocation);if(Number.isFinite(item.lat)&&Number.isFinite(item.lng))combined.set(String(item.id),item);}
+  return [...combined.values()];
+ },[activeTextQuery,exactProductId,props.locations,results,unifiedFilterActive]);
+ const productCountries=useMemo(()=>new Set(combinedLocations.map(item=>item.country).filter(Boolean)).size,[combinedLocations]);
  const selectedMatch=resultMap.get(selectedLocationId);
  const inputValue=exactProductId?(exactProductLabel||'Selected Weedo Facts product'):query;
- const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');clearProductParam();};
- const searchControl=toolbar?createPortal(<div className="map-product-search" style={{display:'flex',alignItems:'center',gap:6,position:'relative'}}>
-   <input className="map-product-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search product or brand" aria-label="Search product or brand" autoComplete="off" style={{minWidth:180,maxWidth:280}}/>
-   {inputValue?<button type="button" onClick={clearSearch} aria-label="Clear product search" title="Clear product search">×</button>:null}
-   {loading?<span style={{fontSize:12,whiteSpace:'nowrap'}}>Finding product…</span>:productFilterActive?<span style={{fontSize:12,whiteSpace:'nowrap'}}>{exactProductId?'Exact product · ':''}{results.length} {results.length===1?'store':'stores'}</span>:error?<span style={{fontSize:12,whiteSpace:'nowrap'}} title={error}>Product search unavailable</span>:null}
+ const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
+ const searchControl=toolbar?createPortal(<div className="map-unified-search" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
+   <input className="map-unified-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180}}/>
+   {inputValue?<button type="button" onClick={clearSearch} aria-label="Clear search" title="Clear search">×</button>:null}
+   {loading?<span aria-label="Searching products" title="Searching products" style={{fontSize:12,whiteSpace:'nowrap'}}>…</span>:error?<span aria-label="Product search unavailable" title={error} style={{fontSize:12,whiteSpace:'nowrap'}}>!</span>:null}
   </div>,toolbar):null;
  const matchCard=locationCard&&selectedMatch?createPortal(<div className="map-location-product-matches" style={{marginTop:12,padding:'10px 12px',borderRadius:10,background:'rgba(72,160,91,.12)',border:'1px solid rgba(103,214,110,.28)'}}>
    <strong style={{display:'block',marginBottom:6}}>🌿 {exactProductId?'THIS PRODUCT':'PRODUCT MATCHES'}</strong>
@@ -70,7 +90,7 @@ function ProductAwareMap(props:Props){
   </div>,locationCard):null;
 
  return <div ref={rootRef} style={{position:'relative',width:'100%',height:'100%'}}>
-   <MapLibreGuessMap {...props} locations={productLocations} mappedTotal={productFilterActive?productLocations.length:props.mappedTotal} enabledTotal={productFilterActive?productLocations.filter(item=>item.enabled).length:props.enabledTotal} countriesTotal={productFilterActive?productCountries:props.countriesTotal}/>
+   <MapLibreGuessMap {...props} locations={combinedLocations} mappedTotal={unifiedFilterActive?combinedLocations.length:props.mappedTotal} enabledTotal={unifiedFilterActive?combinedLocations.filter(item=>item.enabled).length:props.enabledTotal} countriesTotal={unifiedFilterActive?productCountries:props.countriesTotal}/>
    {searchControl}
    {matchCard}
   </div>;
