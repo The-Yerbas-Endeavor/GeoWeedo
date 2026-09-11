@@ -1,7 +1,18 @@
 import 'server-only';
 
+export type RetailId1A4Analyte = {
+  groupName: string;
+  analyteName: string;
+  value: number | null;
+  unit: string | null;
+  status?: string | null;
+  limitValue?: number | null;
+  limitUnit?: string | null;
+};
+
 export type RetailId1A4Record = {
   url: string;
+  apiUrl: string;
   retailId: string | null;
   serial: string | null;
   title: string | null;
@@ -16,12 +27,18 @@ export type RetailId1A4Record = {
   facilityLicense: string | null;
   labName: string | null;
   labLicense: string | null;
+  coaNumber: string | null;
+  coaDocumentId: string | null;
   testedAt: string | null;
   overallStatus: string | null;
   coaUrl: string | null;
   thcText: string | null;
   cbdText: string | null;
+  analytes: RetailId1A4Analyte[];
+  marketCode: string | null;
+  isOnRecall: boolean;
   pageText: string;
+  rawPayload: unknown;
 };
 
 const HOSTS = new Set(['1a4.com', 'www.1a4.com', 'app.1a4.com', 'www.app.1a4.com']);
@@ -43,59 +60,28 @@ export function retailIdFrom1A4Url(value: string) {
   return /^1a4[a-z0-9]{21}$/i.test(candidate) ? candidate.toUpperCase() : null;
 }
 
-function decodeEntities(value: string) {
-  return value
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+function clean(value: unknown) {
+  const text = String(value ?? '').trim();
+  return text || null;
 }
 
-function htmlToText(html: string) {
-  return decodeEntities(html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>|<\/div>|<\/li>|<\/tr>|<\/h[1-6]>|<\/section>|<\/article>/gi, '\n')
-    .replace(/<[^>]+>/g, ' '))
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function firstMatch(text: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    const value = match?.[1]?.trim();
-    if (value) return value.replace(/\s{2,}/g, ' ');
-  }
-  return null;
-}
-
-function extractJsonDocuments(html: string) {
-  const docs: any[] = [];
-  const patterns = [
-    /<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi,
-    /<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/gi,
-  ];
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(html)) !== null) {
-      try { docs.push(JSON.parse(decodeEntities(match[1]))); } catch {}
-    }
-  }
-  return docs;
+function asNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  const match = value.replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
 }
 
 function walk(value: any, visit: (key: string, value: any) => void) {
-  if (Array.isArray(value)) { for (const item of value) walk(item, visit); return; }
+  if (Array.isArray(value)) {
+    for (const item of value) walk(item, visit);
+    return;
+  }
   if (!value || typeof value !== 'object') return;
-  for (const [key, child] of Object.entries(value)) { visit(key, child); walk(child, visit); }
+  for (const [key, child] of Object.entries(value)) {
+    visit(key, child);
+    walk(child, visit);
+  }
 }
 
 function firstJsonText(root: any, keys: string[]) {
@@ -110,94 +96,252 @@ function firstJsonText(root: any, keys: string[]) {
   return found;
 }
 
-function absoluteUrl(base: string, candidate: string | null) {
-  if (!candidate) return null;
-  try { return new URL(candidate, base).toString(); } catch { return null; }
-}
-
-function extractCoaUrl(html: string, base: string) {
-  const anchors = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
-  for (const match of anchors) {
-    const href = decodeEntities(match[1]);
-    const label = htmlToText(match[2]);
-    if (/view\s+lab\s+report|certificate|\bcoa\b/i.test(label) || /(?:coa|certificate|lab|test).*(?:\.pdf|download)|\.pdf(?:\?|$)/i.test(href)) {
-      return absoluteUrl(base, href);
-    }
-  }
-  const pdf = [...html.matchAll(/href=["']([^"']+\.pdf(?:\?[^"']*)?)["']/gi)][0]?.[1] || null;
-  return absoluteUrl(base, pdf ? decodeEntities(pdf) : null);
-}
-
-function extractTitle(html: string, text: string) {
-  const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1];
-  if (og && !/retail\s*id|metrc\s*verif/i.test(og)) return decodeEntities(og).trim();
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-  if (title && !/retail\s*id|metrc\s*verif/i.test(title)) return decodeEntities(title.replace(/<[^>]+>/g, ' ')).trim();
-  return firstMatch(text, [/(?:Product Name|Product|Item)\s*:\s*([^\n]+)/i]);
-}
-
 function normalizeDate(value: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
-export async function fetchRetailId1A4(value: string): Promise<RetailId1A4Record> {
-  if (!isRetailId1A4Url(value)) throw new Error('Unsupported Retail ID URL.');
-  const input = new URL(value);
-  const uidFromPath = retailIdFrom1A4Url(value);
-  const response = await fetch(input.toString(), {
+function parseEmbeddedJson(value: unknown) {
+  if (value && typeof value === 'object') return value as Record<string, any>;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, any> : null;
+  } catch {
+    return null;
+  }
+}
+
+function absoluteUrl(base: string, candidate: unknown) {
+  const text = clean(candidate);
+  if (!text) return null;
+  try { return new URL(text, base).toString(); } catch { return null; }
+}
+
+function findUrl(root: any, base: string) {
+  const keys = new Set([
+    'coaurl', 'certificateurl', 'reporturl', 'labreporturl', 'downloadurl',
+    'fileurl', 'documenturl', 'pdfurl',
+  ]);
+  let found: string | null = null;
+  walk(root, (key, value) => {
+    if (found || typeof value !== 'string') return;
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!keys.has(normalized)) return;
+    found = absoluteUrl(base, value);
+  });
+  return found;
+}
+
+function prettyAnalyteName(key: string, isTotal = false) {
+  const normalized = key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  const compact = normalized.replace(/\s+/g, '').toLowerCase();
+  const names: Record<string, string> = {
+    thc: 'THC', thca: 'THCA', thcv: 'THCV', cbd: 'CBD', cbda: 'CBDA',
+    cbdv: 'CBDV', cbg: 'CBG', cbga: 'CBGA', cbn: 'CBN', cbc: 'CBC',
+    delta8thc: 'Delta-8 THC', delta9thc: 'Delta-9 THC',
+    totalcbd: 'Total CBD', totalthc: 'Total THC', totaldelta9thc: 'Total Delta-9 THC',
+  };
+  const mapped = names[compact] || normalized.replace(/\b\w/g, char => char.toUpperCase());
+  if (isTotal && !/^total\b/i.test(mapped)) return `Total ${mapped}`;
+  return mapped;
+}
+
+function measurementFromEntry(key: string, entry: any, groupName: string, forceTotal = false): RetailId1A4Analyte | null {
+  if (!entry || typeof entry !== 'object') return null;
+  const percent = asNumber(entry.percent);
+  const weightAmount = asNumber(entry.weight?.amount ?? entry.weight?.pkg);
+  const rawValue = percent ?? asNumber(entry.value ?? entry.amount ?? entry.result);
+  const value = rawValue ?? weightAmount;
+  if (value === null && !clean(entry.status)) return null;
+  const isTotal = forceTotal || Boolean(entry.flags?.isTotal);
+  const unit = percent !== null ? '%' : clean(entry.unit ?? entry.weight?.unit);
+  return {
+    groupName,
+    analyteName: prettyAnalyteName(key, isTotal),
+    value,
+    unit,
+    status: clean(entry.status ?? entry.resultStatus ?? entry.passFail),
+    limitValue: asNumber(entry.limit ?? entry.actionLimit ?? entry.limitValue),
+    limitUnit: clean(entry.limitUnit ?? entry.actionLimitUnit),
+  };
+}
+
+function collectAnalytes(coa: any) {
+  const out: RetailId1A4Analyte[] = [];
+  const seen = new Set<string>();
+  const push = (row: RetailId1A4Analyte | null) => {
+    if (!row) return;
+    const key = `${row.groupName}|${row.analyteName.toLowerCase()}|${row.value ?? ''}|${row.unit ?? ''}|${row.status ?? ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(row);
+  };
+
+  const ingredients = coa?.ingredients;
+  if (ingredients && typeof ingredients === 'object') {
+    for (const [key, entry] of Object.entries(ingredients)) {
+      const kind = clean((entry as any)?.kind)?.toLowerCase();
+      if (kind === 'cannabinoid' || /(?:thc|cbd|cbg|cbn|cbc)/i.test(key)) {
+        push(measurementFromEntry(key, entry, 'cannabinoid'));
+      }
+    }
+  }
+
+  const totals = coa?.totals;
+  if (totals && typeof totals === 'object') {
+    for (const [key, entry] of Object.entries(totals)) {
+      const kind = clean((entry as any)?.kind)?.toLowerCase();
+      if (kind === 'cannabinoid' || /(?:thc|cbd|cbg|cbn|cbc)/i.test(key)) {
+        push(measurementFromEntry(key, entry, 'cannabinoid', true));
+      }
+    }
+  }
+
+  const terpenes = coa?.terpenes;
+  if (terpenes && typeof terpenes === 'object') {
+    for (const [key, entry] of Object.entries(terpenes)) {
+      push(measurementFromEntry(key, entry, 'terpene'));
+    }
+  }
+
+  // Some Retail ID payloads expose compliance panels under nonCannabinoids.
+  // Keep their source-reported status/measurements without trying to reinterpret
+  // regulatory limits here.
+  const nonCannabinoids = coa?.nonCannabinoids;
+  if (nonCannabinoids && typeof nonCannabinoids === 'object') {
+    for (const [groupKey, groupValue] of Object.entries(nonCannabinoids)) {
+      if (Array.isArray(groupValue)) {
+        for (const entry of groupValue) {
+          const name = clean((entry as any)?.name ?? (entry as any)?.analyteName ?? (entry as any)?.analyte) || groupKey;
+          const row = measurementFromEntry(name, entry, groupKey.toLowerCase().replace(/\s+/g, '_'));
+          push(row);
+        }
+      } else if (groupValue && typeof groupValue === 'object') {
+        const row = measurementFromEntry(groupKey, groupValue, groupKey.toLowerCase().replace(/\s+/g, '_'));
+        push(row);
+      }
+    }
+  }
+
+  return out;
+}
+
+function packageSize(coa: any) {
+  const weight = asNumber(coa?.unit?.weight);
+  const name = clean(coa?.unit?.weightUnitOfMeasureName);
+  if (weight !== null && name) {
+    const unit = /^grams?$/i.test(name) ? 'g'
+      : /^milligrams?$/i.test(name) ? 'mg'
+        : /^ounces?$/i.test(name) ? 'oz'
+          : name;
+    return `${weight} ${unit}`;
+  }
+  return clean(coa?.servingSize) || null;
+}
+
+function potencyText(coa: any, key: 'thc' | 'cbd') {
+  const total = coa?.totals?.[key] ?? coa?.ingredients?.[`total${key.toUpperCase()}`] ?? coa?.ingredients?.[`total${key[0].toUpperCase()}${key.slice(1)}`];
+  if (!total || typeof total !== 'object') return null;
+  const percent = asNumber(total.percent);
+  if (percent !== null) return `${percent}%`;
+  const amount = asNumber(total.weight?.pkg ?? total.weight?.amount);
+  const unit = clean(total.weight?.unit ?? total.unit);
+  return amount !== null ? `${amount}${unit ? ` ${unit}` : ''}` : null;
+}
+
+async function fetchLandingData(input: URL) {
+  const parts = input.pathname.split('/').filter(Boolean);
+  const id = parts[1] || '';
+  const rawIndex = parts[2] || '';
+  const parsedIndex = Number.parseInt(rawIndex, 10);
+  const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;
+  if (!id) throw new Error('Retail ID URL is missing its issuance ID.');
+
+  // This is the same public request used by the 1A4 browser application:
+  // GET /api/landingpage/data?id=<issuanceId>&index=<index>
+  const apiUrl = new URL('/api/landingpage/data', input.origin);
+  apiUrl.searchParams.set('id', id);
+  apiUrl.searchParams.set('index', String(index));
+  const response = await fetch(apiUrl.toString(), {
     cache: 'no-store',
     redirect: 'follow',
     signal: AbortSignal.timeout(12000),
     headers: {
-      Accept: 'text/html,application/xhtml+xml',
+      Accept: 'application/json,text/plain,*/*',
+      Referer: input.toString(),
       'User-Agent': 'GeoWeedo/1.0 (+https://geoweedo.com)',
     },
   });
-  if (!response.ok) throw new Error(`Retail ID page returned ${response.status}.`);
-  const finalUrl = response.url || input.toString();
-  const html = await response.text();
-  if (!html || html.length > 2_000_000) throw new Error('Retail ID page could not be read safely.');
-  const text = htmlToText(html);
-  const docs = extractJsonDocuments(html);
-  const parts = input.pathname.split('/').filter(Boolean);
-  const serial = parts[2] || null;
-  const retailId = firstJsonText(docs, ['retailId', 'retail_id', 'packageUid', 'package_uid', 'packageTag', 'package_tag', 'uid'])
-    || firstMatch(text, [
-      /(?:Metrc\s*(?:ID|Id)|Retail\s*ID|Id)\s*:\s*(1A4[A-Z0-9]{21})/i,
-      /\b(1A4[A-Z0-9]{21})\b/i,
-    ])
-    || uidFromPath;
+  if (!response.ok) throw new Error(`Retail ID data API returned ${response.status}.`);
+  const contentType = response.headers.get('content-type') || '';
+  if (!/json/i.test(contentType)) throw new Error(`Retail ID data API returned unexpected content type: ${contentType || 'unknown'}.`);
+  const payload = await response.json();
+  if (!payload || typeof payload !== 'object') throw new Error('Retail ID data API returned an empty payload.');
+  return { payload: payload as Record<string, any>, apiUrl: response.url || apiUrl.toString(), serial: String(index) };
+}
 
-  const title = extractTitle(html, text);
-  const structuredProductName = firstJsonText(docs, ['productName', 'product_name', 'itemName', 'item_name']);
-  const labeledProductName = firstMatch(text, [/(?:Product Name|Product|Item)\s*:\s*([^\n]+)/i]);
-  const productName = structuredProductName || labeledProductName || title;
-  const cultivar = firstJsonText(docs, ['cultivar', 'strainName', 'strain_name']) || firstMatch(text, [/(?:Cultivar|Strain)\s*:\s*([^\n]+)/i]);
+export async function fetchRetailId1A4(value: string): Promise<RetailId1A4Record> {
+  if (!isRetailId1A4Url(value)) throw new Error('Unsupported Retail ID URL.');
+  const input = new URL(value);
+  const uidFromPath = retailIdFrom1A4Url(value);
+  const { payload, apiUrl, serial } = await fetchLandingData(input);
+  const coaCard = payload.coaCard && typeof payload.coaCard === 'object' ? payload.coaCard : null;
+  const coa = parseEmbeddedJson(coaCard?.data) || {};
+
+  const productName = clean(coa.productName ?? coa.title)
+    || firstJsonText(payload, ['productName', 'itemName']);
+  const retailId = clean(payload.packageLabel ?? coa.lotNumber ?? coa.id)?.toUpperCase() || uidFromPath;
+  const labName = clean(coa.lab?.name) || firstJsonText(coa, ['labName', 'testingLab']);
+  const labLicense = clean(coa.lab?.licenseNumber) || firstJsonText(coa, ['labLicense', 'labLicenseNumber']);
+  const documentId = clean(coa.lab?.docId ?? coa.documentId ?? coa.coaId);
+  const batchNumber = clean(coa.batch ?? coa.sourceBatch ?? coa.batchNumber);
+  const testedAt = normalizeDate(clean(coa.dateTested ?? coa.testedDate ?? coa.labTests?.[0]?.at));
+  const analytes = collectAnalytes(coa);
+  const coaUrl = findUrl(coaCard, input.toString()) || findUrl(coa, input.toString());
+  const overallStatus = firstJsonText(coa, ['overallStatus', 'complianceStatus', 'resultStatus', 'passFail']);
 
   return {
-    url: finalUrl,
-    retailId: retailId ? retailId.toUpperCase() : uidFromPath,
+    url: input.toString(),
+    apiUrl,
+    retailId,
     serial,
-    title,
-    productName: productName || cultivar,
-    explicitProductName: Boolean(structuredProductName || labeledProductName || title),
-    brandName: firstJsonText(docs, ['brandName', 'brand_name', 'brand']) || firstMatch(text, [/(?:Brand)\s*:\s*([^\n]+)/i]),
-    productType: firstJsonText(docs, ['productType', 'product_type', 'category', 'itemCategory', 'item_category']) || firstMatch(text, [/(?:Product Type|Category|Type)\s*:\s*([^\n]+)/i]),
-    netContents: firstJsonText(docs, ['netContents', 'net_contents', 'packageSize', 'package_size', 'quantity']) || firstMatch(text, [/(?:Net Contents|Package Size|Quantity)\s*:\s*([^\n]+)/i]),
-    cultivar,
-    batchNumber: firstJsonText(docs, ['batchNumber', 'batch_number', 'batch', 'lotNumber', 'lot_number']) || firstMatch(text, [/(?:Batch|Lot)\s*:\s*([^\n]+)/i]),
-    facility: firstJsonText(docs, ['facilityName', 'facility_name', 'facility', 'producerName', 'producer_name', 'manufacturerName', 'manufacturer_name']) || firstMatch(text, [/(?:Facility|Produced By|Manufactured By|Processor)\s*:\s*([^\n]+)/i]),
-    facilityLicense: firstJsonText(docs, ['facilityLicense', 'facility_license', 'producerLicense', 'producer_license']) || firstMatch(text, [/(?:Facility License|License)\s*:\s*([A-Z0-9-]+)/i]),
-    labName: firstJsonText(docs, ['labName', 'lab_name', 'testingLab', 'testing_lab']) || firstMatch(text, [/(?:Tested By|Lab(?:oratory)?)\s*:\s*([^\n]+)/i]),
-    labLicense: firstJsonText(docs, ['labLicense', 'lab_license', 'labLicenseNumber', 'lab_license_number']) || firstMatch(text, [/(?:Lab License)\s*:\s*([A-Z0-9-]+)/i]),
-    testedAt: normalizeDate(firstJsonText(docs, ['testedAt', 'tested_at', 'testDate', 'test_date', 'dateTested', 'date_tested']) || firstMatch(text, [/(?:Tested (?:On|Date)|On)\s*:\s*([^\n]+)/i])),
-    overallStatus: firstJsonText(docs, ['overallStatus', 'overall_status', 'complianceStatus', 'compliance_status']) || firstMatch(text, [/(?:Compliance Status|Status)\s*:\s*([^\n]+)/i]),
-    coaUrl: extractCoaUrl(html, finalUrl),
-    thcText: firstMatch(text, [/(?:Total\s+)?THC\s*:?\s*([^\n]+)/i, /(\d+(?:\.\d+)?\s*MG\s+THC\s+PER\s+(?:PACKAGE|SERVING))/i]),
-    cbdText: firstMatch(text, [/(?:Total\s+)?CBD\s*:?\s*([^\n]+)/i, /(\d+(?:\.\d+)?\s*MG\s+CBD\s+PER\s+(?:PACKAGE|SERVING))/i]),
-    pageText: text.slice(0, 12000),
+    title: clean(coa.title) || productName,
+    productName,
+    explicitProductName: Boolean(productName),
+    brandName: firstJsonText(payload, ['brandName', 'brand']) || firstJsonText(coa, ['brandName', 'brand']),
+    productType: clean(coa.category) || firstJsonText(payload, ['productType', 'category']),
+    netContents: packageSize(coa),
+    cultivar: clean(coa.strainName ?? coa.strain),
+    batchNumber,
+    facility: clean(payload.facilityName) || firstJsonText(coa, ['facilityName', 'producerName', 'manufacturerName']),
+    facilityLicense: clean(payload.facilityLicense) || firstJsonText(coa, ['facilityLicense', 'producerLicense']),
+    labName,
+    labLicense,
+    coaNumber: documentId,
+    coaDocumentId: documentId,
+    testedAt,
+    overallStatus,
+    coaUrl,
+    thcText: potencyText(coa, 'thc'),
+    cbdText: potencyText(coa, 'cbd'),
+    analytes,
+    marketCode: clean(payload.marketCode),
+    isOnRecall: Boolean(payload.isOnRecall),
+    pageText: JSON.stringify({
+      productName,
+      retailId,
+      batchNumber,
+      facilityName: payload.facilityName ?? null,
+      facilityLicense: payload.facilityLicense ?? null,
+      labName,
+      labLicense,
+      documentId,
+      testedAt,
+      marketCode: payload.marketCode ?? null,
+      isOnRecall: Boolean(payload.isOnRecall),
+    }),
+    rawPayload: payload,
   };
 }
