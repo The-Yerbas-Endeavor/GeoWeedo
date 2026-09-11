@@ -42,22 +42,102 @@ export type RetailId1A4Record = {
 };
 
 const HOSTS = new Set(['1a4.com', 'www.1a4.com', 'app.1a4.com', 'www.app.1a4.com']);
+const SHORT_HOSTS = new Set(['1a4.com', 'www.1a4.com']);
+const LANDING_PATH = /^\/landingpage\//i;
+const SHORT_PATH = /^\/[a-z0-9_-]{8,80}\/?$/i;
+
+function supported1A4Url(url: URL) {
+  return url.protocol === 'https:' && HOSTS.has(url.hostname.toLowerCase());
+}
+
+function isLandingPageUrl(url: URL) {
+  return supported1A4Url(url) && LANDING_PATH.test(url.pathname);
+}
+
+function isShortRetailIdUrl(url: URL) {
+  return url.protocol === 'https:'
+    && SHORT_HOSTS.has(url.hostname.toLowerCase())
+    && SHORT_PATH.test(url.pathname);
+}
 
 export function isRetailId1A4Url(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && HOSTS.has(url.hostname.toLowerCase()) && /^\/landingpage\//i.test(url.pathname);
+    return isLandingPageUrl(url) || isShortRetailIdUrl(url);
   } catch {
     return false;
   }
 }
 
 export function retailIdFrom1A4Url(value: string) {
-  if (!isRetailId1A4Url(value)) return null;
-  const url = new URL(value);
-  const parts = url.pathname.split('/').filter(Boolean);
-  const candidate = parts[1] || '';
-  return /^1a4[a-z0-9]{21}$/i.test(candidate) ? candidate.toUpperCase() : null;
+  try {
+    const url = new URL(value);
+    if (!isLandingPageUrl(url)) return null;
+    const parts = url.pathname.split('/').filter(Boolean);
+    const candidate = parts[1] || '';
+    return /^1a4[a-z0-9]{21}$/i.test(candidate) ? candidate.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+function canonicalLandingUrl(value: URL) {
+  const out = new URL(value.toString());
+  out.protocol = 'https:';
+  out.hostname = 'app.1a4.com';
+  out.port = '';
+  return out;
+}
+
+function landingUrlFromText(text: string, base: URL) {
+  const normalized = text.replace(/\\\//g, '/');
+  const absolute = normalized.match(/https:\/\/(?:www\.)?(?:app\.)?1a4\.com\/landingpage\/[a-z0-9]+\/\d+/i)?.[0];
+  const relative = normalized.match(/\/landingpage\/[a-z0-9]+\/\d+/i)?.[0];
+  const candidate = absolute || relative;
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate, base);
+    return isLandingPageUrl(url) ? canonicalLandingUrl(url) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveRetailIdLandingUrl(value: string) {
+  const original = new URL(value);
+  if (isLandingPageUrl(original)) return canonicalLandingUrl(original);
+  if (!isShortRetailIdUrl(original)) throw new Error('Unsupported Retail ID URL.');
+
+  let current = original;
+  for (let hop = 0; hop < 6; hop += 1) {
+    const response = await fetch(current.toString(), {
+      cache: 'no-store',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/json,text/plain,*/*',
+        'User-Agent': 'GeoWeedo/1.0 (+https://geoweedo.com)',
+      },
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error(`Retail ID short link returned ${response.status} without a redirect target.`);
+      const next = new URL(location, current);
+      if (!supported1A4Url(next)) throw new Error('Retail ID short link redirected outside the supported 1A4 hosts.');
+      if (isLandingPageUrl(next)) return canonicalLandingUrl(next);
+      current = next;
+      continue;
+    }
+
+    if (!response.ok) throw new Error(`Retail ID short link returned ${response.status}.`);
+    const text = await response.text();
+    const landing = landingUrlFromText(text, current);
+    if (landing) return landing;
+    throw new Error('Retail ID short link did not expose a supported 1A4 landing page.');
+  }
+
+  throw new Error('Retail ID short link exceeded the redirect limit.');
 }
 
 function clean(value: unknown) {
@@ -284,8 +364,8 @@ async function fetchLandingData(input: URL) {
 
 export async function fetchRetailId1A4(value: string): Promise<RetailId1A4Record> {
   if (!isRetailId1A4Url(value)) throw new Error('Unsupported Retail ID URL.');
-  const input = new URL(value);
-  const uidFromPath = retailIdFrom1A4Url(value);
+  const input = await resolveRetailIdLandingUrl(value);
+  const uidFromPath = retailIdFrom1A4Url(input.toString());
   const { payload, apiUrl, serial } = await fetchLandingData(input);
   const coaCard = payload.coaCard && typeof payload.coaCard === 'object' ? payload.coaCard : null;
   const coa = parseEmbeddedJson(coaCard?.data) || {};
