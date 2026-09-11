@@ -28,14 +28,10 @@ export default function WeedoFactsNativeScanBridge() {
     const capacitor = getCapacitor();
     if (!capacitor?.isNativePlatform?.()) return;
 
-    // Android should use the same in-page ZXing/BarcodeDetector camera scanner
-    // as geoweedo.com. The Capacitor barcode plugin opens its own native scanner
-    // activity, so our GeoWeedo overlay (including the thin green scan line) is
-    // not part of that view. Let the normal Scan package click reach
-    // WeedoFactsLookup.startScanner() so the APK and mobile website stay aligned.
-    if (capacitor.getPlatform?.() === 'android') return;
-
     const scanner = capacitor.Plugins?.CapacitorBarcodeScanner;
+    // Older APKs or development shells may not include the native plugin. In
+    // that case, do not intercept the button: the normal in-page scanner stays
+    // available as the fallback.
     if (!scanner?.scanBarcode) return;
 
     const root = document.documentElement;
@@ -57,7 +53,10 @@ export default function WeedoFactsNativeScanBridge() {
       setError('');
 
       try {
+        const platform = capacitor.getPlatform?.();
         const result = await scanner.scanBarcode({
+          // 17 = ALL formats in @capacitor/barcode-scanner. This keeps QR,
+          // UPC/EAN, Code 128 and the other supported package formats enabled.
           hint: 17,
           scanInstructions: 'Scan a cannabis package barcode or QR code',
           scanButton: false,
@@ -67,7 +66,10 @@ export default function WeedoFactsNativeScanBridge() {
           cancelButtonAccessibilityLabel: 'Cancel product scan',
           torchButtonOnAccessibilityLabel: 'Turn scanner light off',
           torchButtonOffAccessibilityLabel: 'Turn scanner light on',
-          android: { scanningLibrary: 'mlkit' },
+          // Android WebView camera decoding has been less reliable than mobile
+          // Firefox. Use the plugin's native ZXing backend so Android does not
+          // depend on the WebView video-decoder path.
+          ...(platform === 'android' ? { android: { scanningLibrary: 'zxing' } } : {}),
         });
 
         const value = String(result?.ScanResult || '').trim();
