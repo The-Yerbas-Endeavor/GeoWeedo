@@ -6,6 +6,7 @@ import { fetchRetailId1A4, isRetailId1A4Url, retailIdFrom1A4Url, type RetailId1A
 import { ingestRetailId1A4 } from '../../../../lib/retailId1a4Ingest';
 import { ingestRetailIdCoaEvidence } from '../../../../lib/retailIdCoaIngestion';
 import { persistQrScan, persistRetailId1A4Scan } from '../../../../lib/weedoFactsQrPersistence';
+import { confirmVerifiedProductDatabaseWrite } from '../../../../lib/verifiedProductDatabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -167,21 +168,22 @@ export async function POST(request: NextRequest) {
       const sample = normalizeScLabsPublicSample(await fetchScLabsSample(identifier));
       const ingestion = ingestScLabsSample(sample);
       const record = normalizeEvidenceRecord(lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' }));
+      const productDatabase = confirmVerifiedProductDatabaseWrite(ingestion.productId, ingestion.batchId);
       if (isQr) {
         persistedQr = persistQrScan({
           qrValue: identifier,
           resolver: 'sc_labs_public_page',
-          productId: record?.productId || null,
-          batchId: record?.batchId || null,
+          productId: record?.productId || productDatabase.productId,
+          batchId: record?.batchId || productDatabase.batchId,
           sourceUrl: identifier,
           externalIdentifier: sample.coaNumber || sample.sampleId || null,
-          title: record?.productName || null,
+          title: record?.productName || productDatabase.productName,
           brandName: record?.brandName || null,
-          productName: record?.productName || null,
+          productName: record?.productName || productDatabase.productName,
           productType: record?.productType || null,
           producerName: record?.producerName || null,
           producerLicenseNumber: record?.producerLicenseNumber || null,
-          labName: record?.labName || null,
+          labName: record?.labName || productDatabase.labName,
           labLicenseNumber: record?.labLicenseNumber || null,
           testedAt: record?.testedAt || null,
           coaUrl: record?.coaUrl || identifier,
@@ -189,7 +191,15 @@ export async function POST(request: NextRequest) {
           countScan: false,
         });
       }
-      return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: 'sc_labs_public_page', ingestion, persistedQr });
+      return NextResponse.json({
+        ok: true,
+        found: Boolean(record),
+        record,
+        resolvedBy: 'sc_labs_public_page',
+        ingestion,
+        productDatabase,
+        persistedQr,
+      });
     }
 
     if (isRetailId1A4Url(identifier)) {
@@ -229,6 +239,9 @@ export async function POST(request: NextRequest) {
             coaUrl: localRecord.coaUrl,
             countScan: false,
           });
+          const productDatabase = isDirectLabRecord(localRecord)
+            ? confirmVerifiedProductDatabaseWrite(localRecord.productId, localRecord.batchId)
+            : null;
           return NextResponse.json({
             ok: true,
             found: true,
@@ -239,6 +252,7 @@ export async function POST(request: NextRequest) {
             linkedIdentifier: pathRetailId || localRecord.uid || identifier,
             linkedToGeoWeedo: true,
             refresh: { ok: false, error: refreshError(error) },
+            productDatabase,
             persistedQr,
           });
         }
@@ -259,9 +273,15 @@ export async function POST(request: NextRequest) {
         ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
         : null);
 
+      const linkedProductId = linkedRecord?.productId || coaIngestion.productId || ingestion.productId || null;
+      const linkedBatchId = linkedRecord?.batchId || coaIngestion.batchId || ingestion.batchId || null;
+      const productDatabase = coaIngestion.verifiedBatch
+        ? confirmVerifiedProductDatabaseWrite(linkedProductId, linkedBatchId)
+        : null;
+
       persistedQr = persistRetailId1A4Scan(identifier, retailId, {
-        productId: linkedRecord?.productId || coaIngestion.productId || ingestion.productId || null,
-        batchId: linkedRecord?.batchId || coaIngestion.batchId || ingestion.batchId || null,
+        productId: linkedProductId,
+        batchId: linkedBatchId,
       }, false);
 
       const record = linkedRecord || retailIdFallbackRecord(retailId, persistedQr.productId);
@@ -277,6 +297,7 @@ export async function POST(request: NextRequest) {
         externalRecord: retailId,
         ingestion,
         coaIngestion,
+        productDatabase,
         linkedIdentifier: retailId.retailId,
         linkedToGeoWeedo: Boolean(linkedRecord),
         refresh: { ok: true },
