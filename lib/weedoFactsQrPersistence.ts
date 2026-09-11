@@ -70,62 +70,52 @@ function findOrCreateRetailProduct(source: RetailId1A4Record) {
   const db = ensureSchema();
   const retailId = clean(source.retailId);
 
+  // Retail ID is package/batch scoped. Reuse a product through an existing
+  // batch UID, but do not treat the UID itself as a product identifier.
   if (retailId) {
-    const linked = db.prepare(`
-      SELECT p.id
-      FROM cannabis_product_identifiers i
-      JOIN cannabis_products p ON p.id=i.product_id
-      WHERE i.identifier_type='uid' AND i.identifier_value=?
-      LIMIT 1
-    `).get(retailId) as any;
-    if (linked?.id) return String(linked.id);
-
     const batchLinked = db.prepare(`
       SELECT product_id
       FROM cannabis_batches
-      WHERE uid=?
+      WHERE uid=? COLLATE NOCASE
       ORDER BY verified DESC, updated_at DESC
       LIMIT 1
     `).get(retailId) as any;
     if (batchLinked?.product_id) return String(batchLinked.product_id);
   }
 
-  const rawName = clean(source.title) || clean(source.cultivar);
+  // A cultivar alone is not enough to create a canonical retail product.
+  // Only create one when the public page exposes an explicit Product/Item name.
+  const rawName = source.explicitProductName ? clean(source.productName) : null;
   if (!rawName || /^(?:metrc\s+)?retail\s*id(?:\s+product)?$/i.test(rawName)) return null;
   const productName = rawName.slice(0, 240);
-  const normalized = normalizeProductName(productName);
+  const brandName = clean(source.brandName)?.slice(0, 180) || null;
+  const normalized = normalizeProductName(`${brandName || ''} ${productName}`);
   if (!normalized) return null;
 
-  const existing = db.prepare(`
+  let existing = db.prepare(`
     SELECT id
     FROM cannabis_products
     WHERE LOWER(TRIM(COALESCE(normalized_name,'')))=?
-       OR LOWER(TRIM(product_name))=?
     ORDER BY updated_at DESC
     LIMIT 1
-  `).get(normalized, productName.toLowerCase()) as any;
-  const productId = existing?.id
-    ? String(existing.id)
-    : createWeedoFactsProduct({ productName });
-
-  if (retailId) {
-    const now = new Date().toISOString();
-    const existingIdentifier = db.prepare(`
-      SELECT id,product_id
-      FROM cannabis_product_identifiers
-      WHERE identifier_type='uid' AND identifier_value=?
+  `).get(normalized) as any;
+  if (!existing?.id && !brandName) {
+    existing = db.prepare(`
+      SELECT id
+      FROM cannabis_products
+      WHERE brand_name IS NULL AND product_name=? COLLATE NOCASE
+      ORDER BY updated_at DESC
       LIMIT 1
-    `).get(retailId) as any;
-    if (!existingIdentifier) {
-      db.prepare(`
-        INSERT INTO cannabis_product_identifiers
-          (id,product_id,identifier_type,identifier_value,source,verified,created_at)
-        VALUES (?,?,?,?,?,?,?)
-      `).run(`pid-${randomUUID()}`, productId, 'uid', retailId, 'Metrc Retail ID', 1, now);
-    }
+    `).get(productName) as any;
   }
-
-  return productId;
+  return existing?.id
+    ? String(existing.id)
+    : createWeedoFactsProduct({
+        brandName,
+        productName,
+        productType: clean(source.productType),
+        netContents: clean(source.netContents),
+      });
 }
 
 export function persistQrScan(input: {
@@ -235,8 +225,10 @@ export function persistRetailId1A4Scan(qrValue: string, source: RetailId1A4Recor
     batchId: linked?.batchId || null,
     sourceUrl: source.url,
     externalIdentifier: source.retailId,
-    title: source.title,
-    productName: source.title || source.cultivar,
+    title: source.title || source.productName,
+    brandName: source.brandName,
+    productName: source.productName,
+    productType: source.productType,
     producerName: source.facility,
     producerLicenseNumber: source.facilityLicense,
     labName: source.labName,
