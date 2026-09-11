@@ -385,6 +385,7 @@ function UnknownContribution({ identifier, identifierType }: { identifier: strin
 
 function FactsCard({ record }: { record: any }) {
   const exact = record.matchLevel === 'exact_batch';
+  const sourceBacked = record.matchLevel === 'source_backed';
   const statusText = String(record.overallStatus || '').trim();
   const failed = /fail/i.test(statusText);
   const cannabinoidRows = filterHeadlineTotals(record.cannabinoids, 'cannabinoid');
@@ -394,7 +395,7 @@ function FactsCard({ record }: { record: any }) {
     <article className="weedoFactsCard">
       <div className="weedoFactsCardHead">
         <div><span className="weedoFactsEyebrow">WEEDO FACTS</span><h2>{record.productName}</h2><p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p></div>
-        <span className={`weedoFactsStatus ${exact ? 'verified' : 'partial'}`}>{exact ? '✓ Exact batch verified' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}</span>
+        <span className={`weedoFactsStatus ${exact || sourceBacked ? 'verified' : 'partial'}`}>{exact ? '✓ Verified lab batch' : sourceBacked ? '✓ Source-backed batch data' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}</span>
       </div>
 
       {hasChemistry ? <WeedoFactsHeadlineTotals cannabinoids={record.cannabinoids} terpenes={record.terpenes} /> : null}
@@ -403,7 +404,7 @@ function FactsCard({ record }: { record: any }) {
       {terpeneRows.length ? <FactsSection title="Terpenes" rows={terpeneRows} /> : null}
       {record.safetyTests?.length ? <section><h3>Compliance testing</h3><div className="weedoFactsRows">{record.safetyTests.map((row: any, index: number) => <div className="weedoFactsRow" key={`${row.category}-${row.analyte}-${index}`}><span>{row.analyte || row.category}</span><strong>{row.status || formatMeasurement(row)}</strong></div>)}</div></section> : null}
       <section><h3>Batch information</h3><div className="weedoFactsRows">{record.batchNumber ? <Fact label="Batch / lot" value={record.batchNumber} /> : null}{record.uid ? <Fact label="California UID" value={record.uid} /> : null}{record.coaNumber ? <Fact label="COA" value={record.coaNumber} /> : null}{record.testedAt ? <Fact label="Tested" value={new Date(record.testedAt).toLocaleDateString()} /> : null}{record.labName ? <Fact label="Laboratory" value={record.labName} /> : null}{record.producerName ? <Fact label="Producer / manufacturer" value={record.producerName} /> : null}</div></section>
-      {record.coaUrl ? <a className="weedoFactsCoaLink" href={record.coaUrl} target="_blank" rel="noreferrer">View original COA ↗</a> : null}
+      {record.coaUrl ? <a className="weedoFactsCoaLink" href={record.coaUrl} target="_blank" rel="noreferrer">View original COA ↗</a> : record.source?.url ? <a className="weedoFactsCoaLink" href={record.source.url} target="_blank" rel="noreferrer">View source ↗</a> : null}
       {record.productId ? <WeedoFactsBatchHistory productId={record.productId} currentBatchId={record.batchId} /> : null}
     </article>
   );
