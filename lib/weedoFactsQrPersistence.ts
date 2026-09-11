@@ -53,6 +53,10 @@ function ensureSchema() {
   return db;
 }
 
+export function ensureWeedoFactsQrSchema() {
+  return ensureSchema();
+}
+
 function clean(value: unknown) {
   const text = String(value ?? '').trim();
   return text || null;
