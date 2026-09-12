@@ -136,8 +136,6 @@ export default function WeedoFactsLookup() {
       if (value) void handleScannedValue(value);
     };
 
-    // Prefer ZXing for the camera path because it consistently supports both
-    // QR and retail 1D formats such as UPC-A/E and EAN-8/13 across browsers.
     try {
       setScannerMessage('Loading barcode scanner…');
       const zxing = await loadZxingBrowser();
@@ -181,8 +179,6 @@ export default function WeedoFactsLookup() {
       }
     }
 
-    // Native BarcodeDetector remains a fallback. Explicitly request common
-    // retail barcode formats when the browser exposes a supported-format list.
     try {
       const BarcodeDetectorCtor = (window as any).BarcodeDetector;
       const stream = await navigator.mediaDevices.getUserMedia({ video: scannerVideoConstraints, audio: false });
@@ -251,7 +247,7 @@ export default function WeedoFactsLookup() {
       {error ? <p className="weedoFactsError">{error}</p> : null}
       {result?.found === false ? (
         <div className="weedoFactsEmpty">
-          <strong>No Weedo Facts record yet.</strong>
+          <strong>No GeoWeedo Facts record yet.</strong>
           <p>GeoWeedo does not know this scan yet. Add what you can read from the package below. A batch/lot, source link, or supporting COA can help verify it, but none of those are required to start the record.</p>
           <UnknownContribution identifier={identifier} identifierType={inferIdentifierType(identifier)} />
         </div>
@@ -400,7 +396,7 @@ function FactsCard({ record }: { record: any }) {
   return (
     <article className="weedoFactsCard">
       <div className="weedoFactsCardHead">
-        <div><span className="weedoFactsEyebrow">WEEDO FACTS</span><h2>{record.productName}</h2><p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p></div>
+        <div><span className="weedoFactsEyebrow">GEOWEEDO FACTS</span><h2>{record.productName}</h2><p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p></div>
         <span className={`weedoFactsStatus ${exact || sourceBacked ? 'verified' : 'partial'}`}>{exact ? '✓ Verified lab batch' : sourceBacked ? '✓ Source-backed batch data' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}</span>
       </div>
 
