@@ -31,8 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!record) return { title: 'Product not found · GeoWeedo' };
   const brand = record.brandName ? `${record.brandName} · ` : '';
   return {
-    title: `${record.productName} · Weedo Facts · GeoWeedo`,
-    description: `${brand}${record.productName} cannabis product listing with GeoWeedo Weedo Facts lab information.`,
+    title: `${record.productName} · GeoWeedo Facts`,
+    description: `${brand}${record.productName} cannabis product listing with GeoWeedo Facts lab information.`,
     alternates: { canonical: `/product/${encodeURIComponent(record.productId)}` },
   };
 }
@@ -49,7 +49,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
   const record = getWeedoFactsProductListing(id);
 
   if (!record) {
-    return <main className={`landing-shell ${styles.shell}`}><SiteHeader /><div className={styles.page}><a className={styles.back} href="/weedo-facts">← Weedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
+    return <main className={`landing-shell ${styles.shell}`}><SiteHeader /><div className={styles.page}><a className={styles.back} href="/geoweedo-facts">← GeoWeedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
   }
 
   const verifiedBatch = Boolean(record.batchId && record.source?.verified);
@@ -62,7 +62,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
       <SiteHeader />
       <div className={styles.page}>
         <div className={styles.topline}>
-          <a className={styles.back} href="/weedo-facts">← Scan another product</a>
+          <a className={styles.back} href="/geoweedo-facts">← Scan another product</a>
           <span>GeoWeedo product listing</span>
         </div>
 
@@ -85,14 +85,14 @@ export default async function ProductListingPage({ params, searchParams }: Props
           <div className={styles.cultivarList}>{cultivarLinks.map((link: any) => <a key={link.id} href={`/cultivar/${encodeURIComponent(link.slug)}`} className={styles.cultivarCard}><div><strong>{link.canonical_name}</strong><span>{[link.breeder,link.cultivar_type].filter(Boolean).join(' · ') || 'Cannabis cultivar'}</span></div><div><b>{Math.round(Number(link.confidence || 0))}%</b><small>{evidenceLabel(link.link_status)}</small></div></a>)}</div>
         </section> : null}
 
-        <section className={styles.factsFocus} aria-labelledby="weedo-facts-heading">
+        <section className={styles.factsFocus} aria-labelledby="geoweedo-facts-heading">
           <div className={styles.factsHeading}>
             <span>PRODUCT CHEMISTRY</span>
-            <h2 id="weedo-facts-heading">Weedo Facts</h2>
+            <h2 id="geoweedo-facts-heading">GeoWeedo Facts</h2>
             <p>The lab-backed cannabis chemistry for this product is the primary content of this listing.</p>
           </div>
 
-          <div className={styles.factsStage} id="weedo-facts-label">
+          <div className={styles.factsStage} id="geoweedo-facts-label">
             <WeedoFactsProductLabel record={record} />
           </div>
         </section>
