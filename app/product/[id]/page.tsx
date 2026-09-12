@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
+import { getProductCultivars } from '@/lib/cultivarPublic';
 import styles from './product.module.css';
 import '../../weedo-facts/weedo-facts.css';
 import '../../weedo-facts/contrast-fix.css';
@@ -18,6 +19,10 @@ type Props = {
 
 function one(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function evidenceLabel(value: unknown) {
+  return String(value || '').replace(/_/g, ' ');
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -50,6 +55,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
   const verifiedBatch = Boolean(record.batchId && record.source?.verified);
   const provenance = [record.labName, record.producerName].filter(Boolean).join(' · ');
   const findNearbyHref = `/?product=${encodeURIComponent(record.productId)}`;
+  const cultivarLinks = getProductCultivars(record.productId);
 
   return (
     <main className={`landing-shell ${styles.shell}`}>
@@ -73,6 +79,11 @@ export default async function ProductListingPage({ params, searchParams }: Props
             <small>Shows dispensaries with an active GeoWeedo menu listing for this exact product.</small>
           </div>
         </section>
+
+        {cultivarLinks.length ? <section className={styles.cultivarLinks} aria-label="Cultivar genetics">
+          <div className={styles.cultivarHeading}><span>CULTIVAR GENETICS</span><h2>Linked cultivar{cultivarLinks.length === 1 ? '' : 's'}</h2><p>Pedigree identity is kept separate from the exact batch chemistry shown below.</p></div>
+          <div className={styles.cultivarList}>{cultivarLinks.map((link: any) => <a key={link.id} href={`/cultivar/${encodeURIComponent(link.slug)}`} className={styles.cultivarCard}><div><strong>{link.canonical_name}</strong><span>{[link.breeder,link.cultivar_type].filter(Boolean).join(' · ') || 'Cannabis cultivar'}</span></div><div><b>{Math.round(Number(link.confidence || 0))}%</b><small>{evidenceLabel(link.link_status)}</small></div></a>)}</div>
+        </section> : null}
 
         <section className={styles.factsFocus} aria-labelledby="weedo-facts-heading">
           <div className={styles.factsHeading}>
