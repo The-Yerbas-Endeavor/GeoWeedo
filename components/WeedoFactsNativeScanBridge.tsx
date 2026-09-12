@@ -29,19 +29,12 @@ export default function WeedoFactsNativeScanBridge() {
     if (!capacitor?.isNativePlatform?.()) return;
 
     const scanner = capacitor.Plugins?.CapacitorBarcodeScanner;
-    // Older APKs or development shells may not include the native plugin. In
-    // that case, do not intercept the button: the normal in-page scanner stays
-    // available as the fallback.
     if (!scanner?.scanBarcode) return;
 
     const root = document.documentElement;
     root.classList.add('geoweedo-native-weedo-scanner');
 
     const handleClick = async (event: MouseEvent) => {
-      // Only intercept the primary barcode/QR scan button. The reconstruction
-      // section deliberately reuses .weedoFactsScanButton styling for its
-      // "Scan product label" photo capture button, and that must continue to
-      // reach its own <input type="file" capture="environment"> handler.
       const target = event.target instanceof Element
         ? event.target.closest('.weedoFactsScanActions .weedoFactsScanButton')
         : null;
@@ -55,8 +48,6 @@ export default function WeedoFactsNativeScanBridge() {
       try {
         const platform = capacitor.getPlatform?.();
         const result = await scanner.scanBarcode({
-          // 17 = ALL formats in @capacitor/barcode-scanner. This keeps QR,
-          // UPC/EAN, Code 128 and the other supported package formats enabled.
           hint: 17,
           scanInstructions: 'Scan a cannabis package barcode or QR code',
           scanButton: false,
@@ -66,9 +57,6 @@ export default function WeedoFactsNativeScanBridge() {
           cancelButtonAccessibilityLabel: 'Cancel product scan',
           torchButtonOnAccessibilityLabel: 'Turn scanner light off',
           torchButtonOffAccessibilityLabel: 'Turn scanner light on',
-          // Android WebView camera decoding has been less reliable than mobile
-          // Firefox. Use the plugin's native ZXing backend so Android does not
-          // depend on the WebView video-decoder path.
           ...(platform === 'android' ? { android: { scanningLibrary: 'zxing' } } : {}),
         });
 
@@ -78,7 +66,7 @@ export default function WeedoFactsNativeScanBridge() {
         const input = document.querySelector<HTMLInputElement>('#weedo-facts-identifier');
         const form = input?.closest('form');
         if (!input || !(form instanceof HTMLFormElement)) {
-          throw new Error('The Weedo Facts lookup form is not available.');
+          throw new Error('The GeoWeedo Facts lookup form is not available.');
         }
 
         setReactInputValue(input, value);
