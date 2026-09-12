@@ -27,6 +27,13 @@ export async function GET(request: NextRequest) {
   const withdrawals = db.prepare('SELECT id, destination_address, amount_atomic, fee_atomic, status, requested_at, txid, failure_reason FROM withdrawals WHERE wallet_id = ? ORDER BY requested_at DESC LIMIT 25').all(user.walletId) as any[];
   const deposits = db.prepare('SELECT id, address, txid, amount_atomic, confirmations, status, detected_at, confirmed_at FROM deposits WHERE wallet_id = ? ORDER BY detected_at DESC LIMIT 25').all(user.walletId) as any[];
 
+  const verifiedOwnerAssignment = db.prepare(`
+    SELECT COUNT(*) AS count
+      FROM dispensary_user_owner_assignments
+     WHERE user_id = ? AND status = 'verified'
+  `).get(user.id) as { count?: number } | undefined;
+  const verifiedOwnerAssignmentCount = Number(verifiedOwnerAssignment?.count || 0);
+
   const ownedLocations = listUserOwnedLocations(user.id).map(row => ({
     locationId: row.locationId,
     verifiedAt: row.verifiedAt,
@@ -51,7 +58,11 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     user,
     ownership: {
-      verifiedDispensaryOwner: ownedLocations.length > 0,
+      // The verified account-to-dispensary assignment is the source of truth for the
+      // account badge. Location hydration is separate so a temporary catalog mismatch
+      // cannot hide VERIFIED DISPENSARY OWNER from an approved owner account.
+      verifiedDispensaryOwner: verifiedOwnerAssignmentCount > 0,
+      assignmentCount: verifiedOwnerAssignmentCount,
       locations: ownedLocations,
     },
     wallet: {
