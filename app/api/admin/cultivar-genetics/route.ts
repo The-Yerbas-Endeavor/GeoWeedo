@@ -9,6 +9,7 @@ import {
   linkProductToCultivar,
   listCultivarGeneticsAdmin,
 } from '@/lib/cultivarGenetics';
+import { bulkImportCultivarDataset } from '@/lib/cultivarImport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
 
   try {
     let createdId: string | null = null;
+    let importResult: any = null;
 
     if (action === 'create-cultivar') {
       const canonicalName = text((body as any).canonicalName);
@@ -118,11 +120,15 @@ export async function POST(request: NextRequest) {
         sourceId,
         verified: bool((body as any).verified),
       });
+    } else if (action === 'bulk-import') {
+      const dataset = (body as any).dataset;
+      if (!dataset || typeof dataset !== 'object') return invalid('A cultivar import dataset is required.');
+      importResult = bulkImportCultivarDataset(dataset);
     } else {
       return invalid('Unknown action.');
     }
 
-    return NextResponse.json({ ok: true, createdId, data: listCultivarGeneticsAdmin() }, { status: 201 });
+    return NextResponse.json({ ok: true, createdId, importResult, data: listCultivarGeneticsAdmin() }, { status: 201 });
   } catch (error) {
     return invalid(error instanceof Error ? error.message : 'Cultivar genetics update failed.');
   }
