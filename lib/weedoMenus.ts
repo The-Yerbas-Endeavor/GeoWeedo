@@ -94,6 +94,19 @@ function ensureSchema() {
       FOREIGN KEY(batch_id) REFERENCES cannabis_batches(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS cannabis_product_media (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      image_url TEXT NOT NULL,
+      source_type TEXT NOT NULL DEFAULT 'manual',
+      source_url TEXT,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(product_id, image_url),
+      FOREIGN KEY(product_id) REFERENCES cannabis_products(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS cannabis_scan_history (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -145,6 +158,7 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS dispensary_menu_items_menu_idx ON dispensary_menu_items(menu_id, active, category, brand_name);
     CREATE INDEX IF NOT EXISTS dispensary_menu_items_product_idx ON dispensary_menu_items(product_id, batch_id, active);
     CREATE INDEX IF NOT EXISTS dispensary_menu_items_external_idx ON dispensary_menu_items(menu_id, external_item_id);
+    CREATE INDEX IF NOT EXISTS cannabis_product_media_product_idx ON cannabis_product_media(product_id, is_primary, updated_at DESC);
     CREATE INDEX IF NOT EXISTS cannabis_scan_history_user_idx ON cannabis_scan_history(user_id, scanned_at DESC);
     CREATE INDEX IF NOT EXISTS cannabis_product_submissions_status_idx ON cannabis_product_submissions(status, created_at);
     CREATE INDEX IF NOT EXISTS cannabis_product_submissions_identifier_idx ON cannabis_product_submissions(identifier_type, identifier_value);
@@ -160,6 +174,22 @@ function ensureSchema() {
 
 export function ensureWeedoMenuSchema() {
   ensureSchema();
+}
+
+export function setProductPrimaryImage(productId: string, imageUrl: string, input?: { sourceType?: string; sourceUrl?: string | null }) {
+  const db = ensureSchema();
+  const now = new Date().toISOString();
+  db.prepare('UPDATE cannabis_product_media SET is_primary=0, updated_at=? WHERE product_id=? AND is_primary=1').run(now, productId);
+  const existing = db.prepare('SELECT id FROM cannabis_product_media WHERE product_id=? AND image_url=? LIMIT 1').get(productId, imageUrl) as any;
+  if (existing) {
+    db.prepare('UPDATE cannabis_product_media SET source_type=?, source_url=?, is_primary=1, updated_at=? WHERE id=?')
+      .run(input?.sourceType || 'manual', input?.sourceUrl || null, now, existing.id);
+    return existing.id as string;
+  }
+  const id = `productmedia-${randomUUID()}`;
+  db.prepare(`INSERT INTO cannabis_product_media (id,product_id,image_url,source_type,source_url,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,1,?,?)`)
+    .run(id, productId, imageUrl, input?.sourceType || 'manual', input?.sourceUrl || null, now, now);
+  return id;
 }
 
 export function getOrCreateDispensaryMenu(dispensaryId: string, input?: { menuName?: string; sourceType?: string; sourceUrl?: string | null; externalMenuId?: string | null }) {
@@ -196,6 +226,12 @@ export function listDispensaryMenu(dispensaryId: string) {
   const db = ensureSchema();
   return db.prepare(`
     SELECT mi.*, m.dispensary_id, m.menu_name,
+           COALESCE(mi.image_url, (
+             SELECT pm.image_url FROM cannabis_product_media pm
+              WHERE pm.product_id=mi.product_id
+              ORDER BY pm.is_primary DESC, pm.updated_at DESC
+              LIMIT 1
+           )) AS display_image_url,
            p.product_name AS linked_product_name,
            p.brand_name AS linked_brand_name,
            b.batch_number AS linked_batch_number,
