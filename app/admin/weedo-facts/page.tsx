@@ -78,7 +78,7 @@ export default function WeedoFactsAdminPage() {
 
       const response = await fetch(lookupHref(identifier, identifierType), { cache: 'no-store' });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error || 'Unable to retrieve Weedo Facts data.');
+      if (!response.ok) throw new Error(body?.error || 'Unable to retrieve GeoWeedo Facts data.');
       if (!body.found) {
         setRetrieved({ record: null, sample, imported });
         setRetrieveError(`No GeoWeedo lab record found for ${identifier}.`);
@@ -123,12 +123,12 @@ export default function WeedoFactsAdminPage() {
     <header className={styles.header}>
       <div>
         <a href="/admin" className={styles.back}>← Admin</a>
-        <span className={styles.eyebrow}>WEEDO FACTS</span>
+        <span className={styles.eyebrow}>GEOWEEDO FACTS</span>
         <h1>COA review</h1>
-        <p>Retrieve lab data, review submitted SC Labs PDFs, compare records, and promote verified evidence into Weedo Facts.</p>
+        <p>Retrieve lab data, review submitted SC Labs PDFs, compare records, and promote verified evidence into GeoWeedo Facts.</p>
       </div>
       <div className={styles.links}>
-        <a href="/weedo-facts" target="_blank" rel="noreferrer">Open Weedo Facts</a>
+        <a href="/geoweedo-facts" target="_blank" rel="noreferrer">Open GeoWeedo Facts</a>
       </div>
     </header>
 
