@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/sqlite';
 import { getUserFromRequest } from '@/lib/userAuth';
+import { listUserOwnedLocations } from '@/lib/dispensaryCommunity';
 import { scanYerbasDeposits } from '@/lib/yerbasDepositScanner';
 
 export const runtime = 'nodejs';
@@ -26,6 +27,18 @@ export async function GET(request: NextRequest) {
   const withdrawals = db.prepare('SELECT id, destination_address, amount_atomic, fee_atomic, status, requested_at, txid, failure_reason FROM withdrawals WHERE wallet_id = ? ORDER BY requested_at DESC LIMIT 25').all(user.walletId) as any[];
   const deposits = db.prepare('SELECT id, address, txid, amount_atomic, confirmations, status, detected_at, confirmed_at FROM deposits WHERE wallet_id = ? ORDER BY detected_at DESC LIMIT 25').all(user.walletId) as any[];
 
+  const ownedLocations = listUserOwnedLocations(user.id).map(row => ({
+    locationId: row.locationId,
+    verifiedAt: row.verifiedAt,
+    name: row.location?.name || 'Verified dispensary',
+    city: row.location?.city || '',
+    region: row.location?.region || '',
+    kind: row.location?.kind || 'dispensary',
+    active: Boolean(row.location?.active),
+    verified: Boolean(row.location?.verified),
+    menuReady: row.location?.kind === 'dispensary' && Boolean(row.location?.active) && Boolean(row.location?.verified),
+  }));
+
   const postedAtomic = Number(posted?.amount || 0);
   const heldDebitAtomic = Number(heldDebits?.amount || 0);
   const pendingRewardAtomic = Math.max(0, Number(pendingRewards?.amount || 0));
@@ -37,6 +50,10 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     user,
+    ownership: {
+      verifiedDispensaryOwner: ownedLocations.length > 0,
+      locations: ownedLocations,
+    },
     wallet: {
       id: user.walletId,
       currency: 'YERB',
