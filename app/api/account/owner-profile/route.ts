@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
     city: row.location?.city || '',
     region: row.location?.region || '',
     kind: row.location?.kind || 'dispensary',
-    menu_ready: row.location?.kind === 'dispensary' && Boolean(row.location?.active) && Boolean(row.location?.verified) ? 1 : 0,
+    active: Boolean(row.location?.active),
+    public_verified: Boolean(row.location?.verified),
+    menu_ready: row.location?.kind === 'dispensary' ? 1 : 0,
   }));
 
   return NextResponse.json({ locations }, { headers: { 'Cache-Control': 'no-store' } });
