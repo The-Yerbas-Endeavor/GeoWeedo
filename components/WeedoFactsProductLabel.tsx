@@ -60,7 +60,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
     <article className="weedoFactsCard weedoFactsProductCard">
       <div className="weedoFactsCardHead">
         <div>
-          <span className="weedoFactsEyebrow">WEEDO FACTS</span>
+          <span className="weedoFactsEyebrow">GEOWEEDO FACTS</span>
           <h2>{record.productName}</h2>
           <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p>
         </div>
