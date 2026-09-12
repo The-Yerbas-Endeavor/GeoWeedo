@@ -97,8 +97,8 @@ export default function WeedoFactsSourcesPage() {
   return <main className={styles.shell}>
     <header className={styles.header}>
       <div>
-        <a href="/admin/weedo-facts" className={styles.back}>← Weedo Facts admin</a>
-        <span className={styles.eyebrow}>WEEDO DATA SOURCES</span>
+        <a href="/admin/weedo-facts" className={styles.back}>← GeoWeedo Facts admin</a>
+        <span className={styles.eyebrow}>GEOWEEDO FACTS DATA SOURCES</span>
         <h1>Source updates</h1>
         <p>Refresh public source data at any time. Updates are incremental: existing records are refreshed and newly discovered records are added instead of performing a one-time blanket load.</p>
       </div>
