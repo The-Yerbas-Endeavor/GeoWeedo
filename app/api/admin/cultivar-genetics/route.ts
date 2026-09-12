@@ -8,7 +8,7 @@ import {
   createOrEnrichCultivar,
   linkProductToCultivar,
   listCultivarGeneticsAdmin,
-} from '@/lib/cultivarGenetics';
+} from '@/lib/cultivarPedigree';
 import { bulkImportCultivarDataset } from '@/lib/cultivarImport';
 
 export const runtime = 'nodejs';
