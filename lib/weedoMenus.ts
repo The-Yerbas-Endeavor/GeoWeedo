@@ -17,6 +17,7 @@ export type MenuItemInput = {
   inventoryStatus?: string | null;
   sourceType?: string | null;
   sourceUrl?: string | null;
+  imageUrl?: string | null;
   sourceUpdatedAt?: string | null;
   verified?: boolean;
 };
@@ -82,6 +83,7 @@ function ensureSchema() {
       inventory_status TEXT NOT NULL DEFAULT 'unknown',
       source_type TEXT NOT NULL DEFAULT 'manual',
       source_url TEXT,
+      image_url TEXT,
       source_updated_at TEXT,
       verified INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
@@ -147,6 +149,12 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_product_submissions_status_idx ON cannabis_product_submissions(status, created_at);
     CREATE INDEX IF NOT EXISTS cannabis_product_submissions_identifier_idx ON cannabis_product_submissions(identifier_type, identifier_value);
   `);
+
+  const menuItemColumns = db.prepare('PRAGMA table_info(dispensary_menu_items)').all() as any[];
+  if (!menuItemColumns.some(column => column.name === 'image_url')) {
+    db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN image_url TEXT');
+  }
+
   return db;
 }
 
@@ -172,15 +180,15 @@ export function addDispensaryMenuItem(input: MenuItemInput) {
   if (input.externalItemId) {
     const existing = db.prepare('SELECT id FROM dispensary_menu_items WHERE menu_id = ? AND external_item_id = ? LIMIT 1').get(menu.id, input.externalItemId) as any;
     if (existing) {
-      db.prepare(`UPDATE dispensary_menu_items SET product_id=?, batch_id=?, item_name=?, brand_name=?, category=?, variant=?, package_size=?, price_cents=?, currency=?, inventory_status=?, source_type=?, source_url=?, source_updated_at=?, verified=?, active=1, updated_at=? WHERE id=?`)
-        .run(input.productId || null, input.batchId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, existing.id);
+      db.prepare(`UPDATE dispensary_menu_items SET product_id=?, batch_id=?, item_name=?, brand_name=?, category=?, variant=?, package_size=?, price_cents=?, currency=?, inventory_status=?, source_type=?, source_url=?, image_url=?, source_updated_at=?, verified=?, active=1, updated_at=? WHERE id=?`)
+        .run(input.productId || null, input.batchId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, existing.id);
       return existing.id as string;
     }
   }
   const id = `menuitem-${randomUUID()}`;
-  db.prepare(`INSERT INTO dispensary_menu_items (id, menu_id, product_id, batch_id, external_item_id, item_name, brand_name, category, variant, package_size, price_cents, currency, inventory_status, source_type, source_url, source_updated_at, verified, active, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
-    .run(id, menu.id, input.productId || null, input.batchId || null, input.externalItemId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, now);
+  db.prepare(`INSERT INTO dispensary_menu_items (id, menu_id, product_id, batch_id, external_item_id, item_name, brand_name, category, variant, package_size, price_cents, currency, inventory_status, source_type, source_url, image_url, source_updated_at, verified, active, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+    .run(id, menu.id, input.productId || null, input.batchId || null, input.externalItemId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, now);
   return id;
 }
 
