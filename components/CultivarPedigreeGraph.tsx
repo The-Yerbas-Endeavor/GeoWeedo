@@ -11,7 +11,6 @@ type Graph = { focusId:string; nodes:Node[]; lineageEdges:LineageEdge[]; genetic
 type Position = { x:number; y:number };
 
 function label(value:string|null|undefined){return String(value||'').replace(/_/g,' ');}
-function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value));}
 
 export default function CultivarPedigreeGraph({graph}:{graph:Graph}){
  const[mode,setMode]=useState<'pedigree'|'genetic'>('pedigree');
