@@ -8,7 +8,7 @@ import {
   createOrEnrichCultivar,
   ensureCultivarGeneticsSchema,
   normalizeCultivarName,
-} from './cultivarGenetics';
+} from './cultivarPedigree';
 
 type ImportCultivar = {
   name: string;
@@ -110,8 +110,8 @@ export function bulkImportCultivarDataset(payload: CultivarImportPayload) {
       const childName = String(row?.child || '').trim();
       const parentName = String(row?.parent || '').trim();
       if (!childName || !parentName) throw new Error('Every pedigree claim requires child and parent names.');
-      const childId = ids.get(normalizeCultivarName(childName)) || String((db.prepare('SELECT id FROM cannabis_cultivars WHERE normalized_name=? LIMIT 1').get(normalizeCultivarName(childName)) as any)?.id || '');
-      const parentId = ids.get(normalizeCultivarName(parentName)) || String((db.prepare('SELECT id FROM cannabis_cultivars WHERE normalized_name=? LIMIT 1').get(normalizeCultivarName(parentName)) as any)?.id || '');
+      const childId = ids.get(normalizeCultivarName(childName)) || String((db.prepare('SELECT id FROM cannabis_pedigree_cultivars WHERE normalized_name=? LIMIT 1').get(normalizeCultivarName(childName)) as any)?.id || '');
+      const parentId = ids.get(normalizeCultivarName(parentName)) || String((db.prepare('SELECT id FROM cannabis_pedigree_cultivars WHERE normalized_name=? LIMIT 1').get(normalizeCultivarName(parentName)) as any)?.id || '');
       if (!childId || !parentId) throw new Error(`Pedigree claim references an unknown cultivar: ${childName} ← ${parentName}.`);
       addLineageClaim({
         childCultivarId: childId,
