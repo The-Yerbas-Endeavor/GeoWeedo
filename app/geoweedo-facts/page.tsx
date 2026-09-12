@@ -2,12 +2,12 @@ import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsLookup from '@/components/WeedoFactsLookup';
 import WeedoFactsNativeScanBridge from '@/components/WeedoFactsNativeScanBridge';
 import WeedoFactsReconstruction from '@/components/WeedoFactsReconstruction';
-import '../weedo-facts/weedo-facts.css';
-import '../weedo-facts/coa-upload.css';
-import '../weedo-facts/contrast-fix.css';
-import '../weedo-facts/nutrition-label.css';
-import '../weedo-facts/headline-totals.css';
-import '../weedo-facts/reconstruction.css';
+import './geoweedo-facts.css';
+import './coa-upload.css';
+import './contrast-fix.css';
+import './nutrition-label.css';
+import './headline-totals.css';
+import './reconstruction.css';
 
 export const metadata = {
   title: 'GeoWeedo Facts | GeoWeedo',
