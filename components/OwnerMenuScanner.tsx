@@ -164,7 +164,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
         setRecord(null);
         setUnresolved(true);
         setForm(blankForm(/^https?:\/\//i.test(value) ? value : ''));
-        setNotice('This code is not in the canonical Weedo Facts product database yet. You can still add the item to your store menu as owner-reported inventory; the scan will remain available for later product reconciliation.');
+        setNotice('This code is not in the canonical GeoWeedo Facts product database yet. You can still add the item to your store menu as owner-reported inventory; the scan will remain available for later product reconciliation.');
         return;
       }
 
@@ -359,7 +359,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   const canAdd = Boolean((record || unresolved) && scanValue.trim());
 
   return <section className={styles.panel}>
-    <div className={styles.head}><div><span>OWNER MENU SCANNER</span><h2>Scan product → add to menu</h2><p>Scan a package QR code, UPC/EAN, or other supported barcode. GeoWeedo links known products to Weedo Facts and lets you add unknown codes as clearly marked owner-reported inventory.</p></div></div>
+    <div className={styles.head}><div><span>OWNER MENU SCANNER</span><h2>Scan product → add to menu</h2><p>Scan a package QR code, UPC/EAN, or other supported barcode. GeoWeedo links known products to GeoWeedo Facts and lets you add unknown codes as clearly marked owner-reported inventory.</p></div></div>
 
     <div className={styles.scanActions}>
       <button type="button" className={styles.primary} onClick={startScanner} disabled={loading || scannerOpen}>{loading ? 'Checking…' : '📷 Scan QR / barcode'}</button>
