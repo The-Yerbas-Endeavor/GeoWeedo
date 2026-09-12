@@ -17,7 +17,7 @@ export async function generateMetadata({params}:Props):Promise<Metadata>{
  if(!data)return{title:'Cultivar not found · GeoWeedo'};
  const c=data.cultivar;
  return{
-  title:`${c.canonical_name} pedigree · Weedo Facts · GeoWeedo`,
+  title:`${c.canonical_name} pedigree · GeoWeedo Facts`,
   description:`Source-backed cannabis cultivar pedigree, aliases, products, and genetics evidence for ${c.canonical_name}.`,
   alternates:{canonical:`/cultivar/${encodeURIComponent(c.slug)}`},
  };
@@ -32,7 +32,7 @@ export default async function CultivarPage({params}:Props){
  return <main className={styles.shell}>
   <SiteHeader/>
   <div className={styles.page}>
-   <div className={styles.topline}><a href="/cultivars">← Cultivar directory</a><span>WEEDO FACTS · CULTIVAR GENETICS</span></div>
+   <div className={styles.topline}><a href="/cultivars">← Cultivar directory</a><span>GEOWEEDO FACTS · CULTIVAR GENETICS</span></div>
    <section className={styles.hero}>
     <div><span>CANNABIS CULTIVAR</span><h1>{cultivar.canonical_name}</h1><p>{[cultivar.breeder,cultivar.cultivar_type,cultivar.origin].filter(Boolean).join(' · ')||'Source-backed cultivar record'}</p></div>
     <div className={`${styles.status} ${conflict?styles.conflict:''}`}>{conflict?'Conflicting pedigree':cultivar.status==='verified'?'Verified source identity':'Source-backed identity'}</div>
@@ -51,7 +51,7 @@ export default async function CultivarPage({params}:Props){
     </article>
    </section>
 
-   <section className={styles.panel}><div className={styles.panelHead}><span>WEEDO FACTS PRODUCTS</span><h2>Products linked to this cultivar</h2><p>Product/batch chemistry remains separate from cultivar pedigree. These are identity links, not claims that every batch has identical chemistry.</p></div>
+   <section className={styles.panel}><div className={styles.panelHead}><span>GEOWEEDO FACTS PRODUCTS</span><h2>Products linked to this cultivar</h2><p>Product/batch chemistry remains separate from cultivar pedigree. These are identity links, not claims that every batch has identical chemistry.</p></div>
     {products.length===0?<div className={styles.empty}>No GeoWeedo products are linked to this cultivar yet.</div>:<div className={styles.products}>{products.map((row:any)=><a className={styles.product} key={row.id} href={`/product/${encodeURIComponent(row.product_id)}`}><div><strong>{row.brand_name?`${row.brand_name} · `:''}{row.product_name}</strong><span>{[row.product_type,row.net_contents].filter(Boolean).join(' · ')||'Cannabis product'}</span></div><div><b>{pct(row.confidence)}</b><small>{label(row.status)}</small></div></a>)}</div>}
    </section>
 
