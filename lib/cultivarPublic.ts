@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getDatabase } from './sqlite';
-import { ensureCultivarGeneticsSchema, normalizeCultivarName } from './cultivarGenetics';
+import { ensureCultivarGeneticsSchema, normalizeCultivarName } from './cultivarPedigree';
 
 export type CultivarGraphNode = {
   id: string;
@@ -99,18 +99,18 @@ export function listPublicCultivars(search = '') {
   let filter = `c.status IN ('source_backed','verified','conflicting')`;
   if (q) {
     filter += ` AND (c.normalized_name LIKE ? OR EXISTS (
-      SELECT 1 FROM cannabis_cultivar_aliases a
+      SELECT 1 FROM cannabis_pedigree_aliases a
       WHERE a.cultivar_id=c.id AND a.normalized_alias LIKE ?
     ))`;
     params.push(`%${q}%`, `%${q}%`);
   }
   return (db.prepare(`
     SELECT c.id,c.canonical_name,c.breeder,c.cultivar_type,c.origin,c.status,c.updated_at,
-      (SELECT COUNT(*) FROM cannabis_cultivar_aliases a WHERE a.cultivar_id=c.id) AS alias_count,
-      (SELECT COUNT(*) FROM cannabis_cultivar_lineage_claims l WHERE l.child_cultivar_id=c.id) AS parent_claim_count,
-      (SELECT COUNT(*) FROM cannabis_cultivar_lineage_claims l WHERE l.parent_cultivar_id=c.id) AS child_claim_count,
-      (SELECT COUNT(*) FROM cannabis_product_cultivars pc WHERE pc.cultivar_id=c.id) AS product_count
-    FROM cannabis_cultivars c
+      (SELECT COUNT(*) FROM cannabis_pedigree_aliases a WHERE a.cultivar_id=c.id) AS alias_count,
+      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l WHERE l.child_cultivar_id=c.id) AS parent_claim_count,
+      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l WHERE l.parent_cultivar_id=c.id) AS child_claim_count,
+      (SELECT COUNT(*) FROM cannabis_product_pedigree_cultivars pc WHERE pc.cultivar_id=c.id) AS product_count
+    FROM cannabis_pedigree_cultivars c
     WHERE ${filter}
     ORDER BY c.canonical_name COLLATE NOCASE
     LIMIT 1000
@@ -124,9 +124,9 @@ export function getProductCultivars(productId: string) {
     SELECT pc.id,pc.confidence,pc.status AS link_status,pc.notes,
            c.id AS cultivar_id,c.canonical_name,c.breeder,c.cultivar_type,c.origin,c.status AS cultivar_status,
            s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_product_cultivars pc
-    JOIN cannabis_cultivars c ON c.id=pc.cultivar_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=pc.source_id
+    FROM cannabis_product_pedigree_cultivars pc
+    JOIN cannabis_pedigree_cultivars c ON c.id=pc.cultivar_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=pc.source_id
     WHERE pc.product_id=? AND c.status IN ('source_backed','verified','conflicting')
     ORDER BY pc.confidence DESC, c.canonical_name COLLATE NOCASE
   `).all(productId) as any[]).map(row => ({ ...row, slug: cultivarSlug(String(row.canonical_name)) }));
@@ -137,7 +137,7 @@ export function getPublicCultivar(reference: string) {
   const db = getDatabase();
   const normalized = normalizedFromRef(reference);
   const cultivar = db.prepare(`
-    SELECT * FROM cannabis_cultivars
+    SELECT * FROM cannabis_pedigree_cultivars
     WHERE (id=? OR normalized_name=?)
       AND status IN ('source_backed','verified','conflicting')
     LIMIT 1
@@ -146,8 +146,8 @@ export function getPublicCultivar(reference: string) {
 
   const aliases = db.prepare(`
     SELECT a.*,s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_cultivar_aliases a
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=a.source_id
+    FROM cannabis_pedigree_aliases a
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=a.source_id
     WHERE a.cultivar_id=?
     ORDER BY a.verified DESC,a.alias COLLATE NOCASE
   `).all(cultivar.id) as any[];
@@ -155,9 +155,9 @@ export function getPublicCultivar(reference: string) {
   const parents = db.prepare(`
     SELECT l.*,p.canonical_name AS parent_name,p.breeder AS parent_breeder,p.status AS parent_status,
            s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_cultivar_lineage_claims l
-    JOIN cannabis_cultivars p ON p.id=l.parent_cultivar_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=l.source_id
+    FROM cannabis_pedigree_lineage_claims l
+    JOIN cannabis_pedigree_cultivars p ON p.id=l.parent_cultivar_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
     WHERE l.child_cultivar_id=?
     ORDER BY l.confidence DESC,l.parent_role,l.updated_at DESC
   `).all(cultivar.id) as any[];
@@ -165,9 +165,9 @@ export function getPublicCultivar(reference: string) {
   const children = db.prepare(`
     SELECT l.*,c.canonical_name AS child_name,c.breeder AS child_breeder,c.status AS child_status,
            s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_cultivar_lineage_claims l
-    JOIN cannabis_cultivars c ON c.id=l.child_cultivar_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=l.source_id
+    FROM cannabis_pedigree_lineage_claims l
+    JOIN cannabis_pedigree_cultivars c ON c.id=l.child_cultivar_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
     WHERE l.parent_cultivar_id=?
     ORDER BY l.confidence DESC,c.canonical_name COLLATE NOCASE
   `).all(cultivar.id) as any[];
@@ -175,9 +175,9 @@ export function getPublicCultivar(reference: string) {
   const products = db.prepare(`
     SELECT pc.*,p.brand_name,p.product_name,p.product_type,p.net_contents,
            s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_product_cultivars pc
+    FROM cannabis_product_pedigree_cultivars pc
     JOIN cannabis_products p ON p.id=pc.product_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=pc.source_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=pc.source_id
     WHERE pc.cultivar_id=?
     ORDER BY pc.confidence DESC,p.product_name COLLATE NOCASE
   `).all(cultivar.id) as any[];
@@ -185,10 +185,10 @@ export function getPublicCultivar(reference: string) {
   const geneticRelationships = db.prepare(`
     SELECT g.*,a.canonical_name AS cultivar_a_name,b.canonical_name AS cultivar_b_name,
            s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_cultivar_genetic_relationships g
-    JOIN cannabis_cultivars a ON a.id=g.cultivar_a_id
-    JOIN cannabis_cultivars b ON b.id=g.cultivar_b_id
-    JOIN cannabis_cultivar_sources s ON s.id=g.source_id
+    FROM cannabis_pedigree_genetic_relationships g
+    JOIN cannabis_pedigree_cultivars a ON a.id=g.cultivar_a_id
+    JOIN cannabis_pedigree_cultivars b ON b.id=g.cultivar_b_id
+    JOIN cannabis_pedigree_sources s ON s.id=g.source_id
     WHERE g.cultivar_a_id=? OR g.cultivar_b_id=?
     ORDER BY g.verified DESC,g.similarity_score DESC,g.updated_at DESC
   `).all(cultivar.id, cultivar.id) as any[];
@@ -198,11 +198,10 @@ export function getPublicCultivar(reference: string) {
   nodeMap.set(String(cultivar.id), graphNode(cultivar, 0));
 
   const parentStatement = db.prepare(`
-    SELECT l.*,p.id,p.canonical_name,p.breeder,p.status,s.source_name,s.source_url,s.evidence_type,
-           l.parent_cultivar_id AS graph_id
-    FROM cannabis_cultivar_lineage_claims l
-    JOIN cannabis_cultivars p ON p.id=l.parent_cultivar_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=l.source_id
+    SELECT l.*,p.id,p.canonical_name,p.breeder,p.status,s.source_name,s.source_url,s.evidence_type
+    FROM cannabis_pedigree_lineage_claims l
+    JOIN cannabis_pedigree_cultivars p ON p.id=l.parent_cultivar_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
     WHERE l.child_cultivar_id=?
     ORDER BY l.confidence DESC,l.updated_at DESC
   `);
@@ -224,9 +223,9 @@ export function getPublicCultivar(reference: string) {
 
   const childStatement = db.prepare(`
     SELECT l.*,c.id,c.canonical_name,c.breeder,c.status,s.source_name,s.source_url,s.evidence_type
-    FROM cannabis_cultivar_lineage_claims l
-    JOIN cannabis_cultivars c ON c.id=l.child_cultivar_id
-    LEFT JOIN cannabis_cultivar_sources s ON s.id=l.source_id
+    FROM cannabis_pedigree_lineage_claims l
+    JOIN cannabis_pedigree_cultivars c ON c.id=l.child_cultivar_id
+    LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
     WHERE l.parent_cultivar_id=?
     ORDER BY l.confidence DESC,l.updated_at DESC
   `);
@@ -251,7 +250,7 @@ export function getPublicCultivar(reference: string) {
     const otherId = String(relation.cultivar_a_id) === String(cultivar.id) ? String(relation.cultivar_b_id) : String(relation.cultivar_a_id);
     const otherName = String(relation.cultivar_a_id) === String(cultivar.id) ? relation.cultivar_b_name : relation.cultivar_a_name;
     if (!nodeMap.has(otherId)) {
-      const other = db.prepare('SELECT id,canonical_name,breeder,status FROM cannabis_cultivars WHERE id=? LIMIT 1').get(otherId) as any;
+      const other = db.prepare('SELECT id,canonical_name,breeder,status FROM cannabis_pedigree_cultivars WHERE id=? LIMIT 1').get(otherId) as any;
       if (other) nodeMap.set(otherId, graphNode({ ...other, canonical_name: otherName || other.canonical_name }, 99));
     }
   }
