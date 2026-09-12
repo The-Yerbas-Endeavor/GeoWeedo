@@ -122,6 +122,16 @@
   line-height:1.45;
 }
 
+.cultivarLinks{
+  width:min(820px,100%);
+  margin:0 auto 28px;
+  padding:16px;
+  border:1px solid rgba(126,217,87,.16);
+  border-radius:18px;
+  background:rgba(13,25,15,.72);
+}
+.cultivarHeading{text-align:center;margin-bottom:10px}.cultivarHeading>span{color:#8bdc69;font-size:.62rem;font-weight:950;letter-spacing:.19em;text-transform:uppercase}.cultivarHeading h2{margin:4px 0 3px;color:#f3f8f4;font-size:1.28rem}.cultivarHeading p{margin:0;color:rgba(220,233,222,.66);font-size:.76rem}.cultivarList{display:grid;gap:8px}.cultivarCard{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.025);color:#eef8f0;text-decoration:none}.cultivarCard>div:first-child{display:grid;gap:3px}.cultivarCard strong{color:#eaf8e8}.cultivarCard span{color:#9eafa1;font-size:.74rem}.cultivarCard>div:last-child{display:grid;gap:2px;text-align:right}.cultivarCard b{color:#9aed79}.cultivarCard small{color:#87988b;font-size:.68rem;text-transform:capitalize}.cultivarCard:hover{border-color:rgba(126,217,87,.34);background:rgba(126,217,87,.05)}
+
 .factsFocus{
   width:min(860px,100%);
   margin:0 auto;
@@ -212,6 +222,7 @@
   .availabilityAction{margin-top:16px;padding:0 4px}
   .findNearby{width:100%;min-height:48px}
   .availabilityAction small{font-size:.66rem}
+  .cultivarLinks{padding:12px;margin-bottom:20px}.cultivarCard{align-items:flex-start;flex-direction:column}.cultivarCard>div:last-child{text-align:left}
   .factsHeading{padding:0 10px}
   .factsHeading p{font-size:.79rem}
   .factsStage{padding:8px;border-radius:20px 20px 38px 20px}
