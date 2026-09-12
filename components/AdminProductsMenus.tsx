@@ -64,7 +64,7 @@ export default function AdminProductsMenus(){
 
  if(loading&&!dispensaries.length)return <main className={styles.shell}><div className={styles.loading}>Loading products & menus…</div></main>;
  return <main className={styles.shell}>
-  <header className={styles.header}><div><span>WEEDO FACTS · PRODUCT DATABASE</span><h1>Products & scans</h1><p>Audit uploaded QR codes, verified lab products, canonical product records, and dispensary menu availability from one admin screen.</p></div><a href="/admin">← Admin</a></header>
+  <header className={styles.header}><div><span>GEOWEEDO FACTS · PRODUCT DATABASE</span><h1>Products & scans</h1><p>Audit uploaded QR codes, verified lab products, canonical product records, and dispensary menu availability from one admin screen.</p></div><a href="/admin">← Admin</a></header>
   <section className={styles.stats}>
    <article><strong>{stats.products.toLocaleString()}</strong><span>All products</span></article>
    <article><strong>{stats.verifiedProducts.toLocaleString()}</strong><span>Verified products</span></article>
@@ -76,7 +76,7 @@ export default function AdminProductsMenus(){
   {error?<div className={styles.error}>{error}</div>:null}{notice?<div className={styles.notice}>{notice}</div>:null}
 
   <section className={styles.auditPanel}>
-   <div className={styles.auditHead}><div className={styles.panelHead}><span>WEEDO FACTS AUDIT</span><h2>Uploaded QR codes & verified products</h2><p>Every persisted QR appears here. A product is listed as verified only when it has at least one verified lab batch.</p></div><input value={auditSearch} onChange={e=>setAuditSearch(e.target.value)} placeholder="Filter product, UID, COA, QR, lab…" aria-label="Filter QR codes and verified products"/></div>
+   <div className={styles.auditHead}><div className={styles.panelHead}><span>GEOWEEDO FACTS AUDIT</span><h2>Uploaded QR codes & verified products</h2><p>Every persisted QR appears here. A product is listed as verified only when it has at least one verified lab batch.</p></div><input value={auditSearch} onChange={e=>setAuditSearch(e.target.value)} placeholder="Filter product, UID, COA, QR, lab…" aria-label="Filter QR codes and verified products"/></div>
    <div className={styles.auditGrid}>
     <section className={styles.auditCard}>
      <div className={styles.listHead}><div><strong>Verified products</strong><span>{filteredVerifiedProducts.length.toLocaleString()} shown · {verifiedProducts.length.toLocaleString()} total</span></div></div>
