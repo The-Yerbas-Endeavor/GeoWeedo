@@ -4,7 +4,7 @@ import { getAdminFromRequest } from '@/lib/adminAuth';
 import { getDatabase } from '@/lib/sqlite';
 import { createWeedoFactsProduct, ensureWeedoFactsSchema } from '@/lib/weedoFacts';
 import { ensureWeedoFactsQrSchema } from '@/lib/weedoFactsQrPersistence';
-import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu } from '@/lib/weedoMenus';
+import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu, setProductPrimaryImage } from '@/lib/weedoMenus';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +34,7 @@ function productRows(search = '') {
   return db.prepare(`
     SELECT p.id, p.brand_name, p.product_name, p.product_type, p.net_contents, p.created_at, p.updated_at,
            (SELECT identifier_value FROM cannabis_product_identifiers i WHERE i.product_id=p.id AND i.identifier_type IN ('upc','ean') ORDER BY i.verified DESC, i.created_at LIMIT 1) AS barcode,
+           (SELECT image_url FROM cannabis_product_media pm WHERE pm.product_id=p.id ORDER BY pm.is_primary DESC, pm.updated_at DESC LIMIT 1) AS image_url,
            (SELECT COUNT(*) FROM cannabis_batches b WHERE b.product_id=p.id) AS batch_count,
            (SELECT COUNT(*) FROM dispensary_menu_items mi WHERE mi.product_id=p.id AND mi.active=1) AS menu_count
       FROM cannabis_products p
@@ -156,8 +157,10 @@ export async function POST(request: NextRequest) {
     const productType = optional((body as any).productType);
     const netContents = optional((body as any).netContents);
     const barcode = text((body as any).barcode).replace(/\s+/g, '');
+    const imageUrl = optional((body as any).imageUrl);
     if (!productName) return invalid('Product name is required.');
     if (barcode && !/^\d{8,14}$/.test(barcode)) return invalid('UPC/EAN must contain 8 to 14 digits.');
+    if (!validImageUrl(imageUrl)) return invalid('Product image URL must be a valid HTTPS URL.');
 
     const normalized = `${brandName || ''} ${productName}`.trim().toLowerCase();
     const existing = db.prepare(`SELECT id,brand_name,product_name FROM cannabis_products WHERE normalized_name=? LIMIT 1`).get(normalized) as any;
@@ -173,6 +176,7 @@ export async function POST(request: NextRequest) {
       db.prepare(`INSERT INTO cannabis_product_identifiers (id,product_id,identifier_type,identifier_value,source,verified,created_at) VALUES (?,?,?,?,?,?,?)`)
         .run(`pid-${randomUUID()}`, productId, barcode.length === 12 ? 'upc' : 'ean', barcode, 'admin-manual', 0, new Date().toISOString());
     }
+    if (imageUrl) setProductPrimaryImage(productId, imageUrl, { sourceType: 'admin-manual' });
     return NextResponse.json({ productId, product: productRows(`${brandName || ''} ${productName}`)[0] || null }, { status: 201 });
   }
 
