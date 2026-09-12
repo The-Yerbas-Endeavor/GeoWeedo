@@ -57,23 +57,25 @@ function ensure() {
   return db;
 }
 
-function activeOwnedLocations(userId: string) {
+function ownedDispensaryLocations(userId: string) {
   return listUserOwnedLocations(userId)
-    .filter(row => row.location?.kind === 'dispensary' && row.location.active && row.location.verified)
+    .filter(row => row.location?.kind === 'dispensary')
     .map(row => ({
       location_id: row.locationId,
       name: row.location?.name || 'Verified dispensary',
       city: row.location?.city || '',
       region: row.location?.region || '',
+      active: Boolean(row.location?.active),
+      public_verified: Boolean(row.location?.verified),
     }));
 }
 
-function activeOwnerAssignment(db: ReturnType<typeof getDatabase>, userId: string, dispensaryId: string) {
+function ownerAssignment(db: ReturnType<typeof getDatabase>, userId: string, dispensaryId: string) {
   if (!userOwnerCanEdit(userId, dispensaryId)) return null;
   return db.prepare(`
-    SELECT d.id AS location_id,d.name,d.city,d.region
+    SELECT d.id AS location_id,d.name,d.city,d.region,d.active,d.verified AS public_verified
     FROM dispensaries d
-    WHERE d.id=? AND d.active=1 AND d.verified=1
+    WHERE d.id=?
     LIMIT 1
   `).get(dispensaryId) as any;
 }
@@ -134,11 +136,11 @@ export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request);
   if (!user) return unauthorized();
   const db = ensure();
-  const locations = activeOwnedLocations(user.id);
+  const locations = ownedDispensaryLocations(user.id);
   const requested = text(request.nextUrl.searchParams.get('dispensaryId'));
   const selected = requested || String(locations[0]?.location_id || '');
   if (!selected) return NextResponse.json({ locations, menuItems: [] }, { headers: { 'Cache-Control': 'no-store' } });
-  if (!activeOwnerAssignment(db, user.id, selected)) return forbidden('This dispensary is not assigned to your account or is not live yet.');
+  if (!ownerAssignment(db, user.id, selected)) return forbidden('This dispensary is not assigned to your account.');
 
   return NextResponse.json({
     locations,
@@ -172,8 +174,8 @@ export async function POST(request: NextRequest) {
   if (!scanValue) return invalid('The scanned QR/barcode value is required.');
 
   const db = ensure();
-  const assignment = activeOwnerAssignment(db, user.id, dispensaryId);
-  if (!assignment) return forbidden('This dispensary is not assigned to your account or is not live yet.');
+  const assignment = ownerAssignment(db, user.id, dispensaryId);
+  if (!assignment) return forbidden('This dispensary is not assigned to your account.');
 
   let product: any = null;
   if (productId) {
@@ -267,7 +269,7 @@ export async function PATCH(request: NextRequest) {
   if (!dispensaryId || !itemId) return invalid('Dispensary and menu item are required.');
 
   const db = ensure();
-  if (!activeOwnerAssignment(db, user.id, dispensaryId)) return forbidden('This dispensary is not assigned to your account or is not live yet.');
+  if (!ownerAssignment(db, user.id, dispensaryId)) return forbidden('This dispensary is not assigned to your account.');
   const current = ownerMenuItem(db, user.id, dispensaryId, itemId);
   if (!current) return forbidden('This menu item is not assigned to your dispensary.');
 
@@ -307,7 +309,7 @@ export async function DELETE(request: NextRequest) {
   if (!dispensaryId || !itemId) return invalid('Dispensary and menu item are required.');
 
   const db = ensure();
-  if (!activeOwnerAssignment(db, user.id, dispensaryId)) return forbidden('This dispensary is not assigned to your account or is not live yet.');
+  if (!ownerAssignment(db, user.id, dispensaryId)) return forbidden('This dispensary is not assigned to your account.');
   const current = ownerMenuItem(db, user.id, dispensaryId, itemId);
   if (!current) return forbidden('This menu item is not assigned to your dispensary.');
 
