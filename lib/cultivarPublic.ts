@@ -38,12 +38,16 @@ export type CultivarGeneticEdge = {
   evidenceType: string;
 };
 
+const PUBLIC_STATUSES = `('source_backed','verified','conflicting')`;
+
 export function cultivarSlug(name: string) {
   return normalizeCultivarName(name).replace(/\s+/g, '-');
 }
 
 function normalizedFromRef(value: string) {
-  return normalizeCultivarName(decodeURIComponent(value).replace(/-/g, ' '));
+  let decoded = value;
+  try { decoded = decodeURIComponent(value); } catch {}
+  return normalizeCultivarName(decoded.replace(/-/g, ' '));
 }
 
 function isPublicStatus(value: unknown) {
@@ -96,7 +100,7 @@ export function listPublicCultivars(search = '') {
   const db = getDatabase();
   const q = normalizeCultivarName(search);
   const params: string[] = [];
-  let filter = `c.status IN ('source_backed','verified','conflicting')`;
+  let filter = `c.status IN ${PUBLIC_STATUSES}`;
   if (q) {
     filter += ` AND (c.normalized_name LIKE ? OR EXISTS (
       SELECT 1 FROM cannabis_pedigree_aliases a
@@ -107,8 +111,8 @@ export function listPublicCultivars(search = '') {
   return (db.prepare(`
     SELECT c.id,c.canonical_name,c.breeder,c.cultivar_type,c.origin,c.status,c.updated_at,
       (SELECT COUNT(*) FROM cannabis_pedigree_aliases a WHERE a.cultivar_id=c.id) AS alias_count,
-      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l WHERE l.child_cultivar_id=c.id) AS parent_claim_count,
-      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l WHERE l.parent_cultivar_id=c.id) AS child_claim_count,
+      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l JOIN cannabis_pedigree_cultivars p ON p.id=l.parent_cultivar_id WHERE l.child_cultivar_id=c.id AND p.status IN ${PUBLIC_STATUSES}) AS parent_claim_count,
+      (SELECT COUNT(*) FROM cannabis_pedigree_lineage_claims l JOIN cannabis_pedigree_cultivars ch ON ch.id=l.child_cultivar_id WHERE l.parent_cultivar_id=c.id AND ch.status IN ${PUBLIC_STATUSES}) AS child_claim_count,
       (SELECT COUNT(*) FROM cannabis_product_pedigree_cultivars pc WHERE pc.cultivar_id=c.id) AS product_count
     FROM cannabis_pedigree_cultivars c
     WHERE ${filter}
@@ -127,7 +131,7 @@ export function getProductCultivars(productId: string) {
     FROM cannabis_product_pedigree_cultivars pc
     JOIN cannabis_pedigree_cultivars c ON c.id=pc.cultivar_id
     LEFT JOIN cannabis_pedigree_sources s ON s.id=pc.source_id
-    WHERE pc.product_id=? AND c.status IN ('source_backed','verified','conflicting')
+    WHERE pc.product_id=? AND c.status IN ${PUBLIC_STATUSES}
     ORDER BY pc.confidence DESC, c.canonical_name COLLATE NOCASE
   `).all(productId) as any[]).map(row => ({ ...row, slug: cultivarSlug(String(row.canonical_name)) }));
 }
@@ -139,7 +143,7 @@ export function getPublicCultivar(reference: string) {
   const cultivar = db.prepare(`
     SELECT * FROM cannabis_pedigree_cultivars
     WHERE (id=? OR normalized_name=?)
-      AND status IN ('source_backed','verified','conflicting')
+      AND status IN ${PUBLIC_STATUSES}
     LIMIT 1
   `).get(reference, normalized) as any;
   if (!cultivar || !isPublicStatus(cultivar.status)) return null;
@@ -158,7 +162,7 @@ export function getPublicCultivar(reference: string) {
     FROM cannabis_pedigree_lineage_claims l
     JOIN cannabis_pedigree_cultivars p ON p.id=l.parent_cultivar_id
     LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
-    WHERE l.child_cultivar_id=?
+    WHERE l.child_cultivar_id=? AND p.status IN ${PUBLIC_STATUSES}
     ORDER BY l.confidence DESC,l.parent_role,l.updated_at DESC
   `).all(cultivar.id) as any[];
 
@@ -168,7 +172,7 @@ export function getPublicCultivar(reference: string) {
     FROM cannabis_pedigree_lineage_claims l
     JOIN cannabis_pedigree_cultivars c ON c.id=l.child_cultivar_id
     LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
-    WHERE l.parent_cultivar_id=?
+    WHERE l.parent_cultivar_id=? AND c.status IN ${PUBLIC_STATUSES}
     ORDER BY l.confidence DESC,c.canonical_name COLLATE NOCASE
   `).all(cultivar.id) as any[];
 
@@ -189,7 +193,8 @@ export function getPublicCultivar(reference: string) {
     JOIN cannabis_pedigree_cultivars a ON a.id=g.cultivar_a_id
     JOIN cannabis_pedigree_cultivars b ON b.id=g.cultivar_b_id
     JOIN cannabis_pedigree_sources s ON s.id=g.source_id
-    WHERE g.cultivar_a_id=? OR g.cultivar_b_id=?
+    WHERE (g.cultivar_a_id=? OR g.cultivar_b_id=?)
+      AND a.status IN ${PUBLIC_STATUSES} AND b.status IN ${PUBLIC_STATUSES}
     ORDER BY g.verified DESC,g.similarity_score DESC,g.updated_at DESC
   `).all(cultivar.id, cultivar.id) as any[];
 
@@ -202,7 +207,7 @@ export function getPublicCultivar(reference: string) {
     FROM cannabis_pedigree_lineage_claims l
     JOIN cannabis_pedigree_cultivars p ON p.id=l.parent_cultivar_id
     LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
-    WHERE l.child_cultivar_id=?
+    WHERE l.child_cultivar_id=? AND p.status IN ${PUBLIC_STATUSES}
     ORDER BY l.confidence DESC,l.updated_at DESC
   `);
   let frontier = [String(cultivar.id)];
@@ -226,7 +231,7 @@ export function getPublicCultivar(reference: string) {
     FROM cannabis_pedigree_lineage_claims l
     JOIN cannabis_pedigree_cultivars c ON c.id=l.child_cultivar_id
     LEFT JOIN cannabis_pedigree_sources s ON s.id=l.source_id
-    WHERE l.parent_cultivar_id=?
+    WHERE l.parent_cultivar_id=? AND c.status IN ${PUBLIC_STATUSES}
     ORDER BY l.confidence DESC,l.updated_at DESC
   `);
   frontier = [String(cultivar.id)];
@@ -250,7 +255,7 @@ export function getPublicCultivar(reference: string) {
     const otherId = String(relation.cultivar_a_id) === String(cultivar.id) ? String(relation.cultivar_b_id) : String(relation.cultivar_a_id);
     const otherName = String(relation.cultivar_a_id) === String(cultivar.id) ? relation.cultivar_b_name : relation.cultivar_a_name;
     if (!nodeMap.has(otherId)) {
-      const other = db.prepare('SELECT id,canonical_name,breeder,status FROM cannabis_pedigree_cultivars WHERE id=? LIMIT 1').get(otherId) as any;
+      const other = db.prepare(`SELECT id,canonical_name,breeder,status FROM cannabis_pedigree_cultivars WHERE id=? AND status IN ${PUBLIC_STATUSES} LIMIT 1`).get(otherId) as any;
       if (other) nodeMap.set(otherId, graphNode({ ...other, canonical_name: otherName || other.canonical_name }, 99));
     }
   }
