@@ -18,7 +18,6 @@ function formatDate(value: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
-function label(value: unknown) { return String(value || '').replace(/_/g, ' '); }
 
 export default async function CultivarsPage({ searchParams }: Props) {
   const query = await searchParams;
