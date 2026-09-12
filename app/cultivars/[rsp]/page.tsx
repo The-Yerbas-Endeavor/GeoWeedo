@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/SiteHeader';
 import { getCultivarByRsp } from '@/lib/kannapedia';
+import { getPublicCultivar } from '@/lib/cultivarPublic';
 import '../cultivars.css';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CultivarDetailPage({ params }: Props) {
   const { rsp } = await params;
   const cultivar = getCultivarByRsp(rsp);
+  const pedigree = cultivar ? getPublicCultivar(cultivar.name) : null;
 
   return <main className="landing-shell">
     <SiteHeader />
@@ -35,6 +37,7 @@ export default async function CultivarDetailPage({ params }: Props) {
           <span className="cultivarKicker">KANNAPEDIA CULTIVAR RECORD · RSP {cultivar.rsp_id}</span>
           <h1>{cultivar.name}</h1>
           <p>{cultivar.registrant ? `Registered by ${cultivar.registrant}. ` : ''}Genetics and cultivar metadata are shown as source-reported information and are kept separate from GeoWeedo verified laboratory batch chemistry.</p>
+          {pedigree ? <a className="cultivarPedigreeLink" href={`/cultivar/${encodeURIComponent(pedigree.cultivar.slug)}`}>View GeoWeedo source-backed pedigree →</a> : null}
         </section>
 
         <section className="cultivarDetail">
@@ -58,6 +61,7 @@ export default async function CultivarDetailPage({ params }: Props) {
             <h2>Evidence classification</h2>
             <p>Genetics metadata is sourced from Kannapedia. Any chemistry below is explicitly <strong>registrant reported</strong>, not a GeoWeedo-verified laboratory batch.</p>
             <div className="cultivarNotice">Do not use these cultivar-level chemistry values as a substitute for the exact Product Chemistry record of a retail package or batch.</div>
+            {pedigree ? <div className="cultivarPedigreeNotice"><strong>Pedigree available</strong><span>GeoWeedo has a separate curated pedigree record for this cultivar. Its ancestry claims retain their own sources, confidence and conflict status.</span><a href={`/cultivar/${encodeURIComponent(pedigree.cultivar.slug)}`}>Open pedigree →</a></div> : null}
           </article>
         </section>
 
