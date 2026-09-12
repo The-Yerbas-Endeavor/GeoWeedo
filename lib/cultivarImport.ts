@@ -66,24 +66,25 @@ export function bulkImportCultivarDataset(payload: CultivarImportPayload) {
   if (lineage.length > 15000) throw new Error('A single import is limited to 15,000 pedigree claims.');
 
   const db = getDatabase();
-  const source = addCultivarSource({
-    sourceName,
-    sourceType,
-    sourceUrl: clean(payload.source.url),
-    externalId: clean(payload.source.externalId),
-    evidenceType: clean(payload.source.evidenceType) || 'unknown',
-    licenseNote,
-    verified: Boolean(payload.source.verified),
-    rawPayload: { importedCultivars: payload.cultivars.length, importedLineageClaims: lineage.length },
-  });
-
   const ids = new Map<string, string>();
   let cultivarCount = 0;
   let aliasCount = 0;
   let lineageCount = 0;
+  let source: any = null;
 
   db.exec('BEGIN IMMEDIATE');
   try {
+    source = addCultivarSource({
+      sourceName,
+      sourceType,
+      sourceUrl: clean(payload.source.url),
+      externalId: clean(payload.source.externalId),
+      evidenceType: clean(payload.source.evidenceType) || 'unknown',
+      licenseNote,
+      verified: Boolean(payload.source.verified),
+      rawPayload: { importedCultivars: payload.cultivars.length, importedLineageClaims: lineage.length },
+    });
+
     for (const row of payload.cultivars) {
       const name = String(row?.name || '').trim();
       if (!name) throw new Error('Every imported cultivar must have a name.');
