@@ -96,7 +96,7 @@ function blankForm(sourceUrl = ''): MenuForm {
   return { itemName: '', brandName: '', category: '', variant: '', packageSize: '', price: '', inventoryStatus: 'in_stock', sourceUrl };
 }
 
-export default function OwnerMenuScanner({ dispensaryId }: { dispensaryId: string }) {
+export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/owner-menu' }: { dispensaryId: string; apiBase?: string }) {
   const [scanValue, setScanValue] = useState('');
   const [identifierType, setIdentifierType] = useState<IdentifierType>('qr');
   const [record, setRecord] = useState<ScanRecord | null>(null);
@@ -124,10 +124,10 @@ export default function OwnerMenuScanner({ dispensaryId }: { dispensaryId: strin
     setError('');
     setNotice('');
     void loadMenu().catch(loadError => setError(loadError instanceof Error ? loadError.message : 'Could not load your dispensary menu.'));
-  }, [dispensaryId]);
+  }, [dispensaryId, apiBase]);
 
   async function loadMenu() {
-    const response = await fetch(`/api/admin/owner-menu?dispensaryId=${encodeURIComponent(dispensaryId)}`, { cache: 'no-store' });
+    const response = await fetch(`${apiBase}?dispensaryId=${encodeURIComponent(dispensaryId)}`, { cache: 'no-store' });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || 'Could not load your dispensary menu.');
     setMenuItems(Array.isArray(body.menuItems) ? body.menuItems : []);
@@ -268,7 +268,7 @@ export default function OwnerMenuScanner({ dispensaryId }: { dispensaryId: strin
     setError('');
     setNotice('');
     try {
-      const response = await fetch('/api/admin/owner-menu', {
+      const response = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -315,7 +315,7 @@ export default function OwnerMenuScanner({ dispensaryId }: { dispensaryId: strin
     setError('');
     setNotice('');
     try {
-      const response = await fetch('/api/admin/owner-menu', {
+      const response = await fetch(apiBase, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dispensaryId, itemId, ...editForm }),
@@ -338,7 +338,7 @@ export default function OwnerMenuScanner({ dispensaryId }: { dispensaryId: strin
     setError('');
     setNotice('');
     try {
-      const response = await fetch('/api/admin/owner-menu', {
+      const response = await fetch(apiBase, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dispensaryId, itemId: item.id }),
