@@ -13,6 +13,10 @@ function unauthorized() { return NextResponse.json({ error: 'Unauthorized.' }, {
 function invalid(message: string) { return NextResponse.json({ error: message }, { status: 400 }); }
 function text(value: unknown) { return String(value ?? '').trim(); }
 function optional(value: unknown) { const v = text(value); return v || null; }
+function validImageUrl(value: string | null) {
+  if (!value) return true;
+  try { return new URL(value).protocol === 'https:'; } catch { return false; }
+}
 
 function ensure() {
   ensureWeedoFactsSchema();
@@ -178,9 +182,11 @@ export async function POST(request: NextRequest) {
     const itemName = text((body as any).itemName);
     const priceRaw = text((body as any).price);
     const sourceUrl = optional((body as any).sourceUrl);
+    const imageUrl = optional((body as any).imageUrl);
     if (!dispensaryId) return invalid('Dispensary is required.');
     if (!productId) return invalid('Product is required.');
     if (!itemName) return invalid('Menu item name is required.');
+    if (!validImageUrl(imageUrl)) return invalid('Product image URL must be a valid HTTPS URL.');
     const dispensary = db.prepare('SELECT id FROM dispensaries WHERE id=? AND active=1 AND verified=1').get(dispensaryId);
     if (!dispensary) return invalid('Dispensary is not active or verified.');
     const product = db.prepare('SELECT id,brand_name,product_name FROM cannabis_products WHERE id=?').get(productId) as any;
@@ -202,6 +208,7 @@ export async function POST(request: NextRequest) {
       inventoryStatus: optional((body as any).inventoryStatus) || 'in_stock',
       sourceType: sourceUrl ? 'menu_source' : 'admin-manual',
       sourceUrl,
+      imageUrl,
       sourceUpdatedAt: new Date().toISOString(),
       verified,
     });
