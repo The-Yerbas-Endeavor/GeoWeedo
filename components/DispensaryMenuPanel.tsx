@@ -34,7 +34,8 @@ export default function DispensaryMenuPanel({ dispensaryId }: { dispensaryId: st
       const itemPrice = price(item.price_cents, item.currency || 'USD');
       const brand = item.brand_name || item.linked_brand_name;
       const imageAlt = `${brand ? `${brand} ` : ''}${item.item_name}`.trim();
-      const image = item.image_url ? <img src={item.image_url} alt={imageAlt} loading="lazy" /> : <span className={styles.imageFallback} aria-label="Product image not available"><b>{productTypeGlyph(item.category)}</b><small>GeoWeedo</small></span>;
+      const imageUrl = item.display_image_url || item.image_url;
+      const image = imageUrl ? <img src={imageUrl} alt={imageAlt} loading="lazy" /> : <span className={styles.imageFallback} aria-label="Product image not available"><b>{productTypeGlyph(item.category)}</b><small>GeoWeedo</small></span>;
       return <article className={styles.item} key={item.id}>
         <div className={styles.imageColumn}>{item.product_id ? <a className={styles.imageLink} href={factsHref(item)} aria-label={`View GeoWeedo Facts for ${imageAlt}`}>{image}</a> : <div className={styles.imageLink}>{image}</div>}</div>
         <div className={styles.itemContent}>
