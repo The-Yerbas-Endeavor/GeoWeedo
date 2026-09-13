@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { hoursStatus } from '@/lib/dispensaryHours';
 
 type Detail={location:{id:string;name:string;streetAddress?:string;city:string;region:string;postalCode?:string;country:string;website?:string;phone?:string;overview?:string;licenseNumber?:string;dataSource?:string;sourceUrl?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>;recreational?:boolean;medical?:boolean;verified?:boolean};ratings:{count:number;average:number};reviews:Array<{id:string;author:string;rating:number;title?:string;body?:string;images:string[];createdAt:string}>};
@@ -9,7 +9,7 @@ type DetailTab='overview'|'menu';
 function stars(value:number){return '★★★★★'.split('').map((star,index)=><span key={index} className={index<Math.round(value)?'community-star active':'community-star'}>{star}</span>);}
 function normalizeWebsite(value?:string){if(!value)return null;return /^https?:\/\//i.test(value)?value:`https://${value}`;}
 
-export default function DispensaryCommunityDetails({locationId}:{locationId:string}){
+export default function DispensaryCommunityDetails({locationId,children}:{locationId:string;children?:ReactNode}){
  const[data,setData]=useState<Detail|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null),[showReview,setShowReview]=useState(false),[rating,setRating]=useState(5),[title,setTitle]=useState(''),[body,setBody]=useState(''),[files,setFiles]=useState<File[]>([]),[submitting,setSubmitting]=useState(false),[message,setMessage]=useState<string|null>(null);
  const[claimState,setClaimState]=useState<ClaimState>({authenticated:false,claim:null}),[showClaim,setShowClaim]=useState(false),[claimantName,setClaimantName]=useState(''),[businessEmail,setBusinessEmail]=useState(''),[businessPhone,setBusinessPhone]=useState(''),[roleTitle,setRoleTitle]=useState(''),[businessWebsite,setBusinessWebsite]=useState(''),[evidenceText,setEvidenceText]=useState(''),[claimBusy,setClaimBusy]=useState(false),[claimMessage,setClaimMessage]=useState<string|null>(null);
  const[activeTab,setActiveTab]=useState<DetailTab>('overview'),[hoursOpen,setHoursOpen]=useState(false);
@@ -27,7 +27,7 @@ export default function DispensaryCommunityDetails({locationId}:{locationId:stri
     <button type="button" role="tab" aria-selected={activeTab==='menu'} onClick={()=>setActiveTab('menu')} style={{border:'1px solid rgba(255,255,255,.12)',borderRadius:999,padding:'10px 16px',cursor:'pointer',fontWeight:800,background:activeTab==='menu'?'var(--accent)':'rgba(255,255,255,.04)',color:activeTab==='menu'?'#081108':'var(--text)'}}>Menu</button>
    </div>
    {activeTab==='overview'&&<div><div className="profile-section-head"><span>BUSINESS OVERVIEW</span><strong>About this dispensary</strong></div>{l.overview?<p className="community-overview" style={{whiteSpace:'pre-wrap'}}>{l.overview}</p>:<p className="profile-empty">Business overview has not been added yet.</p>}</div>}
-   {activeTab==='menu'&&<div><div className="profile-section-head"><span>MENU</span><strong>Dispensary menu</strong></div><p className="profile-empty">Menu integration is coming soon.</p></div>}
+   {activeTab==='menu'&&<div>{children||<p className="profile-empty">No menu items have been published yet.</p>}</div>}
   </section>
 
   <section className="profile-section-card"><div className="profile-section-head"><span>SHOP DETAILS</span><strong>Services & information</strong></div>{l.amenities&&l.amenities.length>0?<div className="community-amenities">{l.amenities.map(item=><span key={item}>{item}</span>)}</div>:<p className="profile-empty">Amenities and services have not been added yet.</p>}{l.social&&Object.keys(l.social).length>0&&<div className="profile-socials">{Object.entries(l.social).filter(([,v])=>Boolean(v)).map(([network,url])=><a key={network} href={normalizeWebsite(url)||'#'} target="_blank" rel="noreferrer">{network}</a>)}</div>}</section>
