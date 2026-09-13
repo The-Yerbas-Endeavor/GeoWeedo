@@ -66,20 +66,6 @@ export default async function ProductListingPage({ params, searchParams }: Props
           <span>GeoWeedo product listing</span>
         </div>
 
-        <section className={styles.productIntro}>
-          <span>GEOWEEDO · PRODUCT CHEMISTRY</span>
-          <h1>{record.productName}</h1>
-          <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}</p>
-          <div className={styles.proofLine}>
-            <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'VERIFIED LAB RECORD' : 'PRODUCT RECORD'}</span>
-            {provenance ? <span>{provenance}</span> : null}
-          </div>
-          <div className={styles.availabilityAction}>
-            <a className={styles.findNearby} href={findNearbyHref}>📍 Find this product near me</a>
-            <small>Shows dispensaries with an active GeoWeedo menu listing for this exact product.</small>
-          </div>
-        </section>
-
         {cultivarLinks.length ? <section className={styles.cultivarLinks} aria-label="Cultivar genetics">
           <div className={styles.cultivarHeading}><span>CULTIVAR GENETICS</span><h2>Linked cultivar{cultivarLinks.length === 1 ? '' : 's'}</h2><p>Pedigree identity is kept separate from the exact batch chemistry shown below.</p></div>
           <div className={styles.cultivarList}>{cultivarLinks.map((link: any) => <a key={link.id} href={`/cultivar/${encodeURIComponent(link.slug)}`} className={styles.cultivarCard}><div><strong>{link.canonical_name}</strong><span>{[link.breeder,link.cultivar_type].filter(Boolean).join(' · ') || 'Cannabis cultivar'}</span></div><div><b>{Math.round(Number(link.confidence || 0))}%</b><small>{evidenceLabel(link.link_status)}</small></div></a>)}</div>
@@ -88,8 +74,18 @@ export default async function ProductListingPage({ params, searchParams }: Props
         <section className={styles.factsFocus} aria-labelledby="geoweedo-facts-heading">
           <div className={styles.factsHeading}>
             <span>PRODUCT CHEMISTRY</span>
-            <h2 id="geoweedo-facts-heading">GeoWeedo Facts</h2>
+            <h1 id="geoweedo-facts-heading">GeoWeedo Facts</h1>
             <p>The lab-backed cannabis chemistry for this product is the primary content of this listing.</p>
+          </div>
+
+          <div className={styles.proofLine}>
+            <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'VERIFIED LAB RECORD' : 'PRODUCT RECORD'}</span>
+            {provenance ? <span>{provenance}</span> : null}
+          </div>
+
+          <div className={styles.availabilityAction}>
+            <a className={styles.findNearby} href={findNearbyHref}>📍 Find this product near me</a>
+            <small>Shows dispensaries with an active GeoWeedo menu listing for this exact product.</small>
           </div>
 
           <div className={styles.factsStage} id="geoweedo-facts-label">
