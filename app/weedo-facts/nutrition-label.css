@@ -29,13 +29,13 @@
   letter-spacing:.04em;
   text-transform:uppercase;
 }
-.weedoFactsCard h2{
+.weedoFactsCardHead h2{
   margin:0;
   color:#111;
-  font-size:clamp(2.25rem,7vw,4rem);
-  line-height:.94;
+  font-size:clamp(1.85rem,4.8vw,3rem);
+  line-height:.97;
   font-weight:950;
-  letter-spacing:-.055em;
+  letter-spacing:-.045em;
 }
 .weedoFactsCardHead p{
   margin:9px 0 0;
@@ -202,7 +202,7 @@
   .weedoFactsCard{padding:18px 16px 18px;border-width:3px}
   .weedoFactsCardHead{grid-template-columns:1fr;border-bottom-width:9px}
   .weedoFactsCard .weedoFactsStatus{max-width:none;justify-self:start}
-  .weedoFactsCard h2{font-size:clamp(2.25rem,13vw,3.6rem)}
+  .weedoFactsCardHead h2{font-size:clamp(1.8rem,9vw,2.65rem)}
   .weedoFactsCard .weedoFactsOverallStatus{align-items:flex-start}
   .weedoFactsCard .weedoFactsRow{
     grid-template-columns:minmax(105px,42%) minmax(0,58%);
