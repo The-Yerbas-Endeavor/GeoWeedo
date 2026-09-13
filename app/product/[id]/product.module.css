@@ -29,36 +29,6 @@
 }
 .back:hover{text-decoration:underline}
 
-.productIntro{
-  width:min(820px,100%);
-  margin:0 auto 20px;
-  text-align:center;
-}
-.productIntro>span{
-  display:block;
-  margin-bottom:8px;
-  color:#96e872;
-  font-size:.66rem;
-  font-weight:950;
-  letter-spacing:.20em;
-  text-transform:uppercase;
-}
-.productIntro h1{
-  margin:0;
-  color:#f4f7ed;
-  font-size:clamp(2.6rem,7vw,5.6rem);
-  line-height:.92;
-  font-weight:950;
-  letter-spacing:-.065em;
-  text-wrap:balance;
-}
-.productIntro>p{
-  margin:12px 0 0;
-  color:#b9c8bc;
-  font-size:clamp(.88rem,1.5vw,1.05rem);
-  line-height:1.45;
-  font-weight:760;
-}
 .proofLine{
   display:flex;
   justify-content:center;
@@ -90,7 +60,7 @@
   flex-direction:column;
   align-items:center;
   gap:7px;
-  margin-top:20px;
+  margin-top:16px;
 }
 .findNearby{
   display:inline-flex;
@@ -149,7 +119,7 @@
   letter-spacing:.22em;
   text-transform:uppercase;
 }
-.factsHeading h2{
+.factsHeading h1{
   margin:4px 0 0;
   color:#fff;
   font-size:clamp(2rem,5vw,3.6rem);
@@ -167,7 +137,7 @@
 .factsStage{
   position:relative;
   width:min(760px,100%);
-  margin:0 auto;
+  margin:18px auto 0;
   padding:18px;
   border-radius:28px 28px 56px 28px;
   background:
@@ -216,10 +186,8 @@
 @media(max-width:720px){
   .page{width:min(100% - 18px,980px);padding-top:16px;padding-bottom:54px}
   .topline{align-items:flex-start;flex-direction:column;gap:7px;margin-bottom:16px;padding:0 6px}
-  .productIntro{margin-bottom:14px;padding:0 8px}
-  .productIntro h1{font-size:clamp(2.7rem,16vw,5rem)}
   .proofLine{font-size:.62rem}
-  .availabilityAction{margin-top:16px;padding:0 4px}
+  .availabilityAction{margin-top:14px;padding:0 4px}
   .findNearby{width:100%;min-height:48px}
   .availabilityAction small{font-size:.66rem}
   .cultivarLinks{padding:12px;margin-bottom:20px}.cultivarCard{align-items:flex-start;flex-direction:column}.cultivarCard>div:last-child{text-align:left}
