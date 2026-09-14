@@ -76,8 +76,10 @@ function ProductAwareMap(props:Props){
  const inputValue=exactProductId?(exactProductLabel||'Selected Weedo Facts product'):query;
  const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
  const searchControl=toolbar?createPortal(<div className="map-unified-search" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
-   <input className="map-unified-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180}}/>
-   {inputValue?<button type="button" onClick={clearSearch} aria-label="Clear search" title="Clear search">×</button>:null}
+   <div className="map-unified-search-shell" style={{position:'relative',display:'flex',alignItems:'center',width:'100%',minWidth:0}}>
+    <input className="map-unified-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180}}/>
+    {inputValue?<button type="button" onClick={clearSearch} aria-label="Clear search" title="Clear search">×</button>:null}
+   </div>
    {loading?<span aria-label="Searching products" title="Searching products" style={{fontSize:12,whiteSpace:'nowrap'}}>…</span>:error?<span aria-label="Product search unavailable" title={error} style={{fontSize:12,whiteSpace:'nowrap'}}>!</span>:null}
   </div>,toolbar):null;
  const matchCard=locationCard&&selectedMatch?createPortal(<div className="map-location-product-matches" style={{marginTop:12,padding:'10px 12px',borderRadius:10,background:'rgba(72,160,91,.12)',border:'1px solid rgba(103,214,110,.28)'}}>
