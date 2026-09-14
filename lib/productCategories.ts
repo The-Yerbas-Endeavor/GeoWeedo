@@ -1,4 +1,5 @@
 import { getDatabase } from './sqlite.ts';
+import { ensureProductIdentitySchema } from './productIdentity.ts';
 import { PRODUCT_CATEGORY_DEFINITIONS, normalizeTaxonomyText } from './productTaxonomy.ts';
 
 type Db = ReturnType<typeof getDatabase>;
@@ -130,6 +131,7 @@ export function ensureProductCategorySchema(db: Db = getDatabase(), options: { b
   ensureColumn(db, 'cannabis_products', 'category_source', 'TEXT');
   ensureColumn(db, 'dispensary_menu_items', 'category_id', 'TEXT');
   ensureColumn(db, 'dispensary_menu_items', 'category_source', 'TEXT');
+  ensureProductIdentitySchema(db);
   if (tableExists(db, 'cannabis_products')) db.exec('CREATE INDEX IF NOT EXISTS cannabis_products_category_idx ON cannabis_products(category_id)');
   if (tableExists(db, 'dispensary_menu_items')) db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_category_id_idx ON dispensary_menu_items(category_id,active)');
   seedCategories(db);
