@@ -1,5 +1,6 @@
 import { getDatabase } from './sqlite.ts';
 import { ensureWeedoFactsSchema, type WeedoFactsRecord } from './weedoFacts.ts';
+import { ensureProductCategorySchema, listProductCategories } from './productCategories.ts';
 
 export type WeedoFactsListingSummary = {
   productId: string;
@@ -7,6 +8,9 @@ export type WeedoFactsListingSummary = {
   brandName: string | null;
   productName: string;
   productType: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  categorySlug: string | null;
   netContents: string | null;
   batchNumber: string | null;
   coaNumber: string | null;
@@ -44,7 +48,15 @@ export type ProductChemistryCatalog = {
   brands: string[];
   businesses: string[];
   productTypes: string[];
+  productCategories: Array<{ id: string; slug: string; name: string }>;
 };
+
+function ensureCatalogSchema() {
+  ensureWeedoFactsSchema();
+  const db = getDatabase();
+  ensureProductCategorySchema(db);
+  return db;
+}
 
 function analytesForBatch(batchId: string) {
   const db = getDatabase();
@@ -139,6 +151,9 @@ function mapListing(row: any): WeedoFactsListingSummary {
     brandName: row.brand_name,
     productName: row.product_name,
     productType: row.product_type,
+    categoryId: row.category_id || null,
+    categoryName: row.category_name || null,
+    categorySlug: row.category_slug || null,
     netContents: row.net_contents,
     batchNumber: row.batch_number,
     coaNumber: row.coa_number,
@@ -160,6 +175,9 @@ const LISTING_SELECT = `
     p.brand_name,
     p.product_name,
     p.product_type,
+    p.category_id,
+    c.name AS category_name,
+    c.slug AS category_slug,
     p.net_contents,
     b.id AS batch_id,
     b.batch_number,
@@ -175,11 +193,11 @@ const LISTING_SELECT = `
     (SELECT COUNT(*) FROM cannabis_analytes a WHERE a.batch_id = b.id) AS analyte_count
   FROM cannabis_batches b
   JOIN cannabis_products p ON p.id = b.product_id
+  LEFT JOIN cannabis_product_categories c ON c.id = p.category_id
 `;
 
 export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
-  ensureWeedoFactsSchema();
-  const db = getDatabase();
+  const db = ensureCatalogSchema();
   const rows = db.prepare(`${LISTING_SELECT}
     WHERE b.verified = 1
     ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
@@ -229,8 +247,7 @@ function distinctValues(db: any, column: string) {
 }
 
 export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilters = {}): ProductChemistryCatalog {
-  ensureWeedoFactsSchema();
-  const db = getDatabase();
+  const db = ensureCatalogSchema();
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
   const business = String(filters.business || '').trim();
@@ -241,12 +258,15 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
   const params: Array<string | number> = [];
   if (brand) { conditions.push('p.brand_name = ?'); params.push(brand); }
   if (business) { conditions.push('b.producer_name = ? COLLATE NOCASE'); params.push(business); }
-  if (type) { conditions.push('p.product_type = ?'); params.push(type); }
+  if (type) {
+    conditions.push('(c.slug = ? OR c.name = ? COLLATE NOCASE OR p.product_type = ? COLLATE NOCASE)');
+    params.push(type, type, type);
+  }
 
   const searchExpression = `LOWER(
     COALESCE(p.product_name,'') || ' ' || COALESCE(p.brand_name,'') || ' ' ||
     COALESCE(b.producer_name,'') || ' ' || COALESCE(b.producer_license_number,'') || ' ' ||
-    COALESCE(p.product_type,'') || ' ' || COALESCE(b.batch_number,'') || ' ' ||
+    COALESCE(c.name,'') || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(b.batch_number,'') || ' ' ||
     COALESCE(b.coa_number,'') || ' ' || COALESCE(b.lab_name,'') || ' ' || COALESCE(b.source_name,'')
   )`;
   for (const token of q.split(/\s+/).filter(Boolean)) {
@@ -271,6 +291,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
     SELECT COUNT(*) AS count
     FROM cannabis_batches b
     JOIN cannabis_products p ON p.id = b.product_id
+    LEFT JOIN cannabis_product_categories c ON c.id = p.category_id
     WHERE ${where}
   `).get(...params) as any;
   const matchingListings = Number(matched?.count || 0);
@@ -281,7 +302,8 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
 
   const rows = db.prepare(`${LISTING_SELECT}
     WHERE ${where}
-    ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+    ORDER BY COALESCE(c.sort_order,999),
+             COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
              p.product_name COLLATE NOCASE,
              p.brand_name COLLATE NOCASE
     LIMIT ? OFFSET ?
@@ -301,6 +323,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
     brands: distinctValues(db, 'p.brand_name'),
     businesses: distinctValues(db, 'b.producer_name'),
     productTypes: distinctValues(db, 'p.product_type'),
+    productCategories: listProductCategories(db).map(category => ({ id: category.id, slug: category.slug, name: category.name })),
   };
 }
 
@@ -313,8 +336,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
  * physical package is the exact tested batch.
  */
 export function getWeedoFactsProductListing(productId: string, requestedBatchId?: string | null): WeedoFactsRecord | null {
-  ensureWeedoFactsSchema();
-  const db = getDatabase();
+  const db = ensureCatalogSchema();
   const product = db.prepare(`
     SELECT id, brand_name, product_name, product_type, net_contents
     FROM cannabis_products
