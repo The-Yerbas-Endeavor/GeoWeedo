@@ -30,31 +30,6 @@ export default function MapOpenNowFilter(){
     const firstSelect=tools.querySelector('select');
     if(firstSelect&&firstSelect.previousElementSibling!==search)tools.insertBefore(search,firstSelect);
    }
-
-   const shell=search.querySelector<HTMLElement>('.map-unified-search-shell');
-   if(!shell)return;
-   shell.style.position='relative';
-   search.dataset.mapScannerEmbedded='1';
-
-   let scanner=tools.querySelector<HTMLButtonElement>('[data-geoweedo-map-scanner]');
-   if(!scanner){
-    scanner=document.createElement('button');
-    scanner.type='button';
-    scanner.dataset.geoweedoMapScanner='1';
-    scanner.setAttribute('aria-label','Scan a barcode or QR code');
-    scanner.title='Scan barcode or QR code';
-    scanner.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width:18px;height:18px;display:block"><path fill="currentColor" d="M3 3h6v6H3V3Zm2 2v2h2V5H5Zm10-2h6v6h-6V3Zm2 2v2h2V5h-2ZM3 15h6v6H3v-6Zm2 2v2h2v-2H5Zm7-14h2v2h-2V3Zm0 4h2v4h-2V7Zm4 4h2v2h-2v-2Zm4 0h2v4h-2v-4Zm-8 4h2v2h-2v-2Zm4 0h4v2h-2v2h-2v-4Zm-4 4h2v2h-2v-2Zm8 0h2v2h-2v-2Z"/></svg>';
-   }
-
-   if(scanner.parentElement!==shell)shell.appendChild(scanner);
-   Object.assign(scanner.style,{position:'absolute',right:'4px',top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:'34px',height:'34px',minWidth:'34px',minHeight:'34px',margin:'0',padding:'0',flex:'0 0 auto',border:'1px solid rgba(255,255,255,.14)',borderRadius:'50%',background:'rgba(24,33,30,.92)',color:'inherit',textDecoration:'none',boxSizing:'border-box',cursor:'pointer',zIndex:'5'});
-
-   const input=shell.querySelector<HTMLInputElement>('.map-unified-search-input');
-   const clear=shell.querySelector<HTMLButtonElement>('button[aria-label="Clear search"]');
-   if(input)input.style.paddingRight=clear?'82px':'48px';
-   if(clear){
-    Object.assign(clear.style,{position:'absolute',right:'42px',top:'50%',transform:'translateY(-50%)',zIndex:'4'});
-   }
   };
 
   const ensureButton=()=>{
@@ -98,7 +73,6 @@ export default function MapOpenNowFilter(){
    disposed=true;observer.disconnect();if(frame)window.cancelAnimationFrame(frame);
    enabled=false;openIds=[];broadcast();
    document.querySelector('[data-geoweedo-open-now]')?.remove();
-   document.querySelector('[data-geoweedo-map-scanner]')?.remove();
   };
  },[]);
  return null;
