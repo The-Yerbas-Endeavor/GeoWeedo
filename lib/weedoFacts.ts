@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDatabase } from './sqlite.ts';
+import { ensureProductIdentitySchema } from './productIdentity.ts';
+import { normalizeProductTaxonomy } from './productTaxonomy.ts';
 
 export type WeedoFactsMatchLevel = 'exact_batch' | 'source_backed' | 'product_only' | 'community_unverified';
 
@@ -132,6 +134,7 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_batches_uid_idx ON cannabis_batches(uid);
     CREATE INDEX IF NOT EXISTS cannabis_analytes_batch_group_idx ON cannabis_analytes(batch_id, group_name);
   `);
+  ensureProductIdentitySchema(db);
   return db;
 }
 
@@ -252,8 +255,33 @@ export function createWeedoFactsProduct(input: { brandName?: string | null; prod
   const db = ensureSchema();
   const id = randomUUID();
   const now = new Date().toISOString();
-  db.prepare(`INSERT INTO cannabis_products (id, brand_name, product_name, product_type, net_contents, normalized_name, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.brandName ?? null, input.productName, input.productType ?? null, input.netContents ?? null, `${input.brandName ?? ''} ${input.productName}`.trim().toLowerCase(), now, now);
+  const taxonomy = normalizeProductTaxonomy({ productType: input.productType, productName: input.productName });
+  const columns = db.prepare('PRAGMA table_info(cannabis_products)').all() as Array<{ name?: string }>;
+  const hasCategoryColumns = columns.some(column => column.name === 'category_id') && columns.some(column => column.name === 'category_source');
+
+  if (hasCategoryColumns) {
+    db.prepare(`INSERT INTO cannabis_products (
+        id,brand_name,product_name,product_type,net_contents,normalized_name,
+        category_id,category_source,source_category,canonical_product_type,strain_type,normalizer_version,normalized_at,
+        created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(
+        id, input.brandName ?? null, input.productName, input.productType ?? null, input.netContents ?? null,
+        `${input.brandName ?? ''} ${input.productName}`.trim().toLowerCase(),
+        taxonomy.categoryId, `normalizer-v${taxonomy.normalizerVersion}`, taxonomy.sourceCategory,
+        taxonomy.canonicalProductType, taxonomy.strainType, taxonomy.normalizerVersion, now, now, now,
+      );
+  } else {
+    db.prepare(`INSERT INTO cannabis_products (
+        id,brand_name,product_name,product_type,net_contents,normalized_name,
+        source_category,canonical_product_type,strain_type,normalizer_version,normalized_at,created_at,updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(
+        id, input.brandName ?? null, input.productName, input.productType ?? null, input.netContents ?? null,
+        `${input.brandName ?? ''} ${input.productName}`.trim().toLowerCase(), taxonomy.sourceCategory,
+        taxonomy.canonicalProductType, taxonomy.strainType, taxonomy.normalizerVersion, now, now, now,
+      );
+  }
   return id;
 }
 
