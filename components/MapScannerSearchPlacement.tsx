@@ -334,6 +334,8 @@ export default function MapScannerSearchPlacement() {
     let originalParent: Node | null = null;
     let originalNextSibling: ChildNode | null = null;
     let originalScannerStyle: string | null = null;
+    let shell: HTMLElement | null = null;
+    let originalShellStyle: string | null = null;
     let input: HTMLInputElement | null = null;
     let originalInputPaddingRight = '';
     let clearButton: HTMLButtonElement | null = null;
@@ -341,7 +343,13 @@ export default function MapScannerSearchPlacement() {
 
     const placeScanner = () => {
       const search = document.querySelector<HTMLElement>('.map-first-home .map-unified-search');
-      if (!search) return;
+      const nextShell = search?.querySelector<HTMLElement>('.map-unified-search-shell') || null;
+      if (!search || !nextShell) return;
+
+      if (nextShell !== shell) {
+        shell = nextShell;
+        originalShellStyle = nextShell.getAttribute('style');
+      }
 
       const found = document.querySelector<HTMLElement>('[data-geoweedo-map-scanner]');
       if (found && found !== scanner) {
@@ -350,20 +358,20 @@ export default function MapScannerSearchPlacement() {
         originalNextSibling = found.nextSibling;
         originalScannerStyle = found.getAttribute('style');
       }
-      if (!scanner) return;
+      if (!scanner || !shell) return;
 
-      if (scanner.parentElement !== search) search.appendChild(scanner);
+      if (scanner.parentElement !== shell) shell.appendChild(scanner);
       search.dataset.mapScannerEmbedded = '1';
-      search.style.position = 'relative';
+      shell.style.position = 'relative';
 
-      const nextInput = search.querySelector<HTMLInputElement>('.map-unified-search-input');
+      const nextInput = shell.querySelector<HTMLInputElement>('.map-unified-search-input');
       if (nextInput && nextInput !== input) {
         input = nextInput;
         originalInputPaddingRight = nextInput.style.paddingRight;
       }
       if (input) input.style.paddingRight = '52px';
 
-      const nextClear = search.querySelector<HTMLButtonElement>('button[aria-label="Clear search"]');
+      const nextClear = shell.querySelector<HTMLButtonElement>('button[aria-label="Clear search"]');
       if (nextClear && nextClear !== clearButton) {
         clearButton = nextClear;
         originalClearStyle = nextClear.getAttribute('style');
@@ -398,12 +406,18 @@ export default function MapScannerSearchPlacement() {
     placeScanner();
     const observer = new MutationObserver(placeScanner);
     observer.observe(document.body, { subtree: true, childList: true });
+    window.addEventListener('resize', placeScanner);
 
     return () => {
       observer.disconnect();
+      window.removeEventListener('resize', placeScanner);
       const search = document.querySelector<HTMLElement>('.map-first-home .map-unified-search');
       search?.removeAttribute('data-map-scanner-embedded');
 
+      if (shell) {
+        if (originalShellStyle === null) shell.removeAttribute('style');
+        else shell.setAttribute('style', originalShellStyle);
+      }
       if (input) input.style.paddingRight = originalInputPaddingRight;
       if (clearButton) {
         if (originalClearStyle === null) clearButton.removeAttribute('style');
