@@ -17,6 +17,7 @@ import './mobile-home-mode.css';
 import './enabled-browse-filter.css';
 import './home-play-promo.css';
 import './mobile-home-tuning.css';
+import './map-unified-search.css';
 import './pending-game-reward.css';
 import './game-branding.css';
 import './art-direction.css';
