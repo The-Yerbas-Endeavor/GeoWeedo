@@ -4,6 +4,7 @@ import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import { getProductCultivars } from '@/lib/cultivarPublic';
+import { getProductCategorySummary } from '@/lib/productCategoryPublic';
 import styles from './product.module.css';
 import '../../weedo-facts/weedo-facts.css';
 import '../../weedo-facts/contrast-fix.css';
@@ -56,6 +57,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
   const provenance = [record.labName, record.producerName].filter(Boolean).join(' · ');
   const findNearbyHref = `/?product=${encodeURIComponent(record.productId)}`;
   const cultivarLinks = getProductCultivars(record.productId);
+  const productCategory = getProductCategorySummary(record.productId);
 
   return (
     <main className={`landing-shell ${styles.shell}`}>
@@ -80,6 +82,7 @@ export default async function ProductListingPage({ params, searchParams }: Props
 
           <div className={styles.proofLine}>
             <span className={verifiedBatch ? styles.proofVerified : styles.proofPending}>{verifiedBatch ? 'VERIFIED LAB RECORD' : 'PRODUCT RECORD'}</span>
+            {productCategory ? <a className={styles.categoryLink} href={`/product-chemistry?type=${encodeURIComponent(productCategory.slug)}`}>{productCategory.name}</a> : null}
             {provenance ? <span>{provenance}</span> : null}
           </div>
 
