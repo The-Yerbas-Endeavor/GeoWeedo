@@ -55,6 +55,19 @@
 }
 .proofVerified{background:#7ed957;color:#081108}
 .proofPending{border:1px solid rgba(255,255,255,.17);color:#d8e4d9}
+.categoryLink{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:5px 9px;
+  border:1px solid rgba(126,217,87,.26);
+  border-radius:999px;
+  background:rgba(126,217,87,.07);
+  color:#baf09f;
+  text-decoration:none;
+  letter-spacing:.07em;
+}
+.categoryLink:hover{border-color:rgba(126,217,87,.55);background:rgba(126,217,87,.13);color:#dcffca}
 .availabilityAction{
   display:flex;
   flex-direction:column;
