@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDatabase } from './sqlite';
 import { ensureWeedoFactsSchema } from './weedoFacts';
+import { ensureProductCategorySchema, getProductCategory, resolveProductCategory } from './productCategories';
 
 export type MenuItemInput = {
   dispensaryId: string;
@@ -10,6 +11,8 @@ export type MenuItemInput = {
   itemName: string;
   brandName?: string | null;
   category?: string | null;
+  categoryId?: string | null;
+  categorySource?: string | null;
   variant?: string | null;
   packageSize?: string | null;
   priceCents?: number | null;
@@ -165,16 +168,12 @@ function ensureSchema() {
   `);
 
   const menuItemColumns = db.prepare('PRAGMA table_info(dispensary_menu_items)').all() as any[];
-  if (!menuItemColumns.some(column => column.name === 'image_url')) {
-    db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN image_url TEXT');
-  }
-
+  if (!menuItemColumns.some(column => column.name === 'image_url')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN image_url TEXT');
+  ensureProductCategorySchema(db);
   return db;
 }
 
-export function ensureWeedoMenuSchema() {
-  ensureSchema();
-}
+export function ensureWeedoMenuSchema() { ensureSchema(); }
 
 export function setProductPrimaryImage(productId: string, imageUrl: string, input?: { sourceType?: string; sourceUrl?: string | null }) {
   const db = ensureSchema();
@@ -182,76 +181,86 @@ export function setProductPrimaryImage(productId: string, imageUrl: string, inpu
   db.prepare('UPDATE cannabis_product_media SET is_primary=0, updated_at=? WHERE product_id=? AND is_primary=1').run(now, productId);
   const existing = db.prepare('SELECT id FROM cannabis_product_media WHERE product_id=? AND image_url=? LIMIT 1').get(productId, imageUrl) as any;
   if (existing) {
-    db.prepare('UPDATE cannabis_product_media SET source_type=?, source_url=?, is_primary=1, updated_at=? WHERE id=?')
-      .run(input?.sourceType || 'manual', input?.sourceUrl || null, now, existing.id);
+    db.prepare('UPDATE cannabis_product_media SET source_type=?, source_url=?, is_primary=1, updated_at=? WHERE id=?').run(input?.sourceType || 'manual', input?.sourceUrl || null, now, existing.id);
     return existing.id as string;
   }
   const id = `productmedia-${randomUUID()}`;
-  db.prepare(`INSERT INTO cannabis_product_media (id,product_id,image_url,source_type,source_url,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,1,?,?)`)
+  db.prepare('INSERT INTO cannabis_product_media (id,product_id,image_url,source_type,source_url,is_primary,created_at,updated_at) VALUES (?,?,?,?,?,1,?,?)')
     .run(id, productId, imageUrl, input?.sourceType || 'manual', input?.sourceUrl || null, now, now);
   return id;
 }
 
 export function getOrCreateDispensaryMenu(dispensaryId: string, input?: { menuName?: string; sourceType?: string; sourceUrl?: string | null; externalMenuId?: string | null }) {
   const db = ensureSchema();
-  const existing = db.prepare(`SELECT * FROM dispensary_menus WHERE dispensary_id = ? AND active = 1 ORDER BY verified DESC, created_at LIMIT 1`).get(dispensaryId) as any;
+  const existing = db.prepare('SELECT * FROM dispensary_menus WHERE dispensary_id=? AND active=1 ORDER BY verified DESC, created_at LIMIT 1').get(dispensaryId) as any;
   if (existing) return existing;
   const id = `menu-${randomUUID()}`;
   const now = new Date().toISOString();
-  db.prepare(`INSERT INTO dispensary_menus (id, dispensary_id, menu_name, source_type, source_url, external_menu_id, verified, active, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`).run(id, dispensaryId, input?.menuName || 'Menu', input?.sourceType || 'manual', input?.sourceUrl || null, input?.externalMenuId || null, now, now);
-  return db.prepare('SELECT * FROM dispensary_menus WHERE id = ?').get(id) as any;
+  db.prepare('INSERT INTO dispensary_menus (id,dispensary_id,menu_name,source_type,source_url,external_menu_id,verified,active,created_at,updated_at) VALUES (?,?,?,?,?,?,0,1,?,?)')
+    .run(id, dispensaryId, input?.menuName || 'Menu', input?.sourceType || 'manual', input?.sourceUrl || null, input?.externalMenuId || null, now, now);
+  return db.prepare('SELECT * FROM dispensary_menus WHERE id=?').get(id) as any;
+}
+
+function canonicalCategoryForInput(db: ReturnType<typeof getDatabase>, input: MenuItemInput) {
+  if (input.categoryId) {
+    const category = getProductCategory(input.categoryId, db);
+    if (!category) throw new Error('Product category was not found.');
+    return { id: category.id, source: input.categorySource || 'manual' };
+  }
+  const mapped = resolveProductCategory(input.category, db);
+  if (mapped) return { id: mapped.id, source: input.categorySource || 'auto' };
+  if (input.productId) {
+    const product = db.prepare('SELECT category_id FROM cannabis_products WHERE id=? LIMIT 1').get(input.productId) as any;
+    if (product?.category_id) return { id: String(product.category_id), source: 'product' };
+  }
+  return { id: null, source: null };
 }
 
 export function addDispensaryMenuItem(input: MenuItemInput) {
   const db = ensureSchema();
   const menu = getOrCreateDispensaryMenu(input.dispensaryId, { sourceType: input.sourceType || 'manual', sourceUrl: input.sourceUrl || null });
   const now = new Date().toISOString();
+  const canonical = canonicalCategoryForInput(db, input);
   if (input.externalItemId) {
-    const existing = db.prepare('SELECT id FROM dispensary_menu_items WHERE menu_id = ? AND external_item_id = ? LIMIT 1').get(menu.id, input.externalItemId) as any;
+    const existing = db.prepare('SELECT id FROM dispensary_menu_items WHERE menu_id=? AND external_item_id=? LIMIT 1').get(menu.id, input.externalItemId) as any;
     if (existing) {
-      db.prepare(`UPDATE dispensary_menu_items SET product_id=?, batch_id=?, item_name=?, brand_name=?, category=?, variant=?, package_size=?, price_cents=?, currency=?, inventory_status=?, source_type=?, source_url=?, image_url=?, source_updated_at=?, verified=?, active=1, updated_at=? WHERE id=?`)
-        .run(input.productId || null, input.batchId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, existing.id);
+      db.prepare('UPDATE dispensary_menu_items SET product_id=?,batch_id=?,item_name=?,brand_name=?,category=?,category_id=?,category_source=?,variant=?,package_size=?,price_cents=?,currency=?,inventory_status=?,source_type=?,source_url=?,image_url=?,source_updated_at=?,verified=?,active=1,updated_at=? WHERE id=?')
+        .run(input.productId || null, input.batchId || null, input.itemName, input.brandName || null, input.category || null, canonical.id, canonical.source, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, existing.id);
       return existing.id as string;
     }
   }
   const id = `menuitem-${randomUUID()}`;
-  db.prepare(`INSERT INTO dispensary_menu_items (id, menu_id, product_id, batch_id, external_item_id, item_name, brand_name, category, variant, package_size, price_cents, currency, inventory_status, source_type, source_url, image_url, source_updated_at, verified, active, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
-    .run(id, menu.id, input.productId || null, input.batchId || null, input.externalItemId || null, input.itemName, input.brandName || null, input.category || null, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, now);
+  db.prepare(`INSERT INTO dispensary_menu_items (id,menu_id,product_id,batch_id,external_item_id,item_name,brand_name,category,category_id,category_source,variant,package_size,price_cents,currency,inventory_status,source_type,source_url,image_url,source_updated_at,verified,active,created_at,updated_at)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`)
+    .run(id, menu.id, input.productId || null, input.batchId || null, input.externalItemId || null, input.itemName, input.brandName || null, input.category || null, canonical.id, canonical.source, input.variant || null, input.packageSize || null, input.priceCents ?? null, input.currency || 'USD', input.inventoryStatus || 'unknown', input.sourceType || 'manual', input.sourceUrl || null, input.imageUrl || null, input.sourceUpdatedAt || null, input.verified ? 1 : 0, now, now);
   return id;
 }
 
 export function listDispensaryMenu(dispensaryId: string) {
   const db = ensureSchema();
   return db.prepare(`
-    SELECT mi.*, m.dispensary_id, m.menu_name,
-           COALESCE(mi.image_url, (
-             SELECT pm.image_url FROM cannabis_product_media pm
-              WHERE pm.product_id=mi.product_id
-              ORDER BY pm.is_primary DESC, pm.updated_at DESC
-              LIMIT 1
-           )) AS display_image_url,
-           p.product_name AS linked_product_name,
-           p.brand_name AS linked_brand_name,
-           b.batch_number AS linked_batch_number,
-           b.uid AS linked_uid,
-           b.overall_status AS linked_batch_status,
-           b.verified AS linked_batch_verified
+    SELECT mi.*,m.dispensary_id,m.menu_name,
+           COALESCE(mi.image_url,(SELECT pm.image_url FROM cannabis_product_media pm WHERE pm.product_id=mi.product_id ORDER BY pm.is_primary DESC,pm.updated_at DESC LIMIT 1)) AS display_image_url,
+           p.product_name AS linked_product_name,p.brand_name AS linked_brand_name,p.product_type AS linked_product_type,
+           COALESCE(mc.name,pc.name,mi.category) AS display_category,
+           COALESCE(mc.id,pc.id) AS canonical_category_id,
+           b.batch_number AS linked_batch_number,b.uid AS linked_uid,b.overall_status AS linked_batch_status,b.verified AS linked_batch_verified
       FROM dispensary_menus m
-      JOIN dispensary_menu_items mi ON mi.menu_id = m.id
-      LEFT JOIN cannabis_products p ON p.id = mi.product_id
-      LEFT JOIN cannabis_batches b ON b.id = mi.batch_id
-     WHERE m.dispensary_id = ? AND m.active = 1 AND mi.active = 1
-     ORDER BY COALESCE(mi.category, ''), COALESCE(mi.brand_name, ''), mi.item_name
+      JOIN dispensary_menu_items mi ON mi.menu_id=m.id
+      LEFT JOIN cannabis_products p ON p.id=mi.product_id
+      LEFT JOIN cannabis_product_categories mc ON mc.id=mi.category_id
+      LEFT JOIN cannabis_product_categories pc ON pc.id=p.category_id
+      LEFT JOIN cannabis_batches b ON b.id=mi.batch_id
+     WHERE m.dispensary_id=? AND m.active=1 AND mi.active=1
+     ORDER BY COALESCE(mc.sort_order,pc.sort_order,999),COALESCE(mi.brand_name,''),mi.item_name
   `).all(dispensaryId) as any[];
 }
 
 export function saveScanHistory(input: { userId: string; identifierType: string; identifierValue: string; productId?: string | null; batchId?: string | null; matchLevel?: string | null }) {
   const db = ensureSchema();
   const id = `scan-${randomUUID()}`;
-  db.prepare(`INSERT INTO cannabis_scan_history (id, user_id, identifier_type, identifier_value, product_id, batch_id, match_level, scanned_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.userId, input.identifierType, input.identifierValue, input.productId || null, input.batchId || null, input.matchLevel || null, new Date().toISOString());
+  db.prepare('INSERT INTO cannabis_scan_history (id,user_id,identifier_type,identifier_value,product_id,batch_id,match_level,scanned_at) VALUES (?,?,?,?,?,?,?,?)')
+    .run(id, input.userId, input.identifierType, input.identifierValue, input.productId || null, input.batchId || null, input.matchLevel || null, new Date().toISOString());
   return id;
 }
 
@@ -260,12 +269,12 @@ export function createScanContribution(input: ScanContributionInput) {
   const id = `wfsub-${randomUUID()}`;
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO cannabis_product_submissions (
-      id, submitted_by_user_id, identifier_type, identifier_value, product_id, batch_id, dispensary_id,
-      brand_name, product_name, product_type, net_contents, batch_number, uid, coa_url, source_url, notes,
-      requested_menu_add, menu_item_json, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`)
+      id,submitted_by_user_id,identifier_type,identifier_value,product_id,batch_id,dispensary_id,
+      brand_name,product_name,product_type,net_contents,batch_number,uid,coa_url,source_url,notes,
+      requested_menu_add,menu_item_json,status,created_at,updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)`)
     .run(id, input.userId, input.identifierType, input.identifierValue.trim(), input.productId || null, input.batchId || null, input.dispensaryId || null,
       input.brandName || null, input.productName || null, input.productType || null, input.netContents || null, input.batchNumber || null, input.uid || null,
       input.coaUrl || null, input.sourceUrl || null, input.notes || null, input.menu && input.dispensaryId ? 1 : 0, input.menu ? JSON.stringify(input.menu) : null, now, now);
-  return db.prepare('SELECT * FROM cannabis_product_submissions WHERE id = ?').get(id) as any;
+  return db.prepare('SELECT * FROM cannabis_product_submissions WHERE id=?').get(id) as any;
 }
