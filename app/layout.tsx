@@ -47,6 +47,7 @@ import MapOpenNowFilter from '@/components/MapOpenNowFilter';
 import DailyWeedoEnhancer from '@/components/DailyWeedoEnhancer';
 import HuntLeaderboardEnhancer from '@/components/HuntLeaderboardEnhancer';
 import NativeAppBridge from '@/components/NativeAppBridge';
+import GlobalScannerCameraAssist from '@/components/GlobalScannerCameraAssist';
 
 export const metadata = {
   metadataBase: new URL('https://geoweedo.com'),
@@ -81,7 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-map-marker.png" as="image" type="image/png" />
       </head>
-      <body><NativeAppBridge/><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body><NativeAppBridge/><GlobalScannerCameraAssist/><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }
