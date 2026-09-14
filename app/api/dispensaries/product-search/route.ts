@@ -34,12 +34,15 @@ function matchScore(row: any, query: string, exactProduct: boolean) {
   const menuBrand = String(row.menu_brand_name || '').toLowerCase();
   const product = String(row.product_name || '').toLowerCase();
   const productBrand = String(row.product_brand_name || '').toLowerCase();
+  const category = String(row.category_name || '').toLowerCase();
   let score = 0;
   if (item === q || product === q) score += 120;
   else if (item.startsWith(q) || product.startsWith(q)) score += 90;
   else if (item.includes(q) || product.includes(q)) score += 65;
   if (menuBrand === q || productBrand === q) score += 80;
   else if (menuBrand.includes(q) || productBrand.includes(q)) score += 45;
+  if (category === q) score += 35;
+  else if (category.includes(q)) score += 18;
   if (row.item_verified) score += 8;
   return score;
 }
@@ -57,9 +60,11 @@ export async function GET(request: NextRequest) {
   let product: any = null;
   if (productId) {
     product = db.prepare(`
-      SELECT id, product_name, brand_name, product_type, net_contents
-      FROM cannabis_products
-      WHERE id = ?
+      SELECT p.id,p.product_name,p.brand_name,p.product_type,p.net_contents,
+             pc.id AS category_id,pc.slug AS category_slug,pc.name AS category_name
+      FROM cannabis_products p
+      LEFT JOIN cannabis_product_categories pc ON pc.id=p.category_id
+      WHERE p.id = ?
       LIMIT 1
     `).get(productId) as any;
     if (!product) return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
@@ -75,6 +80,10 @@ export async function GET(request: NextRequest) {
     COALESCE(p.brand_name, '') || ' ' ||
     COALESCE(p.product_type, '') || ' ' ||
     COALESCE(p.net_contents, '') || ' ' ||
+    COALESCE(pc.name, '') || ' ' ||
+    COALESCE(pc.slug, '') || ' ' ||
+    COALESCE(mc.name, '') || ' ' ||
+    COALESCE(mc.slug, '') || ' ' ||
     COALESCE(b.batch_number, '') || ' ' ||
     COALESCE(b.uid, '')
   )`;
@@ -96,7 +105,7 @@ export async function GET(request: NextRequest) {
       mi.batch_id,
       mi.item_name,
       mi.brand_name AS menu_brand_name,
-      mi.category,
+      mi.category AS source_category,
       mi.variant,
       mi.package_size,
       mi.price_cents,
@@ -108,11 +117,16 @@ export async function GET(request: NextRequest) {
       p.product_name,
       p.brand_name AS product_brand_name,
       p.product_type,
+      COALESCE(pc.id,mc.id) AS category_id,
+      COALESCE(pc.slug,mc.slug,'other') AS category_slug,
+      COALESCE(pc.name,mc.name,mi.category,p.product_type,'Other') AS category_name,
       b.batch_number
     FROM dispensary_menu_items mi
     JOIN dispensary_menus m ON m.id = mi.menu_id
     JOIN dispensaries d ON d.id = m.dispensary_id
     LEFT JOIN cannabis_products p ON p.id = mi.product_id
+    LEFT JOIN cannabis_product_categories pc ON pc.id = p.category_id
+    LEFT JOIN cannabis_product_categories mc ON mc.id = mi.category_id
     LEFT JOIN cannabis_batches b ON b.id = mi.batch_id
     WHERE mi.active = 1
       AND m.active = 1
@@ -154,7 +168,10 @@ export async function GET(request: NextRequest) {
       batchId: row.batch_id || null,
       itemName: String(row.item_name || row.product_name || 'Product'),
       brandName: row.menu_brand_name || row.product_brand_name || null,
-      category: row.category || row.product_type || null,
+      category: row.category_name || null,
+      categoryId: row.category_id || null,
+      categorySlug: row.category_slug || 'other',
+      sourceCategory: row.source_category || null,
       variant: row.variant || null,
       packageSize: row.package_size || null,
       priceCents: Number.isFinite(Number(row.price_cents)) ? Number(row.price_cents) : null,
@@ -182,6 +199,9 @@ export async function GET(request: NextRequest) {
       productName: product.product_name,
       brandName: product.brand_name || null,
       productType: product.product_type || null,
+      categoryId: product.category_id || null,
+      categorySlug: product.category_slug || null,
+      categoryName: product.category_name || null,
       netContents: product.net_contents || null,
       label: [product.brand_name, product.product_name].filter(Boolean).join(' · '),
     } : null,
