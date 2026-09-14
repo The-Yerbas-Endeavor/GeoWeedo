@@ -1,18 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-type CapacitorPlugin = Record<string, (...args: any[]) => any>;
-type CapacitorRuntime = {
-  isNativePlatform?: () => boolean;
-  getPlatform?: () => string;
-  Plugins?: Record<string, CapacitorPlugin>;
-};
-
-function getCapacitor(): CapacitorRuntime | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return (window as Window & { Capacitor?: CapacitorRuntime }).Capacitor;
-}
+import { getNativePlatform, isNativeApp, scanWeedoFactsCode } from '@/lib/native';
 
 function setReactInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -25,11 +14,7 @@ export default function WeedoFactsNativeScanBridge() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const capacitor = getCapacitor();
-    if (!capacitor?.isNativePlatform?.()) return;
-
-    const scanner = capacitor.Plugins?.CapacitorBarcodeScanner;
-    if (!scanner?.scanBarcode) return;
+    if (!isNativeApp()) return;
 
     const root = document.documentElement;
     root.classList.add('geoweedo-native-weedo-scanner');
@@ -46,21 +31,8 @@ export default function WeedoFactsNativeScanBridge() {
       setError('');
 
       try {
-        const platform = capacitor.getPlatform?.();
-        const result = await scanner.scanBarcode({
-          hint: 17,
-          scanInstructions: 'Scan a cannabis package barcode or QR code',
-          scanButton: false,
-          scanText: 'Scan',
-          cameraDirection: 1,
-          scanOrientation: 3,
-          cancelButtonAccessibilityLabel: 'Cancel product scan',
-          torchButtonOnAccessibilityLabel: 'Turn scanner light off',
-          torchButtonOffAccessibilityLabel: 'Turn scanner light on',
-          ...(platform === 'android' ? { android: { scanningLibrary: 'zxing' } } : {}),
-        });
-
-        const value = String(result?.ScanResult || '').trim();
+        const result = await scanWeedoFactsCode();
+        const value = result.value.trim();
         if (!value) return;
 
         const input = document.querySelector<HTMLInputElement>('#weedo-facts-identifier');
@@ -76,7 +48,7 @@ export default function WeedoFactsNativeScanBridge() {
         const message = scanError instanceof Error ? scanError.message : String(scanError || '');
         if (/permission|denied|camera access/i.test(message)) {
           setError(
-            capacitor.getPlatform?.() === 'android'
+            getNativePlatform() === 'android'
               ? 'Camera permission is blocked. Open Android Settings → Apps → GeoWeedo → Permissions → Camera → Allow, then tap Scan package again.'
               : 'Camera permission is blocked. Open Settings → GeoWeedo → Camera, enable access, then tap Scan package again.',
           );
