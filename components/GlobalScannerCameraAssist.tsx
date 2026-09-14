@@ -12,11 +12,23 @@ function liveCameraStream(video: HTMLVideoElement): MediaStream | null {
 
 export default function GlobalScannerCameraAssist() {
   const streamRef = useRef<MediaStream | null>(null);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
+  const activeTrackIdRef = useRef('');
   const [activeVideo, setActiveVideo] = useState<HTMLVideoElement | null>(null);
   const [activeTrackId, setActiveTrackId] = useState('');
   const camera = useScannerCameraAssist(streamRef);
 
   useEffect(() => {
+    const clearActiveScanner = () => {
+      if (!activeTrackIdRef.current && !activeVideoRef.current) return;
+      streamRef.current = null;
+      activeVideoRef.current = null;
+      activeTrackIdRef.current = '';
+      setActiveVideo(null);
+      setActiveTrackId('');
+      camera.reset();
+    };
+
     const findActiveScanner = () => {
       const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
       const nextVideo = videos.find(video => {
@@ -28,22 +40,23 @@ export default function GlobalScannerCameraAssist() {
       const nextStream = nextVideo ? liveCameraStream(nextVideo) : null;
       const nextTrackId = nextStream?.getVideoTracks?.()[0]?.id || '';
 
-      if (!nextVideo || !nextStream) {
-        if (activeTrackId) {
-          streamRef.current = null;
-          setActiveVideo(null);
-          setActiveTrackId('');
-          camera.reset();
-        }
+      if (!nextVideo || !nextStream || !nextTrackId) {
+        clearActiveScanner();
         return;
       }
 
-      if (nextTrackId !== activeTrackId) {
+      if (nextTrackId !== activeTrackIdRef.current) {
         streamRef.current = nextStream;
+        activeVideoRef.current = nextVideo;
+        activeTrackIdRef.current = nextTrackId;
         setActiveVideo(nextVideo);
         setActiveTrackId(nextTrackId);
         void camera.configure(nextStream);
-      } else if (nextVideo !== activeVideo) {
+        return;
+      }
+
+      if (nextVideo !== activeVideoRef.current) {
+        activeVideoRef.current = nextVideo;
         setActiveVideo(nextVideo);
       }
     };
@@ -61,9 +74,11 @@ export default function GlobalScannerCameraAssist() {
       window.removeEventListener('resize', findActiveScanner);
       window.removeEventListener('orientationchange', findActiveScanner);
       streamRef.current = null;
+      activeVideoRef.current = null;
+      activeTrackIdRef.current = '';
       camera.reset();
     };
-  }, [activeTrackId, activeVideo, camera.configure, camera.reset]);
+  }, [camera.configure, camera.reset]);
 
   useEffect(() => {
     if (!activeVideo || !camera.focusAvailable) return;
