@@ -33,14 +33,15 @@ export default function DispensaryMenuPanel({ dispensaryId }: { dispensaryId: st
       const exact = Boolean(item.batch_id && item.linked_batch_verified);
       const itemPrice = price(item.price_cents, item.currency || 'USD');
       const brand = item.brand_name || item.linked_brand_name;
+      const category = item.display_category || item.category || item.linked_product_type;
       const imageAlt = `${brand ? `${brand} ` : ''}${item.item_name}`.trim();
       const imageUrl = item.display_image_url || item.image_url;
-      const image = imageUrl ? <img src={imageUrl} alt={imageAlt} loading="lazy" /> : <span className={styles.imageFallback} aria-label="Product image not available"><b>{productTypeGlyph(item.category)}</b><small>GeoWeedo</small></span>;
+      const image = imageUrl ? <img src={imageUrl} alt={imageAlt} loading="lazy" /> : <span className={styles.imageFallback} aria-label="Product image not available"><b>{productTypeGlyph(category)}</b><small>GeoWeedo</small></span>;
       return <article className={styles.item} key={item.id}>
         <div className={styles.imageColumn}>{item.product_id ? <a className={styles.imageLink} href={factsHref(item)} aria-label={`View GeoWeedo Facts for ${imageAlt}`}>{image}</a> : <div className={styles.imageLink}>{image}</div>}</div>
         <div className={styles.itemContent}>
           <div className={styles.itemHead}><div><h3>{item.item_name}</h3>{brand ? <div className={styles.brand}>{brand}</div> : null}</div>{itemPrice ? <span className={styles.price}>{itemPrice}</span> : null}</div>
-          <div className={styles.meta}>{item.category ? <span>{item.category}</span> : null}{item.variant ? <span>{item.variant}</span> : null}{item.package_size ? <span>{item.package_size}</span> : null}<span>Inventory: {item.inventory_status || 'unknown'}</span></div>
+          <div className={styles.meta}>{category ? <span>{category}</span> : null}{item.variant ? <span>{item.variant}</span> : null}{item.package_size ? <span>{item.package_size}</span> : null}<span>Inventory: {item.inventory_status || 'unknown'}</span></div>
           <div className={styles.badges}>{item.verified ? <span className={styles.badge}>✓ Verified listing</span> : <span className={styles.badge}>Reported listing</span>}{exact ? <span className={`${styles.badge} ${styles.exact}`}>✓ Exact batch linked</span> : item.product_id ? <span className={styles.badge}>Product linked</span> : null}{item.linked_batch_status ? <span className={styles.badge}>Lab status: {item.linked_batch_status}</span> : null}</div>
           <div className={styles.links}>{item.product_id ? <a href={factsHref(item)}>View GeoWeedo Facts →</a> : <a href="/geoweedo-facts">Search GeoWeedo Facts →</a>}{item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer">Menu source ↗</a> : null}</div>
         </div>
