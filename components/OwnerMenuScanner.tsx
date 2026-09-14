@@ -5,6 +5,7 @@ import { isNativeApp, scanWeedoFactsCode } from '@/lib/native';
 import styles from './OwnerMenuScanner.module.css';
 
 type IdentifierType = 'qr' | 'upc' | 'barcode';
+type ProductCategory = { id: string; slug: string; name: string };
 type ScanRecord = {
   productId: string;
   batchId: string | null;
@@ -28,6 +29,9 @@ type MenuItem = {
   item_name: string;
   brand_name: string | null;
   category: string | null;
+  category_id?: string | null;
+  canonical_category_id?: string | null;
+  display_category?: string | null;
   variant: string | null;
   package_size: string | null;
   price_cents: number | null;
@@ -46,6 +50,7 @@ type MenuForm = {
   itemName: string;
   brandName: string;
   category: string;
+  categoryId: string;
   variant: string;
   packageSize: string;
   price: string;
@@ -147,7 +152,7 @@ function inferIdentifierType(value: string): IdentifierType {
 }
 
 function blankForm(sourceUrl = ''): MenuForm {
-  return { itemName: '', brandName: '', category: '', variant: '', packageSize: '', price: '', inventoryStatus: 'in_stock', sourceUrl };
+  return { itemName: '', brandName: '', category: '', categoryId: '', variant: '', packageSize: '', price: '', inventoryStatus: 'in_stock', sourceUrl };
 }
 
 export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/owner-menu' }: { dispensaryId: string; apiBase?: string }) {
@@ -156,6 +161,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   const [record, setRecord] = useState<ScanRecord | null>(null);
   const [unresolved, setUnresolved] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -172,6 +178,12 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   const resolvingScanRef = useRef(false);
 
   useEffect(() => () => stopScanner(), []);
+  useEffect(() => {
+    void fetch('/api/product-categories', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(body => setCategories(Array.isArray(body?.categories) ? body.categories : []))
+      .catch(() => undefined);
+  }, []);
   useEffect(() => {
     if (!dispensaryId) return;
     setRecord(null);
@@ -223,7 +235,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
         setRecord(null);
         setUnresolved(true);
         setForm(blankForm(/^https?:\/\//i.test(value) ? value : ''));
-        setNotice('This code is not in the canonical GeoWeedo Facts product database yet. You can still add the item to your store menu as owner-reported inventory; the scan will remain available for later product reconciliation.');
+        setNotice('This code is not in the canonical GeoWeedo Facts product database yet. Choose a product category and add the item as owner-reported inventory; the scan will remain available for later product reconciliation.');
         return;
       }
 
@@ -234,6 +246,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
         itemName: next.productName || '',
         brandName: next.brandName || '',
         category: next.productType || '',
+        categoryId: '',
         variant: '',
         packageSize: next.netContents || '',
         price: '',
@@ -352,13 +365,30 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
     await resolveScan(scanValue);
   }
 
+  async function assignOwnerCategory(itemId: string, categoryId: string) {
+    if (!categoryId) return null;
+    const response = await fetch('/api/admin/owner-menu/category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dispensaryId, itemId, categoryId }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || 'Could not update product category.');
+    return body;
+  }
+
   async function addToMenu(event: FormEvent) {
     event.preventDefault();
     if (!record && !unresolved) return;
+    if (unresolved && !form.categoryId) {
+      setError('Choose a GeoWeedo product category before adding an unknown product.');
+      return;
+    }
     setSaving(true);
     setError('');
     setNotice('');
     try {
+      const selectedCategory = categories.find(category => category.id === form.categoryId);
       const response = await fetch(apiBase, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -369,11 +399,17 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
           scanValue,
           identifierType,
           ...form,
+          category: unresolved && selectedCategory ? selectedCategory.name : form.category,
         }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not add this product to the menu.');
-      setMenuItems(Array.isArray(body.menuItems) ? body.menuItems : []);
+      let nextItems = Array.isArray(body.menuItems) ? body.menuItems : [];
+      if (form.categoryId && body.itemId) {
+        const categoryBody = await assignOwnerCategory(body.itemId, form.categoryId);
+        if (Array.isArray(categoryBody?.menuItems)) nextItems = categoryBody.menuItems;
+      }
+      setMenuItems(nextItems);
       if (body.resolution === 'owner_reported') {
         setNotice(`${form.itemName} was added to your menu as owner-reported inventory. GeoWeedo did not create an unverified canonical product from the unknown code.`);
       } else {
@@ -391,7 +427,8 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
     setEditForm({
       itemName: item.item_name || '',
       brandName: item.brand_name || '',
-      category: item.category || '',
+      category: item.category || item.display_category || '',
+      categoryId: item.canonical_category_id || item.category_id || '',
       variant: item.variant || '',
       packageSize: item.package_size || '',
       price: item.price_cents === null || item.price_cents === undefined ? '' : (item.price_cents / 100).toFixed(2),
@@ -413,7 +450,12 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not update this menu item.');
-      setMenuItems(Array.isArray(body.menuItems) ? body.menuItems : []);
+      let nextItems = Array.isArray(body.menuItems) ? body.menuItems : [];
+      if (editForm.categoryId) {
+        const categoryBody = await assignOwnerCategory(itemId, editForm.categoryId);
+        if (Array.isArray(categoryBody?.menuItems)) nextItems = categoryBody.menuItems;
+      }
+      setMenuItems(nextItems);
       setEditingId(null);
       setNotice('Menu item updated.');
     } catch (saveError) {
@@ -447,10 +489,10 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   }
 
   const verifiedBatch = Boolean(record?.batchId && record?.source?.verified && record?.source?.type === 'lab' && record?.matchLevel === 'exact_batch');
-  const canAdd = Boolean((record || unresolved) && scanValue.trim());
+  const canAdd = Boolean((record || unresolved) && scanValue.trim() && (!unresolved || form.categoryId));
 
   return <section className={styles.panel}>
-    <div className={styles.head}><div><span>OWNER MENU SCANNER</span><h2>Scan product → add to menu</h2><p>Scan a package QR code, UPC/EAN, or other supported barcode. GeoWeedo links known products to GeoWeedo Facts and lets you add unknown codes as clearly marked owner-reported inventory.</p></div></div>
+    <div className={styles.head}><div><span>OWNER MENU SCANNER</span><h2>Scan product → add to menu</h2><p>Scan a package QR code, UPC/EAN, or other supported barcode. GeoWeedo links known products to GeoWeedo Facts and uses the same product categories across every dispensary menu.</p></div></div>
 
     <div className={styles.scanActions}>
       <button type="button" className={styles.primary} onClick={startScanner} disabled={loading || scannerOpen}>{loading ? 'Checking…' : '📷 Scan QR / barcode'}</button>
@@ -483,7 +525,13 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
       {unresolved ? <p className={styles.unresolvedNote}>Enter the package details you can read. This publishes the item on your dispensary menu but does not claim a lab verification or create a canonical product record.</p> : null}
       <form className={styles.form} onSubmit={addToMenu}>
         <label>Menu item name<input required value={form.itemName} onChange={event => setForm(current => ({ ...current, itemName: event.target.value }))} placeholder={unresolved ? 'Product name from package' : undefined}/></label>
-        <div className={styles.row}><label>Brand<input value={form.brandName} onChange={event => setForm(current => ({ ...current, brandName: event.target.value }))}/></label><label>Category<input value={form.category} onChange={event => setForm(current => ({ ...current, category: event.target.value }))} placeholder="Flower, vape, edible…"/></label></div>
+        <div className={styles.row}>
+          <label>Brand<input value={form.brandName} onChange={event => setForm(current => ({ ...current, brandName: event.target.value }))}/></label>
+          <label>Product category<select required={unresolved} value={form.categoryId} onChange={event => setForm(current => ({ ...current, categoryId: event.target.value }))}>
+            <option value="">{unresolved ? 'Choose category…' : 'Use product category automatically'}</option>
+            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select></label>
+        </div>
         <div className={styles.row}><label>Variant<input value={form.variant} onChange={event => setForm(current => ({ ...current, variant: event.target.value }))} placeholder="Indica, 510 cart…"/></label><label>Package size<input value={form.packageSize} onChange={event => setForm(current => ({ ...current, packageSize: event.target.value }))} placeholder="1 g, 3.5 g…"/></label></div>
         <div className={styles.row}><label>Price USD<input inputMode="decimal" value={form.price} onChange={event => setForm(current => ({ ...current, price: event.target.value }))} placeholder="35.00"/></label><label>Inventory<select value={form.inventoryStatus} onChange={event => setForm(current => ({ ...current, inventoryStatus: event.target.value }))}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="unknown">Unknown</option><option value="out_of_stock">Out of stock</option></select></label></div>
         <label>Source URL<input value={form.sourceUrl} onChange={event => setForm(current => ({ ...current, sourceUrl: event.target.value }))} placeholder="QR / menu source URL"/></label>
@@ -495,9 +543,10 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
       <div className={styles.menuHead}><h3>Current menu</h3><span>{menuItems.length.toLocaleString()} active items</span></div>
       {menuItems.length === 0 ? <div className={styles.empty}>No products have been added to this menu yet.</div> : <div className={styles.menuList}>{menuItems.map(item => {
         const ownerReported = !item.product_id || item.source_type === 'owner_reported_scan';
+        const category = item.display_category || item.category;
         return <article className={styles.menuItem} key={item.id}>
           <div className={styles.menuSummary}>
-            <div><strong>{item.brand_name ? `${item.brand_name} · ` : ''}{item.item_name}</strong><small>{[item.category, item.variant, item.package_size, item.linked_batch_number ? `Batch ${item.linked_batch_number}` : null].filter(Boolean).join(' · ')}</small>{item.linked_uid ? <span className={styles.code}>{item.linked_uid}</span> : null}{item.owner_scan_value ? <span className={styles.scanCode}>{String(item.owner_scan_type || 'scan').toUpperCase()}: {item.owner_scan_value}</span> : null}</div>
+            <div><strong>{item.brand_name ? `${item.brand_name} · ` : ''}{item.item_name}</strong><small>{[category, item.variant, item.package_size, item.linked_batch_number ? `Batch ${item.linked_batch_number}` : null].filter(Boolean).join(' · ')}</small>{item.linked_uid ? <span className={styles.code}>{item.linked_uid}</span> : null}{item.owner_scan_value ? <span className={styles.scanCode}>{String(item.owner_scan_type || 'scan').toUpperCase()}: {item.owner_scan_value}</span> : null}</div>
             <div className={styles.menuPrice}><b>{money(item.price_cents)}</b><small>{item.inventory_status.replace(/_/g, ' ')}</small><span className={ownerReported ? styles.ownerReportedMini : styles.canonicalMini}>{ownerReported ? 'Owner reported' : item.linked_batch_verified ? 'COA-linked' : 'Canonical product'}</span></div>
           </div>
           <div className={styles.menuActions}>
@@ -506,10 +555,16 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
           </div>
           {editingId === item.id ? <div className={styles.editForm}>
             <label>Item name<input value={editForm.itemName} onChange={event => setEditForm(current => ({ ...current, itemName: event.target.value }))}/></label>
-            <div className={styles.row}><label>Brand<input value={editForm.brandName} onChange={event => setEditForm(current => ({ ...current, brandName: event.target.value }))}/></label><label>Category<input value={editForm.category} onChange={event => setEditForm(current => ({ ...current, category: event.target.value }))}/></label></div>
+            <div className={styles.row}>
+              <label>Brand<input value={editForm.brandName} onChange={event => setEditForm(current => ({ ...current, brandName: event.target.value }))}/></label>
+              <label>Product category<select value={editForm.categoryId} onChange={event => setEditForm(current => ({ ...current, categoryId: event.target.value, category: categories.find(category => category.id === event.target.value)?.name || current.category }))}>
+                <option value="">Choose category…</option>
+                {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select></label>
+            </div>
             <div className={styles.row}><label>Variant<input value={editForm.variant} onChange={event => setEditForm(current => ({ ...current, variant: event.target.value }))}/></label><label>Package size<input value={editForm.packageSize} onChange={event => setEditForm(current => ({ ...current, packageSize: event.target.value }))}/></label></div>
             <div className={styles.row}><label>Price USD<input inputMode="decimal" value={editForm.price} onChange={event => setEditForm(current => ({ ...current, price: event.target.value }))}/></label><label>Inventory<select value={editForm.inventoryStatus} onChange={event => setEditForm(current => ({ ...current, inventoryStatus: event.target.value }))}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="unknown">Unknown</option><option value="out_of_stock">Out of stock</option></select></label></div>
-            <button type="button" className={styles.primary} onClick={() => void saveMenuItem(item.id)} disabled={saving || !editForm.itemName.trim()}>{saving ? 'Saving…' : 'Save menu changes'}</button>
+            <button type="button" className={styles.primary} onClick={() => void saveMenuItem(item.id)} disabled={saving || !editForm.itemName.trim() || !editForm.categoryId}>{saving ? 'Saving…' : 'Save menu changes'}</button>
           </div> : null}
         </article>;
       })}</div>}
