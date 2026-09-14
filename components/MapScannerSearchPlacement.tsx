@@ -45,15 +45,42 @@ const scannerVideoConstraints: MediaTrackConstraints = {
   facingMode: { ideal: 'environment' },
   width: { ideal: 1920 },
   height: { ideal: 1080 },
+  frameRate: { ideal: 30, max: 60 },
 };
+
+const browserFormats = [
+  'qr_code',
+  'data_matrix',
+  'ean_13',
+  'ean_8',
+  'upc_a',
+  'upc_e',
+  'code_128',
+  'code_39',
+  'code_93',
+  'itf',
+  'codabar',
+  'pdf417',
+  'aztec',
+];
 
 async function tuneScannerStream(stream: MediaStream | null) {
   const track = stream?.getVideoTracks?.()[0];
   if (!track) return;
   try {
     const capabilities = (track as any).getCapabilities?.();
+    const advanced: Record<string, unknown> = {};
     if (Array.isArray(capabilities?.focusMode) && capabilities.focusMode.includes('continuous')) {
-      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as any);
+      advanced.focusMode = 'continuous';
+    }
+    if (Array.isArray(capabilities?.exposureMode) && capabilities.exposureMode.includes('continuous')) {
+      advanced.exposureMode = 'continuous';
+    }
+    if (Array.isArray(capabilities?.whiteBalanceMode) && capabilities.whiteBalanceMode.includes('continuous')) {
+      advanced.whiteBalanceMode = 'continuous';
+    }
+    if (Object.keys(advanced).length) {
+      await track.applyConstraints({ advanced: [advanced] } as any);
     }
   } catch {}
 }
@@ -62,6 +89,45 @@ function scanType(value: string) {
   if (/^https?:\/\//i.test(value)) return 'qr';
   if (/^\d{8,14}$/.test(value.replace(/[\s-]/g, ''))) return 'upc';
   return undefined;
+}
+
+function configureZxingReader(zxing: any) {
+  const barcodeFormat = zxing?.BarcodeFormat;
+  const decodeHintType = zxing?.DecodeHintType;
+  const formats = barcodeFormat
+    ? [
+        barcodeFormat.QR_CODE,
+        barcodeFormat.DATA_MATRIX,
+        barcodeFormat.UPC_A,
+        barcodeFormat.UPC_E,
+        barcodeFormat.EAN_13,
+        barcodeFormat.EAN_8,
+        barcodeFormat.CODE_128,
+        barcodeFormat.CODE_39,
+        barcodeFormat.CODE_93,
+        barcodeFormat.ITF,
+        barcodeFormat.CODABAR,
+        barcodeFormat.PDF_417,
+        barcodeFormat.AZTEC,
+      ].filter((format: unknown) => format !== undefined && format !== null)
+    : [];
+
+  if (decodeHintType && typeof Map !== 'undefined') {
+    const hints = new Map<any, any>();
+    if (formats.length && decodeHintType.POSSIBLE_FORMATS !== undefined) {
+      hints.set(decodeHintType.POSSIBLE_FORMATS, formats);
+    }
+    if (decodeHintType.TRY_HARDER !== undefined) hints.set(decodeHintType.TRY_HARDER, true);
+    if (decodeHintType.ALSO_INVERTED !== undefined) hints.set(decodeHintType.ALSO_INVERTED, true);
+    return new zxing.BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 80,
+      delayBetweenScanSuccess: 250,
+    });
+  }
+
+  const reader = new zxing.BrowserMultiFormatReader();
+  if (formats.length) reader.possibleFormats = formats;
+  return reader;
 }
 
 export default function MapScannerSearchPlacement() {
@@ -138,7 +204,7 @@ export default function MapScannerSearchPlacement() {
     setStatusMessage('');
     setStatusError(false);
     setUnknownScan(false);
-    setScannerMessage('Starting camera…');
+    setScannerMessage('Starting rear camera…');
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatusError(true);
@@ -146,102 +212,77 @@ export default function MapScannerSearchPlacement() {
       return;
     }
 
-    const onZxingResult = (scanResult: any) => {
-      const value = scanResult?.getText?.() || scanResult?.text;
-      if (value) void resolveScannedValue(value);
-    };
-
-    try {
-      setScannerOpen(true);
-      setScannerMessage('Loading barcode scanner…');
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const zxing = await loadZxingBrowser();
-      const video = videoRef.current;
-      if (!video) throw new Error('Camera preview could not start.');
-
-      setScannerMessage('Point the camera at a QR code or barcode.');
-      const reader = new zxing.BrowserMultiFormatReader();
-      const barcodeFormat = zxing.BarcodeFormat;
-      if (barcodeFormat) {
-        const formats = [
-          barcodeFormat.QR_CODE,
-          barcodeFormat.UPC_A,
-          barcodeFormat.UPC_E,
-          barcodeFormat.UPC_EAN_EXTENSION,
-          barcodeFormat.EAN_13,
-          barcodeFormat.EAN_8,
-          barcodeFormat.CODE_128,
-          barcodeFormat.CODE_39,
-          barcodeFormat.CODE_93,
-          barcodeFormat.ITF,
-          barcodeFormat.CODABAR,
-        ].filter((format: unknown) => format !== undefined && format !== null);
-        if (formats.length) reader.possibleFormats = formats;
-      }
-
-      const controls = typeof reader.decodeFromConstraints === 'function'
-        ? await reader.decodeFromConstraints({ video: scannerVideoConstraints, audio: false }, video, onZxingResult)
-        : await reader.decodeFromVideoDevice(undefined, video, onZxingResult);
-      zxingControlsRef.current = controls;
-      const stream = video.srcObject instanceof MediaStream ? video.srcObject : null;
-      streamRef.current = stream;
-      await tuneScannerStream(stream);
+    setScannerOpen(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const video = videoRef.current;
+    if (!video) {
+      setScannerOpen(false);
+      setStatusError(true);
+      setStatusMessage('Camera preview could not start.');
       return;
-    } catch (zxingError) {
-      try { zxingControlsRef.current?.stop?.(); } catch {}
-      zxingControlsRef.current = null;
-      streamRef.current?.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-      if (videoRef.current) videoRef.current.srcObject = null;
-
-      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
-      if (!BarcodeDetectorCtor) {
-        stopBrowserScanner();
-        setStatusError(true);
-        setStatusMessage(zxingError instanceof Error ? zxingError.message : 'Compatible barcode scanner could not start.');
-        return;
-      }
     }
 
+    let detectorStarted = false;
+
     try {
-      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
       const stream = await navigator.mediaDevices.getUserMedia({ video: scannerVideoConstraints, audio: false });
       streamRef.current = stream;
-      setScannerOpen(true);
-      setScannerMessage('Point the camera at a QR code or barcode.');
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const video = videoRef.current;
-      if (!video) throw new Error('Camera preview could not start.');
       video.srcObject = stream;
       await video.play();
       await tuneScannerStream(stream);
+      setScannerMessage('Point the camera at the code. GeoWeedo is using native detection + enhanced barcode decoding.');
 
-      const desiredFormats = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'codabar'];
-      let detector: any;
-      if (typeof BarcodeDetectorCtor.getSupportedFormats === 'function') {
-        const supported = await BarcodeDetectorCtor.getSupportedFormats();
-        const formats = desiredFormats.filter(format => supported.includes(format));
-        detector = formats.length ? new BarcodeDetectorCtor({ formats }) : new BarcodeDetectorCtor();
-      } else {
-        detector = new BarcodeDetectorCtor();
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+      if (BarcodeDetectorCtor) {
+        try {
+          let detector: any;
+          if (typeof BarcodeDetectorCtor.getSupportedFormats === 'function') {
+            const supported = await BarcodeDetectorCtor.getSupportedFormats();
+            const formats = browserFormats.filter(format => supported.includes(format));
+            detector = formats.length ? new BarcodeDetectorCtor({ formats }) : new BarcodeDetectorCtor();
+          } else {
+            detector = new BarcodeDetectorCtor();
+          }
+
+          detectorStarted = true;
+          let lastDetectionAt = 0;
+          const detectFrame = async (time: number) => {
+            if (resolvingRef.current || streamRef.current !== stream) return;
+            if (time - lastDetectionAt >= 90 && video.readyState >= 2) {
+              lastDetectionAt = time;
+              try {
+                const codes = await detector.detect(video);
+                const hit = codes?.find((code: any) => code?.rawValue);
+                if (hit?.rawValue) {
+                  await resolveScannedValue(hit.rawValue);
+                  return;
+                }
+              } catch {}
+            }
+            frameRef.current = requestAnimationFrame(detectFrame);
+          };
+          frameRef.current = requestAnimationFrame(detectFrame);
+        } catch {
+          detectorStarted = false;
+        }
       }
 
-      const scan = async () => {
-        try {
-          const codes = await detector.detect(video);
-          const hit = codes?.find((code: any) => code?.rawValue);
-          if (hit?.rawValue) {
-            await resolveScannedValue(hit.rawValue);
-            return;
-          }
-        } catch {}
-        frameRef.current = requestAnimationFrame(scan);
-      };
-      frameRef.current = requestAnimationFrame(scan);
+      try {
+        const zxing = await loadZxingBrowser();
+        if (streamRef.current !== stream || resolvingRef.current) return;
+        const reader = configureZxingReader(zxing);
+        const controls = await reader.decodeFromVideoElement(video, (scanResult: any) => {
+          const value = scanResult?.getText?.() || scanResult?.text;
+          if (value) void resolveScannedValue(value);
+        });
+        zxingControlsRef.current = controls;
+      } catch (zxingError) {
+        if (!detectorStarted) throw zxingError;
+      }
     } catch (error) {
       stopBrowserScanner();
       setStatusError(true);
-      setStatusMessage(error instanceof Error ? error.message : 'Camera access failed.');
+      setStatusMessage(error instanceof Error ? error.message : 'Camera scanner could not start.');
     }
   }, [resolveScannedValue, stopBrowserScanner]);
 
