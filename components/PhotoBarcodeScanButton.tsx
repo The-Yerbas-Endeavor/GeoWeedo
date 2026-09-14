@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import {
   canUseNativePhotoScanner,
   scanBarcodeFromImageFile,
@@ -11,16 +11,20 @@ import type { WeedoFactsScanResult } from '@/lib/native';
 type Props = {
   onScan: (result: WeedoFactsScanResult) => Promise<void> | void;
   onError?: (message: string) => void;
+  beforeScan?: () => Promise<void> | void;
   disabled?: boolean;
   className?: string;
+  style?: CSSProperties;
   label?: string;
 };
 
 export default function PhotoBarcodeScanButton({
   onScan,
   onError,
+  beforeScan,
   disabled = false,
   className,
+  style,
   label = '🖼️ Scan from photo',
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -40,6 +44,10 @@ export default function PhotoBarcodeScanButton({
   async function choosePhoto() {
     if (disabled || pending) return;
     setInternalError('');
+
+    try {
+      await beforeScan?.();
+    } catch {}
 
     if (!canUseNativePhotoScanner()) {
       inputRef.current?.click();
@@ -76,6 +84,7 @@ export default function PhotoBarcodeScanButton({
       <button
         type="button"
         className={className}
+        style={style}
         onClick={() => void choosePhoto()}
         disabled={disabled || pending}
         data-geoweedo-photo-scanner="1"
