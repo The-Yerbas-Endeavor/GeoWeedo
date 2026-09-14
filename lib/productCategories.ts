@@ -1,4 +1,6 @@
-import { getDatabase } from './sqlite';
+import { getDatabase } from './sqlite.ts';
+import { ensureProductIdentitySchema } from './productIdentity.ts';
+import { PRODUCT_CATEGORY_DEFINITIONS, normalizeTaxonomyText } from './productTaxonomy.ts';
 
 type Db = ReturnType<typeof getDatabase>;
 
@@ -11,25 +13,8 @@ export type ProductCategory = {
   active: number;
 };
 
-type CategorySeed = { id: string; slug: string; name: string; sort: number; aliases: string[] };
-
-const CATEGORY_SEEDS: CategorySeed[] = [
-  { id: 'cat-flower', slug: 'flower', name: 'Flower', sort: 10, aliases: ['flower', 'bud', 'cannabis flower'] },
-  { id: 'cat-prerolls', slug: 'pre-rolls', name: 'Pre-Rolls', sort: 20, aliases: ['pre roll', 'pre rolls', 'pre-roll', 'pre-rolls', 'preroll', 'prerolls', 'joint', 'joints', 'infused pre roll', 'infused pre-roll'] },
-  { id: 'cat-vapes', slug: 'vapes', name: 'Vapes', sort: 30, aliases: ['vape', 'vapes', 'vaporizer', 'vaporizer cartridge', 'cartridge', 'cartridges', 'cart', 'carts', 'disposable vape', 'disposable', 'pod', 'pods'] },
-  { id: 'cat-concentrates', slug: 'concentrates', name: 'Concentrates', sort: 40, aliases: ['concentrate', 'concentrates', 'extract', 'extracts', 'resin', 'live resin', 'rosin', 'live rosin', 'wax', 'badder', 'budder', 'shatter', 'sauce', 'diamonds', 'hash', 'hashish'] },
-  { id: 'cat-edibles', slug: 'edibles', name: 'Edibles', sort: 50, aliases: ['edible', 'edibles', 'gummy', 'gummies', 'chocolate', 'chocolates', 'candy', 'candies', 'baked good', 'baked goods'] },
-  { id: 'cat-beverages', slug: 'beverages', name: 'Beverages', sort: 60, aliases: ['beverage', 'beverages', 'drink', 'drinks', 'shot', 'shots', 'drink mix', 'drink mixes', 'mixer', 'mixers'] },
-  { id: 'cat-tinctures', slug: 'tinctures', name: 'Tinctures', sort: 70, aliases: ['tincture', 'tinctures', 'drops', 'oral drops'] },
-  { id: 'cat-capsules', slug: 'capsules-tablets', name: 'Capsules & Tablets', sort: 80, aliases: ['capsule', 'capsules', 'tablet', 'tablets', 'pill', 'pills', 'softgel', 'softgels'] },
-  { id: 'cat-topicals', slug: 'topicals', name: 'Topicals', sort: 90, aliases: ['topical', 'topicals', 'balm', 'balms', 'salve', 'salves', 'lotion', 'lotions', 'cream', 'creams', 'patch', 'patches'] },
-  { id: 'cat-sublinguals', slug: 'sublinguals', name: 'Sublinguals', sort: 100, aliases: ['sublingual', 'sublinguals', 'strip', 'strips', 'lozenge', 'lozenges'] },
-  { id: 'cat-seeds-clones', slug: 'seeds-clones', name: 'Seeds & Clones', sort: 110, aliases: ['seed', 'seeds', 'clone', 'clones', 'plant', 'plants'] },
-  { id: 'cat-other', slug: 'other', name: 'Other / Uncategorized', sort: 999, aliases: ['other', 'uncategorized', 'unknown'] },
-];
-
 function normalize(value: unknown) {
-  return String(value ?? '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  return normalizeTaxonomyText(value);
 }
 
 function tableExists(db: Db, table: string) {
@@ -54,10 +39,10 @@ function seedCategories(db: Db) {
     VALUES (?,?,?,?,?,?)
     ON CONFLICT(normalized_alias,source_scope) DO UPDATE SET category_id=excluded.category_id,alias=excluded.alias
   `);
-  for (const category of CATEGORY_SEEDS) {
+  for (const category of PRODUCT_CATEGORY_DEFINITIONS) {
     categoryStatement.run(category.id, category.slug, category.name, null, category.sort, now, now);
     const aliases = new Map<string, string>();
-    for (const alias of [category.name, ...category.aliases]) {
+    for (const alias of [category.name, category.slug, ...category.aliases]) {
       const normalized = normalize(alias);
       if (normalized && !aliases.has(normalized)) aliases.set(normalized, alias);
     }
@@ -69,7 +54,7 @@ function seedCategories(db: Db) {
 
 function resolveWithoutEnsure(raw: unknown, db: Db): ProductCategory | null {
   const value = normalize(raw);
-  if (!value) return null;
+  if (!value || /^(indica|sativa|hybrid)$/.test(value)) return null;
   const exact = db.prepare(`
     SELECT c.id,c.slug,c.name,c.description,c.sort_order,c.active
     FROM cannabis_product_category_aliases a
@@ -125,7 +110,7 @@ function backfillWithoutEnsure(db: Db) {
   return { products, menuItems };
 }
 
-export function ensureProductCategorySchema(db: Db = getDatabase()) {
+export function ensureProductCategorySchema(db: Db = getDatabase(), options: { backfill?: boolean } = {}) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_product_categories (
       id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, parent_id TEXT,
@@ -146,10 +131,11 @@ export function ensureProductCategorySchema(db: Db = getDatabase()) {
   ensureColumn(db, 'cannabis_products', 'category_source', 'TEXT');
   ensureColumn(db, 'dispensary_menu_items', 'category_id', 'TEXT');
   ensureColumn(db, 'dispensary_menu_items', 'category_source', 'TEXT');
+  ensureProductIdentitySchema(db);
   if (tableExists(db, 'cannabis_products')) db.exec('CREATE INDEX IF NOT EXISTS cannabis_products_category_idx ON cannabis_products(category_id)');
   if (tableExists(db, 'dispensary_menu_items')) db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_category_id_idx ON dispensary_menu_items(category_id,active)');
   seedCategories(db);
-  backfillWithoutEnsure(db);
+  if (options.backfill !== false) backfillWithoutEnsure(db);
   return db;
 }
 
@@ -170,7 +156,7 @@ export function resolveProductCategory(raw: unknown, db: Db = getDatabase()): Pr
 }
 
 export function backfillProductCategories(db: Db = getDatabase()) {
-  ensureProductCategorySchema(db);
+  ensureProductCategorySchema(db, { backfill: false });
   return backfillWithoutEnsure(db);
 }
 

@@ -11,6 +11,8 @@
     "deploy": "bash scripts/deploy-no-downtime.sh",
     "db:init": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs",
     "admin:create": "bash scripts/create-admin.sh",
+    "products:taxonomy": "node --conditions=react-server --experimental-strip-types scripts/backfill-product-taxonomy.mjs",
+    "test:product-taxonomy": "node --experimental-strip-types scripts/test-product-taxonomy.mjs",
     "weedo:ingest:sc-labs": "node --conditions=react-server --experimental-strip-types scripts/ingest-sc-labs.mjs",
     "weedo:import:sc-labs": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-sc-labs-public.mjs",
     "weedo:import:kannapedia": "node --experimental-loader ./scripts/ts-extension-loader.mjs --conditions=react-server --experimental-strip-types scripts/import-kannapedia-public.mjs",

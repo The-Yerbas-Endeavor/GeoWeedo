@@ -3,7 +3,7 @@ export default function SiteHeader() {
     ['/how-to-play', 'How to play'],
     ['/leaderboard', 'Leaderboard'],
     ['/geoweedo-facts', 'GeoWeedo Facts'],
-    ['/product-chemistry', 'Product Chemistry'],
+    ['/product-chemistry', 'Products'],
     ['/cultivars', 'Cultivar Genetics'],
     ['/rewards', 'YERB rewards'],
     ['/for-dispensaries', 'For dispensaries'],

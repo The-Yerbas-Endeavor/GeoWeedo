@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getCultivarLinksForProduct } from '@/lib/kannapedia';
-import { getProductChemistryCatalog, getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
+import { getProductBrowseCatalog } from '@/lib/productBrowse';
+import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import '../weedo-facts/weedo-facts.css';
 import '../weedo-facts/contrast-fix.css';
 import '../weedo-facts/nutrition-label.css';
@@ -12,8 +13,8 @@ import './listings.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Cannabis Product Chemistry · GeoWeedo',
-  description: 'Search GeoWeedo Product Chemistry by product, consumer brand, licensed business, product category, batch, COA, and lab data.',
+  title: 'Cannabis Products · GeoWeedo',
+  description: 'Browse cannabis products by name, brand, or category. Open a product for GeoWeedo Facts, lab results, batches, COAs, and source details.',
 };
 
 type Props = {
@@ -22,7 +23,6 @@ type Props = {
     batch?: string | string[];
     q?: string | string[];
     brand?: string | string[];
-    business?: string | string[];
     type?: string | string[];
     page?: string | string[];
   }>;
@@ -32,70 +32,35 @@ function one(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function formatDate(value: string | null) {
+function displayType(value: string | null) {
   if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+  return value.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 export default async function ProductChemistryPage({ searchParams }: Props) {
   const query = await searchParams;
   const productId = one(query.product)?.trim() || '';
   const batchId = one(query.batch)?.trim() || null;
-  const q = one(query.q)?.trim() || '';
-  const brand = one(query.brand)?.trim() || '';
-  const business = one(query.business)?.trim() || '';
-  const productCategory = one(query.type)?.trim() || '';
-  const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
-  const record = productId ? getWeedoFactsProductListing(productId, batchId) : null;
-  const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
-  const catalog = getProductChemistryCatalog({ q, brand, business, type: productCategory, page: requestedPage, pageSize: 50 });
-  const filtersActive = Boolean(q || brand || business || productCategory);
-  const resultStart = catalog.matchingListings ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
-  const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingListings);
 
-  function pageHref(nextPage: number) {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (brand) params.set('brand', brand);
-    if (business) params.set('business', business);
-    if (productCategory) params.set('type', productCategory);
-    if (nextPage > 1) params.set('page', String(nextPage));
-    const queryString = params.toString();
-    return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
-  }
-
-  return (
-    <main className="landing-shell">
-      <SiteHeader />
-      <div className="weedoFactsPage productChemistryPage">
-        <section className="weedoFactsHero">
-          <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
-          <h1>Product Chemistry</h1>
-          <p className="weedoFactsLead">
-            Search source-backed cannabis product and batch chemistry by product, consumer brand, licensed business, product category, batch, COA, or laboratory data.
-          </p>
-          <div className="productChemistryStats" aria-label="Product Chemistry catalog totals">
-            <div><strong>{catalog.productCount.toLocaleString()}</strong><span>Products</span></div>
-            <div><strong>{catalog.totalListings.toLocaleString()}</strong><span>Sourced batches</span></div>
-            <div><strong>{catalog.brandCount.toLocaleString()}</strong><span>Consumer brands</span></div>
-            <div><strong>{catalog.businessCount.toLocaleString()}</strong><span>Licensed businesses</span></div>
-          </div>
-        </section>
-
-        {productId ? (
-          !record ? (
+  if (productId) {
+    const record = getWeedoFactsProductListing(productId, batchId);
+    const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
+    return (
+      <main className="landing-shell">
+        <SiteHeader />
+        <div className="weedoFactsPage productChemistryPage">
+          {!record ? (
             <section className="weedoFactsEmpty">
-              <strong>Product Chemistry not found.</strong>
+              <strong>Product not found.</strong>
               <p>This product or batch is not available in GeoWeedo.</p>
-              <a className="weedoFactsCoaLink" href="/product-chemistry">View all Product Chemistry →</a>
+              <a className="weedoFactsCoaLink" href="/product-chemistry">← Browse products</a>
             </section>
           ) : (
             <>
               <section className="weedoFactsHero productChemistryDetailHero">
-                <a className="nutritionalFactsBack" href="/product-chemistry">← All Product Chemistry</a>
-                <span className="weedoFactsKicker">CANNABIS PRODUCT CHEMISTRY</span>
-                <h2>{record.productName}</h2>
+                <a className="nutritionalFactsBack" href={`/product/${encodeURIComponent(record.productId)}`}>← Product overview</a>
+                <span className="weedoFactsKicker">DETAILED PRODUCT DATA</span>
+                <h1>{record.productName}</h1>
                 <p className="weedoFactsLead">
                   {[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ') || 'Cannabis product'}
                 </p>
@@ -106,43 +71,76 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               </section>
               <WeedoFactsProductLabel record={record} />
             </>
-          )
-        ) : null}
+          )}
+        </div>
+      </main>
+    );
+  }
 
-        <section className="nutritionalFactsIndex" aria-labelledby="product-chemistry-listings-heading">
+  const q = one(query.q)?.trim() || '';
+  const brand = one(query.brand)?.trim() || '';
+  const productCategory = one(query.type)?.trim() || '';
+  const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
+  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, page: requestedPage, pageSize: 36 });
+  const filtersActive = Boolean(q || brand || productCategory);
+  const resultStart = catalog.matchingProducts ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
+  const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingProducts);
+
+  function pageHref(nextPage: number) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (brand) params.set('brand', brand);
+    if (productCategory) params.set('type', productCategory);
+    if (nextPage > 1) params.set('page', String(nextPage));
+    const queryString = params.toString();
+    return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
+  }
+
+  return (
+    <main className="landing-shell">
+      <SiteHeader />
+      <div className="weedoFactsPage productChemistryPage">
+        <section className="weedoFactsHero productBrowseHero">
+          <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
+          <h1>Products</h1>
+          <p className="weedoFactsLead">
+            Browse by product, brand, or category. Open a product when you want lab results, batches, COAs, availability, and source-backed details.
+          </p>
+          <div className="productChemistryStats" aria-label="Product catalog totals">
+            <div><strong>{catalog.totalProducts.toLocaleString()}</strong><span>Products</span></div>
+            <div><strong>{catalog.categoryCount.toLocaleString()}</strong><span>Categories</span></div>
+            <div><strong>{catalog.brandCount.toLocaleString()}</strong><span>Brands</span></div>
+            <div><strong>{catalog.batchCount.toLocaleString()}</strong><span>Lab records</span></div>
+          </div>
+        </section>
+
+        <section className="nutritionalFactsIndex productBrowseIndex" aria-labelledby="product-listings-heading">
           <div className="nutritionalFactsIndexHead">
             <div>
-              <span className="weedoFactsEyebrow">SOURCE-BACKED CATALOG</span>
-              <h2 id="product-chemistry-listings-heading">Product Chemistry catalog</h2>
-              <p>GeoWeedo categories provide consistent grouping while the original source product type remains attached to each record.</p>
+              <span className="weedoFactsEyebrow">PRODUCT CATALOG</span>
+              <h2 id="product-listings-heading">Browse products</h2>
+              <p>Start simple. Choose a product to open its GeoWeedo Facts and deeper product data.</p>
             </div>
             <span className="nutritionalFactsCount">
-              {catalog.matchingListings ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingListings.toLocaleString()}` : '0'} {catalog.matchingListings === 1 ? 'batch' : 'batches'}
-              {filtersActive && catalog.matchingListings !== catalog.totalListings ? ` · ${catalog.totalListings.toLocaleString()} total` : ''}
+              {catalog.matchingProducts ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingProducts.toLocaleString()}` : '0'} {catalog.matchingProducts === 1 ? 'product' : 'products'}
+              {filtersActive && catalog.matchingProducts !== catalog.totalProducts ? ` · ${catalog.totalProducts.toLocaleString()} total` : ''}
             </span>
           </div>
 
-          <form className="productChemistryFilters" method="get" action="/product-chemistry">
+          <form className="productChemistryFilters productBrowseFilters" method="get" action="/product-chemistry">
             <label className="productChemistrySearch">
-              <span>Search catalog</span>
-              <input name="q" defaultValue={q} placeholder="Product, category, batch, COA, brand, business, license…" />
+              <span>Search products</span>
+              <input name="q" defaultValue={q} placeholder="Product or brand…" />
             </label>
             <label>
-              <span>Consumer brand</span>
+              <span>Brand</span>
               <select name="brand" defaultValue={brand}>
                 <option value="">All brands</option>
                 {catalog.brands.map(value => <option value={value} key={value}>{value}</option>)}
               </select>
             </label>
             <label>
-              <span>Licensed business</span>
-              <select name="business" defaultValue={business}>
-                <option value="">All businesses</option>
-                {catalog.businesses.map(value => <option value={value} key={value}>{value}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Product category</span>
+              <span>Category</span>
               <select name="type" defaultValue={productCategory}>
                 <option value="">All categories</option>
                 {catalog.productCategories.map(category => <option value={category.slug} key={category.id}>{category.name}</option>)}
@@ -154,55 +152,37 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             </div>
           </form>
 
-          {catalog.listings.length ? (
-            <div className="nutritionalFactsList">
-              {catalog.listings.map(listing => {
-                const tested = formatDate(listing.testedAt);
-                const identity = listing.batchNumber || listing.coaNumber || listing.batchId;
+          {catalog.products.length ? (
+            <div className="productBrowseGrid">
+              {catalog.products.map(product => {
+                const secondary = [displayType(product.canonicalProductType) || product.productType, product.netContents].filter(Boolean).join(' · ');
                 return (
-                  <a
-                    key={listing.batchId}
-                    className="nutritionalFactsListing productChemistryListing"
-                    href={`/product-chemistry?product=${encodeURIComponent(listing.productId)}&batch=${encodeURIComponent(listing.batchId)}`}
-                  >
-                    <span className="productChemistryIdentity">
-                      <span className="nutritionalFactsName">{listing.productName}</span>
-                      <span className="nutritionalFactsBrand">
-                        <strong>Consumer brand:</strong> {listing.brandName || 'Not reported'}
-                      </span>
-                      <span className="productChemistryBusiness">
-                        <strong>Licensed business:</strong> {listing.producerName || 'Not reported'}
-                        {listing.producerLicenseNumber ? ` · ${listing.producerLicenseNumber}` : ''}
-                      </span>
-                    </span>
-                    <span className="nutritionalFactsMeta">
-                      {listing.categoryName ? <span><strong>Category:</strong> {listing.categoryName}</span> : null}
-                      {listing.productType && listing.productType.toLowerCase() !== String(listing.categoryName || '').toLowerCase() ? <span><strong>Source type:</strong> {listing.productType}</span> : null}
-                      <span><strong>Batch / COA:</strong> {identity}</span>
-                      {listing.labName ? <span><strong>Lab:</strong> {listing.labName}</span> : null}
-                      {tested ? <span><strong>Tested:</strong> {tested}</span> : null}
-                      {listing.sourceName ? <span><strong>Source:</strong> {listing.sourceName}{listing.sourceName === 'Cannlytics' ? ' · normalized public dataset' : ''}</span> : null}
-                      <span><strong>Analytes:</strong> {listing.analyteCount}</span>
-                    </span>
-                    <span className="nutritionalFactsOpen">View chemistry →</span>
+                  <a key={product.productId} className="productBrowseCard" href={`/product/${encodeURIComponent(product.productId)}`}>
+                    <div className="productBrowseCardTop">
+                      <span className="productBrowseCategory">{product.categoryName || 'Other'}</span>
+                    </div>
+                    <strong className="productBrowseName">{product.productName}</strong>
+                    <span className="productBrowseBrand">{product.brandName || 'Brand not reported'}</span>
+                    {secondary ? <span className="productBrowseSecondary">{secondary}</span> : null}
+                    <span className="productBrowseOpen">View product →</span>
                   </a>
                 );
               })}
             </div>
           ) : (
             <div className="nutritionalFactsEmptyIndex">
-              {filtersActive ? 'No Product Chemistry listings match these filters.' : 'No Product Chemistry listings are available yet.'}
+              {filtersActive ? 'No products match these filters.' : 'No products are available yet.'}
             </div>
           )}
 
-          {catalog.pageCount > 1 ? <nav className="productChemistryPagination" aria-label="Product Chemistry pages">
+          {catalog.pageCount > 1 ? <nav className="productChemistryPagination" aria-label="Product catalog pages">
             {catalog.page > 1 ? <a href={pageHref(catalog.page - 1)}>← Previous</a> : <span />}
             <strong>Page {catalog.page.toLocaleString()} of {catalog.pageCount.toLocaleString()}</strong>
             {catalog.page < catalog.pageCount ? <a href={pageHref(catalog.page + 1)}>Next →</a> : <span />}
           </nav> : null}
 
           {catalog.hasCannlytics ? <div className="productChemistryAttribution">
-            <strong>Cannlytics attribution.</strong> Some Product Chemistry records are normalized from the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. GeoWeedo normalizes field names, product identities, and analyte naming; original source or COA links are retained when supplied by the dataset.
+            <strong>Data attribution.</strong> Some product records are normalized from the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Detailed source and COA information is shown only after opening a product.
           </div> : null}
         </section>
       </div>
