@@ -21,7 +21,7 @@ export default function WeedoFactsNativeScanBridge() {
 
     const handleClick = async (event: MouseEvent) => {
       const target = event.target instanceof Element
-        ? event.target.closest('.weedoFactsScanActions .weedoFactsScanButton')
+        ? event.target.closest('.weedoFactsScanActions .weedoFactsScanButton:not([data-geoweedo-photo-scanner])')
         : null;
       if (!target) return;
 
