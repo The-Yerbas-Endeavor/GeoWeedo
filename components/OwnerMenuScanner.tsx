@@ -66,6 +66,10 @@ function loadZxingBrowser() {
       else reject(new Error('Compatible product scanner could not load.'));
     };
     if (existing) {
+      if ((window as any).ZXingBrowser?.BrowserMultiFormatReader) {
+        finish();
+        return;
+      }
       existing.addEventListener('load', finish, { once: true });
       existing.addEventListener('error', () => reject(new Error('Compatible product scanner could not load.')), { once: true });
       return;
@@ -80,6 +84,56 @@ function loadZxingBrowser() {
     document.head.appendChild(script);
   });
   return zxingLoader;
+}
+
+const scannerVideoConstraints: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 30, max: 60 },
+};
+
+const browserFormats = [
+  'qr_code', 'data_matrix', 'ean_13', 'ean_8', 'upc_a', 'upc_e',
+  'code_128', 'code_39', 'code_93', 'itf', 'codabar', 'pdf417', 'aztec',
+];
+
+async function tuneScannerStream(stream: MediaStream | null) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track) return;
+  try {
+    const capabilities = (track as any).getCapabilities?.();
+    const advanced: Record<string, unknown> = {};
+    if (Array.isArray(capabilities?.focusMode) && capabilities.focusMode.includes('continuous')) advanced.focusMode = 'continuous';
+    if (Array.isArray(capabilities?.exposureMode) && capabilities.exposureMode.includes('continuous')) advanced.exposureMode = 'continuous';
+    if (Array.isArray(capabilities?.whiteBalanceMode) && capabilities.whiteBalanceMode.includes('continuous')) advanced.whiteBalanceMode = 'continuous';
+    if (Object.keys(advanced).length) await track.applyConstraints({ advanced: [advanced] } as any);
+  } catch {}
+}
+
+function configureZxingReader(zxing: any) {
+  const barcodeFormat = zxing?.BarcodeFormat;
+  const decodeHintType = zxing?.DecodeHintType;
+  const formats = barcodeFormat
+    ? [
+        barcodeFormat.QR_CODE, barcodeFormat.DATA_MATRIX, barcodeFormat.UPC_A, barcodeFormat.UPC_E,
+        barcodeFormat.EAN_13, barcodeFormat.EAN_8, barcodeFormat.CODE_128, barcodeFormat.CODE_39,
+        barcodeFormat.CODE_93, barcodeFormat.ITF, barcodeFormat.CODABAR, barcodeFormat.PDF_417,
+        barcodeFormat.AZTEC,
+      ].filter((format: unknown) => format !== undefined && format !== null)
+    : [];
+
+  if (decodeHintType && typeof Map !== 'undefined') {
+    const hints = new Map<any, any>();
+    if (formats.length && decodeHintType.POSSIBLE_FORMATS !== undefined) hints.set(decodeHintType.POSSIBLE_FORMATS, formats);
+    if (decodeHintType.TRY_HARDER !== undefined) hints.set(decodeHintType.TRY_HARDER, true);
+    if (decodeHintType.ALSO_INVERTED !== undefined) hints.set(decodeHintType.ALSO_INVERTED, true);
+    return new zxing.BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 80, delayBetweenScanSuccess: 250 });
+  }
+
+  const reader = new zxing.BrowserMultiFormatReader();
+  if (formats.length) reader.possibleFormats = formats;
+  return reader;
 }
 
 function money(cents: number | null) {
@@ -114,6 +168,8 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const controlsRef = useRef<any>(null);
+  const frameRef = useRef<number | null>(null);
+  const resolvingScanRef = useRef(false);
 
   useEffect(() => () => stopScanner(), []);
   useEffect(() => {
@@ -134,6 +190,8 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
   }
 
   function stopScanner() {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
     try { controlsRef.current?.stop?.(); } catch {}
     controlsRef.current = null;
     streamRef.current?.getTracks().forEach(track => track.stop());
@@ -144,7 +202,8 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
 
   async function resolveScan(rawValue: string) {
     const value = rawValue.trim();
-    if (!value) return;
+    if (!value || resolvingScanRef.current) return;
+    resolvingScanRef.current = true;
     const type = inferIdentifierType(value);
     setLoading(true);
     setError('');
@@ -187,6 +246,7 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
       setError(scanError instanceof Error ? scanError.message : 'Product scan lookup failed.');
     } finally {
       setLoading(false);
+      resolvingScanRef.current = false;
     }
   }
 
@@ -213,43 +273,74 @@ export default function OwnerMenuScanner({ dispensaryId, apiBase = '/api/admin/o
       return;
     }
 
+    setScannerOpen(true);
+    setScannerMessage('Starting rear camera…');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const video = videoRef.current;
+    if (!video) {
+      setScannerOpen(false);
+      setError('Camera preview could not start.');
+      return;
+    }
+
+    let detectorStarted = false;
     try {
-      setScannerMessage('Loading QR / barcode scanner…');
-      const zxing = await loadZxingBrowser();
-      setScannerOpen(true);
-      await new Promise(resolve => setTimeout(resolve, 0));
-      const video = videoRef.current;
-      if (!video) throw new Error('Camera preview could not start.');
-      setScannerMessage('Point the camera at the package QR code or barcode. For UPC/EAN, fill most of the frame width.');
-      const reader = new zxing.BrowserMultiFormatReader();
-      const barcodeFormat = zxing.BarcodeFormat;
-      if (barcodeFormat) {
-        const formats = [
-          barcodeFormat.QR_CODE,
-          barcodeFormat.UPC_A,
-          barcodeFormat.UPC_E,
-          barcodeFormat.EAN_13,
-          barcodeFormat.EAN_8,
-          barcodeFormat.CODE_128,
-          barcodeFormat.CODE_39,
-          barcodeFormat.CODE_93,
-          barcodeFormat.ITF,
-          barcodeFormat.CODABAR,
-        ].filter((format: unknown) => format !== undefined && format !== null);
-        if (formats.length) reader.possibleFormats = formats;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: scannerVideoConstraints, audio: false });
+      streamRef.current = stream;
+      video.srcObject = stream;
+      await video.play();
+      await tuneScannerStream(stream);
+      setScannerMessage('Point the camera at the package code. GeoWeedo is using native detection + enhanced barcode decoding.');
+
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+      if (BarcodeDetectorCtor) {
+        try {
+          let detector: any;
+          if (typeof BarcodeDetectorCtor.getSupportedFormats === 'function') {
+            const supported = await BarcodeDetectorCtor.getSupportedFormats();
+            const formats = browserFormats.filter(format => supported.includes(format));
+            detector = formats.length ? new BarcodeDetectorCtor({ formats }) : new BarcodeDetectorCtor();
+          } else {
+            detector = new BarcodeDetectorCtor();
+          }
+          detectorStarted = true;
+          let lastDetectionAt = 0;
+          const detectFrame = async (time: number) => {
+            if (resolvingScanRef.current || streamRef.current !== stream) return;
+            if (time - lastDetectionAt >= 90 && video.readyState >= 2) {
+              lastDetectionAt = time;
+              try {
+                const codes = await detector.detect(video);
+                const hit = codes?.find((code: any) => code?.rawValue);
+                if (hit?.rawValue) {
+                  stopScanner();
+                  await resolveScan(String(hit.rawValue));
+                  return;
+                }
+              } catch {}
+            }
+            frameRef.current = requestAnimationFrame(detectFrame);
+          };
+          frameRef.current = requestAnimationFrame(detectFrame);
+        } catch {
+          detectorStarted = false;
+        }
       }
-      const controls = await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
-        video,
-        (scanResult: any) => {
+
+      try {
+        const zxing = await loadZxingBrowser();
+        if (streamRef.current !== stream || resolvingScanRef.current) return;
+        const reader = configureZxingReader(zxing);
+        const controls = await reader.decodeFromVideoElement(video, (scanResult: any) => {
           const value = scanResult?.getText?.() || scanResult?.text;
           if (!value) return;
           stopScanner();
           void resolveScan(String(value));
-        },
-      );
-      controlsRef.current = controls;
-      streamRef.current = video.srcObject instanceof MediaStream ? video.srcObject : null;
+        });
+        controlsRef.current = controls;
+      } catch (zxingError) {
+        if (!detectorStarted) throw zxingError;
+      }
     } catch (scanError) {
       stopScanner();
       setError(scanError instanceof Error ? scanError.message : 'Camera scanner could not start.');
