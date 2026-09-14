@@ -265,7 +265,7 @@ export async function installNativeListeners(): Promise<() => void> {
 
   if (network?.addListener) {
     const handle = await network.addListener('networkStatusChange', (status: NativeNetworkStatus) => {
-      root.dataset.nativeNetwork = status.connected ? initial.connectionType : 'offline';
+      root.dataset.nativeNetwork = status.connected ? status.connectionType : 'offline';
       window.dispatchEvent(new CustomEvent('geoweedo:native-network', { detail: status }));
     });
     if (handle) handles.push(handle);
