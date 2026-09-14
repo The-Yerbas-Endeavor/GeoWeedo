@@ -61,6 +61,14 @@ function sameTargets(a: Targets, b: Targets) {
     && a.nativeControls === b.nativeControls;
 }
 
+function scannedType(result: WeedoFactsScanResult) {
+  const value = String(result?.value || '').trim();
+  const format = String(result?.format ?? '').toUpperCase();
+  if (/^https?:\/\//i.test(value) || format.includes('QR') || format.includes('DATA_MATRIX')) return 'qr';
+  if (/^\d{8,14}$/.test(value.replace(/[\s-]/g, ''))) return 'upc';
+  return undefined;
+}
+
 async function sleep(ms: number) {
   await new Promise(resolve => window.setTimeout(resolve, ms));
 }
@@ -101,24 +109,24 @@ export default function GlobalPhotoBarcodeScanner() {
     }
   }, [targets.facts]);
 
+  async function postScan(result: WeedoFactsScanResult) {
+    const value = result.value.trim();
+    const response = await fetch('/api/weedo-facts/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: value, type: scannedType(result) }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || 'Product lookup failed.');
+    return body;
+  }
+
   async function resolveMapScan(result: WeedoFactsScanResult) {
     setMessage('Reading GeoWeedo Facts…');
     const value = result.value.trim();
-    const type = /^https?:\/\//i.test(value)
-      ? 'qr'
-      : /^\d{8,14}$/.test(value.replace(/[\s-]/g, ''))
-        ? 'upc'
-        : undefined;
 
     try {
-      const response = await fetch('/api/weedo-facts/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: value, type }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body?.error || 'Product lookup failed.');
-
+      const body = await postScan(result);
       const record = body?.record || null;
       const productId = String(record?.productId || body?.productId || '').trim();
       const batchId = String(record?.batchId || body?.batchId || '').trim();
@@ -134,6 +142,25 @@ export default function GlobalPhotoBarcodeScanner() {
     }
   }
 
+  async function handleFactsPhoto(result: WeedoFactsScanResult, input: HTMLInputElement) {
+    const value = result.value.trim();
+
+    // URL-based QR scans already use /api/weedo-facts/scan when the existing form submits.
+    // Persist non-URL photo scans first so UPC/EAN and package barcodes follow the same scan audit path.
+    if (!/^https?:\/\//i.test(value)) {
+      setMessage('Reading GeoWeedo Facts…');
+      try {
+        await postScan(result);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not record the code from that photo.');
+        return;
+      }
+    }
+
+    setMessage('');
+    submitExistingLookup(input, value);
+  }
+
   async function handlePhotoResult(result: WeedoFactsScanResult) {
     const value = String(result?.value || '').trim();
     if (!value) return;
@@ -143,7 +170,10 @@ export default function GlobalPhotoBarcodeScanner() {
     if (targets.owner && ownerInput && submitExistingLookup(ownerInput, value)) return;
 
     const factsInput = factsScanInput();
-    if (targets.facts && factsInput && submitExistingLookup(factsInput, value)) return;
+    if (targets.facts && factsInput) {
+      await handleFactsPhoto(result, factsInput);
+      return;
+    }
 
     await resolveMapScan(result);
   }
