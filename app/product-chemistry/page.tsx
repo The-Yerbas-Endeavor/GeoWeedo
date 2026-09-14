@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Cannabis Product Chemistry · GeoWeedo',
-  description: 'Search GeoWeedo Product Chemistry by product, consumer brand, licensed business, product type, batch, COA, and lab data.',
+  description: 'Search GeoWeedo Product Chemistry by product, consumer brand, licensed business, product category, batch, COA, and lab data.',
 };
 
 type Props = {
@@ -45,12 +45,12 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const q = one(query.q)?.trim() || '';
   const brand = one(query.brand)?.trim() || '';
   const business = one(query.business)?.trim() || '';
-  const productType = one(query.type)?.trim() || '';
+  const productCategory = one(query.type)?.trim() || '';
   const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
   const record = productId ? getWeedoFactsProductListing(productId, batchId) : null;
   const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
-  const catalog = getProductChemistryCatalog({ q, brand, business, type: productType, page: requestedPage, pageSize: 50 });
-  const filtersActive = Boolean(q || brand || business || productType);
+  const catalog = getProductChemistryCatalog({ q, brand, business, type: productCategory, page: requestedPage, pageSize: 50 });
+  const filtersActive = Boolean(q || brand || business || productCategory);
   const resultStart = catalog.matchingListings ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
   const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingListings);
 
@@ -59,7 +59,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     if (q) params.set('q', q);
     if (brand) params.set('brand', brand);
     if (business) params.set('business', business);
-    if (productType) params.set('type', productType);
+    if (productCategory) params.set('type', productCategory);
     if (nextPage > 1) params.set('page', String(nextPage));
     const queryString = params.toString();
     return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
@@ -73,7 +73,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
           <h1>Product Chemistry</h1>
           <p className="weedoFactsLead">
-            Search source-backed cannabis product and batch chemistry by product, consumer brand, licensed business, product type, batch, COA, or laboratory data.
+            Search source-backed cannabis product and batch chemistry by product, consumer brand, licensed business, product category, batch, COA, or laboratory data.
           </p>
           <div className="productChemistryStats" aria-label="Product Chemistry catalog totals">
             <div><strong>{catalog.productCount.toLocaleString()}</strong><span>Products</span></div>
@@ -114,7 +114,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             <div>
               <span className="weedoFactsEyebrow">SOURCE-BACKED CATALOG</span>
               <h2 id="product-chemistry-listings-heading">Product Chemistry catalog</h2>
-              <p>Consumer brand and licensed business are kept as separate identities. Every result below is backed by a batch record with source provenance.</p>
+              <p>GeoWeedo categories provide consistent grouping while the original source product type remains attached to each record.</p>
             </div>
             <span className="nutritionalFactsCount">
               {catalog.matchingListings ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingListings.toLocaleString()}` : '0'} {catalog.matchingListings === 1 ? 'batch' : 'batches'}
@@ -125,7 +125,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           <form className="productChemistryFilters" method="get" action="/product-chemistry">
             <label className="productChemistrySearch">
               <span>Search catalog</span>
-              <input name="q" defaultValue={q} placeholder="Product, batch, COA, brand, business, license…" />
+              <input name="q" defaultValue={q} placeholder="Product, category, batch, COA, brand, business, license…" />
             </label>
             <label>
               <span>Consumer brand</span>
@@ -142,10 +142,10 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               </select>
             </label>
             <label>
-              <span>Product type</span>
-              <select name="type" defaultValue={productType}>
-                <option value="">All types</option>
-                {catalog.productTypes.map(value => <option value={value} key={value}>{value}</option>)}
+              <span>Product category</span>
+              <select name="type" defaultValue={productCategory}>
+                <option value="">All categories</option>
+                {catalog.productCategories.map(category => <option value={category.slug} key={category.id}>{category.name}</option>)}
               </select>
             </label>
             <div className="productChemistryFilterActions">
@@ -176,7 +176,8 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                       </span>
                     </span>
                     <span className="nutritionalFactsMeta">
-                      {listing.productType ? <span><strong>Type:</strong> {listing.productType}</span> : null}
+                      {listing.categoryName ? <span><strong>Category:</strong> {listing.categoryName}</span> : null}
+                      {listing.productType && listing.productType.toLowerCase() !== String(listing.categoryName || '').toLowerCase() ? <span><strong>Source type:</strong> {listing.productType}</span> : null}
                       <span><strong>Batch / COA:</strong> {identity}</span>
                       {listing.labName ? <span><strong>Lab:</strong> {listing.labName}</span> : null}
                       {tested ? <span><strong>Tested:</strong> {tested}</span> : null}
