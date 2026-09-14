@@ -37,6 +37,21 @@ export type WeedoFactsScanResult = {
   format: number | string | null;
 };
 
+const PRODUCT_BARCODE_FORMATS = [
+  'QR_CODE',
+  'DATA_MATRIX',
+  'EAN_13',
+  'EAN_8',
+  'UPC_A',
+  'UPC_E',
+  'CODE_128',
+  'CODE_39',
+  'CODE_93',
+  'ITF',
+  'CODABAR',
+  'PDF_417',
+] as const;
+
 function runtime(): CapacitorRuntime | undefined {
   if (typeof window === 'undefined') return undefined;
   return (window as Window & { Capacitor?: CapacitorRuntime }).Capacitor;
@@ -153,10 +168,43 @@ export async function getNativeNetworkStatus(): Promise<NativeNetworkStatus> {
   };
 }
 
-export async function scanWeedoFactsCode(): Promise<WeedoFactsScanResult> {
+async function scanWithEnhancedNativeScanner(): Promise<WeedoFactsScanResult | null> {
+  const scanner = plugin('BarcodeScanner');
+  if (!scanner?.scan) return null;
+
+  const platform = getNativePlatform();
+  if (platform === 'android' && scanner.isGoogleBarcodeScannerModuleAvailable) {
+    try {
+      const state = await scanner.isGoogleBarcodeScannerModuleAvailable();
+      if (!state?.available && scanner.installGoogleBarcodeScannerModule) {
+        await scanner.installGoogleBarcodeScannerModule();
+      }
+    } catch {
+      // If the Google scanner module cannot be prepared, scan() may still work.
+      // Any real scan failure is handled by the legacy fallback below.
+    }
+  }
+
+  const result = await scanner.scan({
+    formats: PRODUCT_BARCODE_FORMATS,
+    autoZoom: true,
+  });
+  const barcode = Array.isArray(result?.barcodes)
+    ? result.barcodes.find((item: any) => String(item?.rawValue || item?.displayValue || '').trim())
+    : null;
+  const value = String(barcode?.rawValue || barcode?.displayValue || '').trim();
+  if (!value) throw new Error('No barcode or QR code was captured.');
+
+  return {
+    value,
+    format: barcode?.format ?? null,
+  };
+}
+
+async function scanWithLegacyNativeScanner(): Promise<WeedoFactsScanResult> {
   const scanner = plugin('CapacitorBarcodeScanner');
-  if (!isNativeApp() || !scanner?.scanBarcode) {
-    throw new Error('Native Weedo Facts scanning is available in the GeoWeedo Android and iOS apps.');
+  if (!scanner?.scanBarcode) {
+    throw new Error('Native GeoWeedo Facts scanning is not available in this app build.');
   }
 
   const platform = getNativePlatform();
@@ -176,11 +224,27 @@ export async function scanWeedoFactsCode(): Promise<WeedoFactsScanResult> {
   const value = String(result?.ScanResult || '').trim();
   if (!value) throw new Error('No barcode or QR code was captured.');
 
-  await nativeHaptic('success');
-  const detail: WeedoFactsScanResult = {
+  return {
     value,
     format: result?.format ?? null,
   };
+}
+
+export async function scanWeedoFactsCode(): Promise<WeedoFactsScanResult> {
+  if (!isNativeApp()) {
+    throw new Error('Native GeoWeedo Facts scanning is available in the GeoWeedo Android and iOS apps.');
+  }
+
+  let detail: WeedoFactsScanResult;
+  try {
+    detail = (await scanWithEnhancedNativeScanner()) || (await scanWithLegacyNativeScanner());
+  } catch (enhancedError) {
+    const message = enhancedError instanceof Error ? enhancedError.message : String(enhancedError || '');
+    if (/cancel|canceled|cancelled/i.test(message)) throw enhancedError;
+    detail = await scanWithLegacyNativeScanner();
+  }
+
+  await nativeHaptic('success');
   window.dispatchEvent(new CustomEvent('geoweedo:weedo-facts-scanned', { detail }));
   return detail;
 }
@@ -201,7 +265,7 @@ export async function installNativeListeners(): Promise<() => void> {
 
   if (network?.addListener) {
     const handle = await network.addListener('networkStatusChange', (status: NativeNetworkStatus) => {
-      root.dataset.nativeNetwork = status.connected ? status.connectionType : 'offline';
+      root.dataset.nativeNetwork = status.connected ? initial.connectionType : 'offline';
       window.dispatchEvent(new CustomEvent('geoweedo:native-network', { detail: status }));
     });
     if (handle) handles.push(handle);
