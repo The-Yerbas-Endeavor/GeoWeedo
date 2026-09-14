@@ -109,7 +109,7 @@ function backfillWithoutEnsure(db: Db) {
   return { products, menuItems };
 }
 
-export function ensureProductCategorySchema(db: Db = getDatabase()) {
+export function ensureProductCategorySchema(db: Db = getDatabase(), options: { backfill?: boolean } = {}) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_product_categories (
       id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, parent_id TEXT,
@@ -133,7 +133,7 @@ export function ensureProductCategorySchema(db: Db = getDatabase()) {
   if (tableExists(db, 'cannabis_products')) db.exec('CREATE INDEX IF NOT EXISTS cannabis_products_category_idx ON cannabis_products(category_id)');
   if (tableExists(db, 'dispensary_menu_items')) db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_category_id_idx ON dispensary_menu_items(category_id,active)');
   seedCategories(db);
-  backfillWithoutEnsure(db);
+  if (options.backfill !== false) backfillWithoutEnsure(db);
   return db;
 }
 
@@ -154,7 +154,7 @@ export function resolveProductCategory(raw: unknown, db: Db = getDatabase()): Pr
 }
 
 export function backfillProductCategories(db: Db = getDatabase()) {
-  ensureProductCategorySchema(db);
+  ensureProductCategorySchema(db, { backfill: false });
   return backfillWithoutEnsure(db);
 }
 
