@@ -56,7 +56,8 @@ function seedCategories(db: Db) {
   `);
   for (const category of CATEGORY_SEEDS) {
     categoryStatement.run(category.id, category.slug, category.name, null, category.sort, now, now);
-    for (const alias of category.aliases) {
+    const aliases = [...new Set([category.name, ...category.aliases])];
+    for (const alias of aliases) {
       const normalized = normalize(alias);
       aliasStatement.run(`alias-${category.id}-${normalized.replace(/\s+/g, '-')}`, category.id, alias, normalized, '*', now);
     }
