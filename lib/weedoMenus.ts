@@ -207,12 +207,12 @@ function canonicalCategoryForInput(db: ReturnType<typeof getDatabase>, input: Me
     if (!category) throw new Error('Product category was not found.');
     return { id: category.id, source: input.categorySource || 'manual' };
   }
-  const mapped = resolveProductCategory(input.category, db);
-  if (mapped) return { id: mapped.id, source: input.categorySource || 'auto' };
   if (input.productId) {
     const product = db.prepare('SELECT category_id FROM cannabis_products WHERE id=? LIMIT 1').get(input.productId) as any;
     if (product?.category_id) return { id: String(product.category_id), source: 'product' };
   }
+  const mapped = resolveProductCategory(input.category, db);
+  if (mapped) return { id: mapped.id, source: input.categorySource || 'auto' };
   return { id: null, source: null };
 }
 
@@ -242,8 +242,12 @@ export function listDispensaryMenu(dispensaryId: string) {
     SELECT mi.*,m.dispensary_id,m.menu_name,
            COALESCE(mi.image_url,(SELECT pm.image_url FROM cannabis_product_media pm WHERE pm.product_id=mi.product_id ORDER BY pm.is_primary DESC,pm.updated_at DESC LIMIT 1)) AS display_image_url,
            p.product_name AS linked_product_name,p.brand_name AS linked_brand_name,p.product_type AS linked_product_type,
-           COALESCE(mc.name,pc.name,mi.category) AS display_category,
-           COALESCE(mc.id,pc.id) AS canonical_category_id,
+           mi.category AS source_category,
+           COALESCE(pc.name,mc.name,mi.category) AS display_category,
+           COALESCE(pc.id,mc.id) AS canonical_category_id,
+           COALESCE(pc.slug,mc.slug,'other') AS canonical_category_slug,
+           COALESCE(pc.name,mc.name,mi.category,'Other') AS canonical_category_name,
+           CASE WHEN pc.id IS NOT NULL THEN 'product' ELSE COALESCE(mi.category_source,'menu') END AS canonical_category_source,
            b.batch_number AS linked_batch_number,b.uid AS linked_uid,b.overall_status AS linked_batch_status,b.verified AS linked_batch_verified
       FROM dispensary_menus m
       JOIN dispensary_menu_items mi ON mi.menu_id=m.id
@@ -252,7 +256,7 @@ export function listDispensaryMenu(dispensaryId: string) {
       LEFT JOIN cannabis_product_categories pc ON pc.id=p.category_id
       LEFT JOIN cannabis_batches b ON b.id=mi.batch_id
      WHERE m.dispensary_id=? AND m.active=1 AND mi.active=1
-     ORDER BY COALESCE(mc.sort_order,pc.sort_order,999),COALESCE(mi.brand_name,''),mi.item_name
+     ORDER BY COALESCE(pc.sort_order,mc.sort_order,999),COALESCE(mi.brand_name,p.brand_name,''),mi.item_name
   `).all(dispensaryId) as any[];
 }
 

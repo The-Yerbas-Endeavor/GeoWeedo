@@ -93,18 +93,31 @@ function backfillWithoutEnsure(db: Db) {
 
   if (tableExists(db, 'dispensary_menu_items')) {
     const rows = db.prepare(`
-      SELECT mi.id,mi.category,p.category_id AS product_category_id
+      SELECT mi.id,mi.category,mi.category_id,mi.category_source,p.category_id AS product_category_id
       FROM dispensary_menu_items mi
       LEFT JOIN cannabis_products p ON p.id=mi.product_id
       WHERE mi.category_id IS NULL
-    `).all() as Array<{ id: string; category: string | null; product_category_id: string | null }>;
-    const updateMenu = db.prepare('UPDATE dispensary_menu_items SET category_id=?,category_source=?,updated_at=? WHERE id=? AND category_id IS NULL');
+         OR (p.category_id IS NOT NULL AND COALESCE(mi.category_source,'') IN ('','auto','product'))
+    `).all() as Array<{
+      id: string;
+      category: string | null;
+      category_id: string | null;
+      category_source: string | null;
+      product_category_id: string | null;
+    }>;
+    const updateMenu = db.prepare('UPDATE dispensary_menu_items SET category_id=?,category_source=?,updated_at=? WHERE id=?');
     for (const row of rows) {
-      const category = resolveWithoutEnsure(row.category, db);
-      const categoryId = category?.id || row.product_category_id || null;
-      if (!categoryId) continue;
-      updateMenu.run(categoryId, category ? 'auto' : 'product', now, row.id);
-      menuItems += 1;
+      let categoryId = row.product_category_id || null;
+      let source = row.product_category_id ? 'product' : null;
+      if (!categoryId) {
+        const category = resolveWithoutEnsure(row.category, db);
+        categoryId = category?.id || null;
+        source = category ? 'auto' : null;
+      }
+      if (!categoryId || !source) continue;
+      if (row.category_id === categoryId && row.category_source === source) continue;
+      const result = updateMenu.run(categoryId, source, now, row.id);
+      menuItems += Number(result.changes || 0);
     }
   }
   return { products, menuItems };
