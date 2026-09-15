@@ -9,6 +9,7 @@ import {
   heartbeatSourceUpdate,
   CANNLYTICS_REGIONS,
 } from '../lib/weedoDataSources.ts';
+import { clearSourceWorkerControl, writeSourceWorkerControl } from '../lib/weedoSourceWorker.ts';
 
 const sourceId = process.argv[2];
 const region = String(process.argv[3] || '').toLowerCase();
@@ -28,9 +29,15 @@ const startedAt = new Date().toISOString();
 fs.writeSync(log, `\n\n=== ${startedAt} starting ${sourceId}${region ? ` ${region.toUpperCase()}` : ''} update ===\n`);
 
 const MIN_CANNLYTICS_FREE_BYTES = 3 * 1024 * 1024 * 1024;
+const STOP_MESSAGE = 'Stopped by admin. The last saved Cannlytics checkpoint was preserved and can be resumed safely.';
 
 beginSourceUpdate(sourceId);
+writeSourceWorkerControl(sourceId, process.pid, region || null);
 let finalized = false;
+let stopRequested = false;
+let currentChild = null;
+let forceKillTimer = null;
+
 const heartbeat = setInterval(() => {
   try { heartbeatSourceUpdate(sourceId); } catch (error) {
     fs.writeSync(log, `\nHEARTBEAT WARNING: ${error instanceof Error ? error.message : String(error)}\n`);
@@ -38,10 +45,19 @@ const heartbeat = setInterval(() => {
 }, 30_000);
 heartbeat.unref?.();
 
+function cleanupControl() {
+  clearSourceWorkerControl(sourceId, process.pid);
+  if (forceKillTimer) {
+    clearTimeout(forceKillTimer);
+    forceKillTimer = null;
+  }
+}
+
 function finish(code, errorMessage) {
   if (finalized) return;
   finalized = true;
   clearInterval(heartbeat);
+  cleanupControl();
   const completedAt = new Date().toISOString();
   if (code === 0) {
     finishSourceUpdate(sourceId, { completedAt, region: region || null, logPath });
@@ -56,6 +72,31 @@ function finish(code, errorMessage) {
   fs.closeSync(log);
   process.exitCode = code || 0;
 }
+
+function finishStopped() {
+  finish(1, STOP_MESSAGE);
+}
+
+function requestStop(signal = 'SIGTERM') {
+  if (finalized || stopRequested) return;
+  stopRequested = true;
+  const requestedAt = new Date().toISOString();
+  fs.writeSync(log, `\n--- ${requestedAt} stop requested by admin (${signal}); preserving last saved checkpoint ---\n`);
+  if (!currentChild) {
+    finishStopped();
+    return;
+  }
+  try { currentChild.kill('SIGTERM'); } catch {}
+  forceKillTimer = setTimeout(() => {
+    if (!currentChild || finalized) return;
+    fs.writeSync(log, `\n--- ${new Date().toISOString()} importer did not stop after 8s; forcing child exit ---\n`);
+    try { currentChild.kill('SIGKILL'); } catch {}
+  }, 8000);
+  forceKillTimer.unref?.();
+}
+
+process.on('SIGTERM', () => requestStop('SIGTERM'));
+process.on('SIGINT', () => requestStop('SIGINT'));
 
 function commandForSource() {
   const currentYear = new Date().getUTCFullYear();
@@ -117,6 +158,10 @@ function hasCannlyticsDiskHeadroom() {
 
 function runChunk() {
   if (finalized) return;
+  if (stopRequested) {
+    finishStopped();
+    return;
+  }
   if (!hasCannlyticsDiskHeadroom()) return;
 
   if (serverIsBusy()) {
@@ -138,14 +183,21 @@ function runChunk() {
     },
     stdio: ['ignore', log, log],
   });
+  currentChild = child;
 
   let spawnFailed = false;
   child.once('error', error => {
     spawnFailed = true;
+    currentChild = null;
     finish(1, error.message);
   });
   child.once('close', code => {
+    currentChild = null;
     if (spawnFailed || finalized) return;
+    if (stopRequested) {
+      finishStopped();
+      return;
+    }
     if (sourceId === 'cannlytics' && code === 75) {
       const checkpointAt = new Date().toISOString();
       fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 15s before next chunk ---\n`);
