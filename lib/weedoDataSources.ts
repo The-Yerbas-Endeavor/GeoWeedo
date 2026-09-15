@@ -34,7 +34,9 @@ export const WEEDO_DATA_SOURCES = [
   },
 ] as const;
 
+const SOURCE_HEARTBEAT_DELAYED_MS = 90 * 1000;
 const SOURCE_STALE_MS = 10 * 60 * 1000;
+let sourceSchemaReady = false;
 
 function tableExists(db: any, name: string) {
   return Boolean(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name));
@@ -48,6 +50,7 @@ function ensureColumn(db: any, table: string, column: string, definition: string
 
 function ensureSourceSchema() {
   const db = getDatabase();
+  if (sourceSchemaReady) return db;
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_data_sources (
       id TEXT PRIMARY KEY,
@@ -106,6 +109,7 @@ function ensureSourceSchema() {
     VALUES (?, ?, ?)
   `);
   for (const [code,, upstream] of CANNLYTICS_REGIONS) regionInsert.run(code, upstream, now);
+  sourceSchemaReady = true;
   return db;
 }
 
@@ -163,8 +167,10 @@ function countCannlytics(db: any) {
   for (const row of db.prepare(`SELECT * FROM cannlytics_state_sync`).all() as any[]) {
     syncRows.set(String(row.state_code), row);
   }
-  const regions = CANNLYTICS_REGIONS.map(([code,label,upstreamRecords]) => {
+  const regions = CANNLYTICS_REGIONS.map(([code,label,configuredUpstreamRecords]) => {
     const sync = syncRows.get(code);
+    const syncedUpstreamRecords = Number(sync?.upstream_records || 0);
+    const upstreamRecords = syncedUpstreamRecords > 0 ? syncedUpstreamRecords : configuredUpstreamRecords;
     const importedRecords = importedByState.get(code) || 0;
     const processedRecords = Number(sync?.processed_records || 0);
     return {
@@ -181,10 +187,16 @@ function countCannlytics(db: any) {
   return { records, products, primaryLabel:'products', secondaryCount:regions.filter(row => row.importedRecords > 0).length, secondaryLabel:'states imported', regions };
 }
 
-function runningStateIsStale(row: any) {
-  if (row?.state !== 'running') return false;
+function runningHeartbeatState(row: any) {
+  if (row?.state !== 'running') return { stale:false, heartbeatDelayed:false, heartbeatAgeMs:null as number|null };
   const heartbeat = new Date(row.updated_at || row.last_started_at || '').getTime();
-  return !Number.isFinite(heartbeat) || Date.now() - heartbeat > SOURCE_STALE_MS;
+  if (!Number.isFinite(heartbeat)) return { stale:true, heartbeatDelayed:true, heartbeatAgeMs:null as number|null };
+  const heartbeatAgeMs = Math.max(0, Date.now() - heartbeat);
+  return {
+    stale: heartbeatAgeMs > SOURCE_STALE_MS,
+    heartbeatDelayed: heartbeatAgeMs > SOURCE_HEARTBEAT_DELAYED_MS,
+    heartbeatAgeMs,
+  };
 }
 
 export function getSourceSummaries() {
@@ -195,12 +207,12 @@ export function getSourceSummaries() {
     const counts = row.id === 'sc-labs' ? countScLabs(db) : row.id === 'cannlytics' ? countCannlytics(db) : countKannapedia(db);
     let lastSummary: unknown = null;
     try { lastSummary = row.last_summary_json ? JSON.parse(row.last_summary_json) : null; } catch {}
-    const stale = runningStateIsStale(row);
+    const heartbeat = runningHeartbeatState(row);
     return {
       id:row.id,label:row.label,kind:row.source_kind,sourceUrl:row.source_url,description:definition?.description || '',
-      state:(stale ? 'error' : row.state) as WeedoDataSourceState,lastStartedAt:row.last_started_at,lastCompletedAt:row.last_completed_at,
-      lastError:stale ? 'The previous update stopped reporting progress. It is safe to resume from the last Cannlytics checkpoint.' : row.last_error,
-      lastHeartbeatAt:row.updated_at,stale,lastSummary,...counts,
+      state:(heartbeat.stale ? 'error' : row.state) as WeedoDataSourceState,lastStartedAt:row.last_started_at,lastCompletedAt:row.last_completed_at,
+      lastError:heartbeat.stale ? 'The previous update stopped reporting progress. It is safe to resume from the last Cannlytics checkpoint.' : row.last_error,
+      lastHeartbeatAt:row.updated_at,...heartbeat,lastSummary,...counts,
     };
   });
 }

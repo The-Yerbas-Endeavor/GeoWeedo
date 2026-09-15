@@ -7,10 +7,27 @@ import { beginSourceUpdate, CANNLYTICS_REGIONS, getSourceSummaries, sourceCanSta
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function sourceErrorResponse(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || fallback);
+  const busy = /database is locked|database is busy|SQLITE_BUSY/i.test(raw);
+  const message = busy
+    ? 'Source status is temporarily busy while an import is writing to the database. GeoWeedo will retry automatically.'
+    : raw || fallback;
+  return NextResponse.json(
+    { error: message, busy },
+    { status: busy ? 503 : 500, headers: busy ? { 'Retry-After': '5' } : undefined },
+  );
+}
+
 export async function GET(request: NextRequest) {
   const admin = getAdminFromRequest(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  return NextResponse.json({ sources: getSourceSummaries() });
+  try {
+    return NextResponse.json({ sources: getSourceSummaries() });
+  } catch (error) {
+    console.error('GeoWeedo source status error', error);
+    return sourceErrorResponse(error, 'Unable to load data sources.');
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -26,11 +43,12 @@ export async function POST(request: NextRequest) {
   if (sourceId === 'cannlytics' && !CANNLYTICS_REGIONS.some(([code]) => code === region)) {
     return NextResponse.json({ error: 'Choose a Cannlytics state before starting the update.' }, { status: 400 });
   }
-  if (!sourceCanStart(sourceId)) {
-    return NextResponse.json({ error: 'This source update is already running.' }, { status: 409 });
-  }
 
   try {
+    if (!sourceCanStart(sourceId)) {
+      return NextResponse.json({ error: 'This source update is already running.' }, { status: 409 });
+    }
+
     beginSourceUpdate(sourceId);
     const loader = path.join(process.cwd(), 'scripts', 'ts-extension-loader.mjs');
     const runner = path.join(process.cwd(), 'scripts', 'run-weedo-source-update.mjs');
@@ -50,6 +68,7 @@ export async function POST(request: NextRequest) {
     child.unref();
     return NextResponse.json({ ok: true, sourceId, region: region || null, state: 'running' }, { status: 202 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to start source update.' }, { status: 500 });
+    console.error('GeoWeedo source update start error', error);
+    return sourceErrorResponse(error, 'Unable to start source update.');
   }
 }
