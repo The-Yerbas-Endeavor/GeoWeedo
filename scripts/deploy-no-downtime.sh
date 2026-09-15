@@ -258,6 +258,17 @@ switch_nginx "$LIVE_PORT" "$NGINX_SWITCH_FILE"
 log 'Stopping temporary staging service'
 sudo systemctl stop "${STAGE_SERVICE}.service" >/dev/null 2>&1 || true
 
+# The staging checkout only exists to provide a temporary healthy backend during
+# deployment. Its installed dependencies and build output are disposable once
+# nginx is verified back on the live service. Removing them prevents a small VPS
+# from permanently carrying two full Next.js installs/builds.
+if nginx_points_to_port "$NGINX_SWITCH_FILE" "$LIVE_PORT"; then
+  log 'Cleaning disposable staging build and dependencies'
+  rm -rf "$STAGE/.next" "$STAGE/node_modules"
+else
+  log 'Skipping staging cleanup because nginx is not verified on the live port'
+fi
+
 log 'Deployment complete — production remained behind a healthy backend throughout the deployment.'
 printf 'Live commit: '
 git -C "$LIVE" rev-parse --short HEAD
