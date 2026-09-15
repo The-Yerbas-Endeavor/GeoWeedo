@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
+import { resolveCanonicalProductId } from '@/lib/productMaintenance';
 import { getProductCultivars } from '@/lib/cultivarPublic';
 import { getProductCategorySummary } from '@/lib/productCategoryPublic';
 import styles from './product.module.css';
@@ -28,7 +29,8 @@ function evidenceLabel(value: unknown) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const record = getWeedoFactsProductListing(id);
+  const canonicalId = resolveCanonicalProductId(id);
+  const record = getWeedoFactsProductListing(canonicalId);
   if (!record) return { title: 'Product not found · GeoWeedo' };
   const brand = record.brandName ? `${record.brandName} · ` : '';
   return {
@@ -41,13 +43,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductListingPage({ params, searchParams }: Props) {
   const { id } = await params;
   const query = await searchParams;
+  const canonicalId = resolveCanonicalProductId(id);
   const requestedBatch = one(query.batch);
 
   if (requestedBatch) {
-    redirect(`/product-chemistry?product=${encodeURIComponent(id)}&batch=${encodeURIComponent(requestedBatch)}`);
+    redirect(`/product-chemistry?product=${encodeURIComponent(canonicalId)}&batch=${encodeURIComponent(requestedBatch)}`);
+  }
+  if (canonicalId && canonicalId !== id) {
+    redirect(`/product/${encodeURIComponent(canonicalId)}`);
   }
 
-  const record = getWeedoFactsProductListing(id);
+  const record = getWeedoFactsProductListing(canonicalId);
 
   if (!record) {
     return <main className={`landing-shell ${styles.shell}`}><SiteHeader /><div className={styles.page}><a className={styles.back} href="/geoweedo-facts">← GeoWeedo Facts</a><section className={styles.hero}><span>GEOWEEDO PRODUCT</span><h1>Product not found</h1><p>This product listing may have been removed or is not available in GeoWeedo yet.</p></section></div></main>;
