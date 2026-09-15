@@ -7,8 +7,10 @@ export const runtime='nodejs';
 function ensureIpColumn(){
   const database=getAnalyticsDb();
   const columns=database.prepare(`PRAGMA table_info(analytics_sessions)`).all() as Array<{name:string}>;
-  if(!columns.some(c=>c.name==='ip_address'))database.exec(`ALTER TABLE analytics_sessions ADD COLUMN ip_address TEXT`);
-  database.exec(`CREATE INDEX IF NOT EXISTS analytics_sessions_ip_idx ON analytics_sessions(ip_address,started_at)`);
+  const hasIp=columns.some(c=>c.name==='ip_address');
+  if(!hasIp)database.exec(`ALTER TABLE analytics_sessions ADD COLUMN ip_address TEXT`);
+  const indexes=database.prepare(`PRAGMA index_list(analytics_sessions)`).all() as Array<{name:string}>;
+  if(!indexes.some(index=>index.name==='analytics_sessions_ip_idx'))database.exec(`CREATE INDEX analytics_sessions_ip_idx ON analytics_sessions(ip_address,started_at)`);
   return database;
 }
 
