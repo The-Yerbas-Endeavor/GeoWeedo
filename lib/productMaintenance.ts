@@ -26,6 +26,18 @@ function nullable(value: unknown) {
   return text || null;
 }
 
+function atomic<T>(db: Db, work: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* preserve original error */ }
+    throw error;
+  }
+}
+
 export function normalizeProductName(brandName: unknown, productName: unknown) {
   return `${clean(brandName)} ${clean(productName)}`.trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -87,7 +99,7 @@ export function updateCanonicalProduct(input: { productId: string; brandName?: s
   }
 
   const now = new Date().toISOString();
-  const transaction = db.transaction(() => {
+  atomic(db, () => {
     db.prepare(`UPDATE cannabis_products
       SET brand_name=?,product_name=?,normalized_name=?,updated_at=?
       WHERE id=?`).run(brandName, productName, normalized, now, productId);
@@ -100,7 +112,6 @@ export function updateCanonicalProduct(input: { productId: string; brandName?: s
         .run(brandName, now, productId, current.brand_name || '');
     }
   });
-  transaction();
   return db.prepare('SELECT * FROM cannabis_products WHERE id=?').get(productId) as any;
 }
 
@@ -211,40 +222,38 @@ export function mergeCanonicalProducts(input: { sourceProductId: string; targetP
   };
 
   const now = new Date().toISOString();
-  const transaction = db.transaction(() => {
-    const productColumns = new Set(columnsFor(db, 'cannabis_products').map(column => column.name));
-    const fillable = ['brand_name', 'product_type', 'net_contents', 'category_id', 'category_source', 'source_category', 'canonical_product_type', 'strain_type'];
-    for (const column of fillable) {
-      if (!productColumns.has(column)) continue;
-      const targetValue = target[column];
-      const sourceValue = source[column];
-      if ((targetValue === null || targetValue === undefined || String(targetValue).trim() === '') && sourceValue !== null && sourceValue !== undefined && String(sourceValue).trim() !== '') {
-        db.prepare(`UPDATE cannabis_products SET ${quoteIdentifier(column)}=? WHERE id=?`).run(sourceValue, targetProductId);
-        target[column] = sourceValue;
-      }
-    }
-
-    const effectiveBrand = target.brand_name || null;
-    db.prepare('UPDATE cannabis_products SET normalized_name=?,updated_at=? WHERE id=?')
-      .run(normalizeProductName(effectiveBrand, target.product_name), now, targetProductId);
-
-    mergeProductMedia(db, sourceProductId, targetProductId);
-    mergeLegacyCultivarLinks(db, sourceProductId, targetProductId);
-    mergePedigreeCultivarLinks(db, sourceProductId, targetProductId);
-    const referenceUpdates = updateProductReferences(db, sourceProductId, targetProductId);
-
-    db.prepare(`INSERT OR REPLACE INTO cannabis_product_merge_history
-      (source_product_id,target_product_id,source_brand_name,source_product_name,target_brand_name,target_product_name,merged_at)
-      VALUES (?,?,?,?,?,?,?)`)
-      .run(sourceProductId, targetProductId, source.brand_name || null, source.product_name, effectiveBrand, target.product_name, now);
-
-    db.prepare('DELETE FROM cannabis_products WHERE id=?').run(sourceProductId);
-    return referenceUpdates;
-  });
-
   let referenceUpdates: Record<string, number>;
   try {
-    referenceUpdates = transaction();
+    referenceUpdates = atomic(db, () => {
+      const productColumns = new Set(columnsFor(db, 'cannabis_products').map(column => column.name));
+      const fillable = ['brand_name', 'product_type', 'net_contents', 'category_id', 'category_source', 'source_category', 'canonical_product_type', 'strain_type'];
+      for (const column of fillable) {
+        if (!productColumns.has(column)) continue;
+        const targetValue = target[column];
+        const sourceValue = source[column];
+        if ((targetValue === null || targetValue === undefined || String(targetValue).trim() === '') && sourceValue !== null && sourceValue !== undefined && String(sourceValue).trim() !== '') {
+          db.prepare(`UPDATE cannabis_products SET ${quoteIdentifier(column)}=? WHERE id=?`).run(sourceValue, targetProductId);
+          target[column] = sourceValue;
+        }
+      }
+
+      const effectiveBrand = target.brand_name || null;
+      db.prepare('UPDATE cannabis_products SET normalized_name=?,updated_at=? WHERE id=?')
+        .run(normalizeProductName(effectiveBrand, target.product_name), now, targetProductId);
+
+      mergeProductMedia(db, sourceProductId, targetProductId);
+      mergeLegacyCultivarLinks(db, sourceProductId, targetProductId);
+      mergePedigreeCultivarLinks(db, sourceProductId, targetProductId);
+      const updates = updateProductReferences(db, sourceProductId, targetProductId);
+
+      db.prepare(`INSERT OR REPLACE INTO cannabis_product_merge_history
+        (source_product_id,target_product_id,source_brand_name,source_product_name,target_brand_name,target_product_name,merged_at)
+        VALUES (?,?,?,?,?,?,?)`)
+        .run(sourceProductId, targetProductId, source.brand_name || null, source.product_name, effectiveBrand, target.product_name, now);
+
+      db.prepare('DELETE FROM cannabis_products WHERE id=?').run(sourceProductId);
+      return updates;
+    });
   } catch (error) {
     throw new Error(`Merge was rolled back without deleting anything: ${error instanceof Error ? error.message : 'linked data could not be moved safely'}`);
   }
