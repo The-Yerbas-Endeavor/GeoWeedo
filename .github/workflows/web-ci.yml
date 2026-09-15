@@ -46,7 +46,7 @@ jobs:
 
       - name: Validate Cannlytics importers
         run: |
-          python3 -m py_compile scripts/import-cannlytics-public.py scripts/import-cannlytics-resumable.py scripts/audit-cannlytics-duplicates.py
+          python3 -m py_compile scripts/import-cannlytics-public.py scripts/import-cannlytics-resumable.py scripts/audit-cannlytics-duplicates.py scripts/reconcile-cannlytics-products.py
           node --check scripts/run-weedo-source-update.mjs
 
       - name: Build GeoWeedo
