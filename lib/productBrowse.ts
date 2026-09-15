@@ -6,6 +6,7 @@ export type ProductBrowseFilters = {
   q?: string | null;
   brand?: string | null;
   type?: string | null;
+  sort?: string | null;
   page?: number | null;
   pageSize?: number | null;
 };
@@ -49,12 +50,31 @@ function normalizedSearch(value: unknown) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function productSortSql(value: unknown) {
+  switch (String(value || '').trim()) {
+    case 'name-asc':
+      return 'p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
+    case 'name-desc':
+      return 'p.product_name COLLATE NOCASE DESC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
+    case 'brand-asc':
+      return "COALESCE(NULLIF(TRIM(p.brand_name),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC";
+    case 'recent':
+      return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'batches-desc':
+      return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'category':
+    default:
+      return 'COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,latest_record DESC';
+  }
+}
+
 export function getProductBrowseCatalog(filters: ProductBrowseFilters = {}): ProductBrowseCatalog {
   const db = ensureBrowseSchema();
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
   const type = String(filters.type || '').trim();
   const pageSize = Math.max(12, Math.min(72, Math.floor(Number(filters.pageSize || 36)) || 36));
+  const orderBy = productSortSql(filters.sort);
 
   const conditions = ['b.verified = 1'];
   const params: Array<string | number> = [];
@@ -120,7 +140,7 @@ export function getProductBrowseCatalog(filters: ProductBrowseFilters = {}): Pro
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
     WHERE ${where}
     GROUP BY p.id,p.brand_name,p.product_name,p.product_type,p.canonical_product_type,p.category_id,c.name,c.slug,p.net_contents
-    ORDER BY COALESCE(c.sort_order,999),p.product_name COLLATE NOCASE,p.brand_name COLLATE NOCASE,latest_record DESC
+    ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `).all(...params, pageSize, offset) as any[];
 
