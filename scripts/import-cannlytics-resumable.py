@@ -3,11 +3,14 @@
 
 The existing importer remains the single implementation of row normalization and
 upsert behavior. This wrapper gives large state datasets a durable raw-row cursor,
-runs bounded chunks, and redirects the historical geoweodo.sqlite typo in-process
-to the actual GeoWeedo runtime database without renaming either file.
+runs bounded chunks, redirects the historical geoweodo.sqlite typo in-process to
+the actual GeoWeedo runtime database, and converts XLSX sources to a persistent
+CSV resume cache so later checkpoints do not repeatedly parse Excel XML.
 """
 import argparse
+import csv
 import importlib.util
+import json
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -71,6 +74,54 @@ def ensure_progress_schema(db, legacy, state, upstream):
     db.commit()
 
 
+def prepare_resumable_source(legacy, state, source_file, cache_dir):
+    """Convert XLSX once to CSV so later resume chunks avoid reparsing XML."""
+    if source_file.suffix.lower() != ".xlsx":
+        return source_file
+
+    target = cache_dir / f"{state}-results-latest.resumable.csv"
+    meta_path = cache_dir / f"{state}-results-latest.resumable.meta.json"
+    source_stat = source_file.stat()
+    fingerprint = {
+        "source_size": source_stat.st_size,
+        "source_mtime_ns": source_stat.st_mtime_ns,
+    }
+
+    if target.exists() and meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+            if all(meta.get(key) == value for key, value in fingerprint.items()):
+                print(f"Using resumable CSV cache {target.name} ({target.stat().st_size / (1024*1024):.1f} MiB)")
+                return target
+        except Exception:
+            pass
+
+    temp = target.with_suffix(target.suffix + ".part")
+    print(f"Preparing one-time resumable CSV cache for {state.upper()} from {source_file.name}...")
+    writer = None
+    rows_written = 0
+    with temp.open("w", encoding="utf-8", newline="") as handle:
+        for raw in legacy.iter_rows(source_file):
+            if writer is None:
+                fields = list(raw.keys())
+                writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+                writer.writeheader()
+            writer.writerow(raw)
+            rows_written += 1
+    if writer is None:
+        raise RuntimeError(f"Cannlytics {state.upper()} XLSX did not contain data rows")
+
+    temp.replace(target)
+    meta_path.write_text(json.dumps({
+        **fingerprint,
+        "rows": rows_written,
+        "created_at": now_iso(),
+        "source": str(source_file),
+    }, indent=2))
+    print(f"Prepared resumable CSV cache with {rows_written:,} rows: {target.name}")
+    return target
+
+
 def external_key_for_raw(legacy, state, raw):
     row = legacy.normalized_row(raw)
     product_name = legacy.pick(row, "product_name", "strain_name", "product")
@@ -122,6 +173,18 @@ def main():
         raise SystemExit(f"Unknown Cannlytics state: {state}")
     extension, upstream_records = legacy.STATE_FILES[state]
 
+    cache_dir = ROOT / "data" / "source-cache" / "cannlytics"
+    original_download_dataset = legacy.download_dataset
+    source_file, _cached = original_download_dataset(state, extension, cache_dir)
+    source_file = prepare_resumable_source(legacy, state, source_file, cache_dir)
+
+    # legacy.main() owns normalization/upsert behavior. Make it reuse the source
+    # already prepared above instead of performing another network/cache lookup.
+    def reuse_prepared_source(_state, _extension, _cache_dir):
+        return source_file, True
+
+    legacy.download_dataset = reuse_prepared_source
+
     db = sqlite3.connect(CORRECT_DB, timeout=60)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
@@ -137,8 +200,6 @@ def main():
             "SELECT COUNT(*) FROM cannlytics_source_records WHERE state_code=?", (state,)
         ).fetchone()[0]
         if existing_count:
-            cache_dir = ROOT / "data" / "source-cache" / "cannlytics"
-            source_file, _cached = legacy.download_dataset(state, extension, cache_dir)
             offset = bootstrap_offset(db, legacy, state, source_file)
             timestamp = now_iso()
             db.execute("""
