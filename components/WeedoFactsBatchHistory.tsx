@@ -8,7 +8,8 @@ function measure(value: any) {
 }
 
 function measureNumber(value: any) {
-  const number = Number(value?.value);
+  if (!value || value.value === null || value.value === undefined) return Number.NEGATIVE_INFINITY;
+  const number = Number(value.value);
   return Number.isFinite(number) ? number : Number.NEGATIVE_INFINITY;
 }
 
