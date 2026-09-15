@@ -11,7 +11,7 @@ export default function AboutPage() {
         <span className="eyebrow">ABOUT GEOWEEDO</span>
         <h1 style={{fontSize:'clamp(2.2rem,4vw,3.5rem)',lineHeight:1.02,maxWidth:920}}>GeoWeedo has grown into a cannabis discovery, game and product-information platform.</h1>
         <p>GeoWeedo started as a geography game built around real dispensaries. Today it combines map-based discovery, three game modes, GeoWeedo Facts, product and lab-data tools, verified dispensary-owner workspaces, sponsorship analytics and native mobile development around one public GeoWeedo platform.</p>
-        <div className="info-actions"><a className="primary" href="/">Explore the map</a><a href="/products">Browse products</a><a href="/facts">GeoWeedo Facts</a></div>
+        <div className="info-actions"><a className="primary" href="/">Explore the map</a><a href="/product-chemistry">Browse products</a><a href="/geoweedo-facts">GeoWeedo Facts</a></div>
       </section>
 
       <section className="info-grid two-col">
