@@ -8,8 +8,13 @@ type Region = {
   label: string;
   upstreamRecords: number;
   importedRecords: number;
+  processedRecords: number;
+  nextRowOffset: number;
+  progressPercent: number;
+  resumable: boolean;
   lastStartedAt: string | null;
   lastCompletedAt: string | null;
+  lastProgressAt: string | null;
   lastError: string | null;
 };
 
@@ -20,8 +25,10 @@ type Source = {
   sourceUrl: string;
   description: string;
   state: 'idle' | 'running' | 'success' | 'error';
+  stale?: boolean;
   lastStartedAt: string | null;
   lastCompletedAt: string | null;
+  lastHeartbeatAt?: string | null;
   lastError: string | null;
   records: number;
   products: number;
@@ -31,7 +38,7 @@ type Source = {
   regions?: Region[];
 };
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null | undefined) {
   if (!value) return 'Never';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
@@ -100,7 +107,7 @@ export default function WeedoFactsSourcesPage() {
         <a href="/admin/weedo-facts" className={styles.back}>← GeoWeedo Facts admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS DATA SOURCES</span>
         <h1>Source updates</h1>
-        <p>Refresh public source data at any time. Updates are incremental: existing records are refreshed and newly discovered records are added instead of performing a one-time blanket load.</p>
+        <p>Refresh public source data at any time. Large Cannlytics states run in durable chunks, save checkpoints, and can resume after a restart without discarding records already imported.</p>
       </div>
       <button type="button" className={styles.refresh} onClick={load}>Refresh status</button>
     </header>
@@ -113,13 +120,14 @@ export default function WeedoFactsSourcesPage() {
         const selectedRegion = selectedRegions[source.id] || '';
         const selected = source.regions?.find(region => region.code === selectedRegion);
         const sourceBusy = source.state === 'running' || busy === source.id || busy.startsWith(`${source.id}:`);
+        const selectedResumable = Boolean(selected?.resumable || (selected && selected.importedRecords > 0 && selected.importedRecords < selected.upstreamRecords && !selected.lastCompletedAt));
         return <article className={styles.card} key={source.id}>
           <div className={styles.cardHead}>
             <div>
               <span className={styles.kind}>{source.kind}</span>
               <h2>{source.label}</h2>
             </div>
-            <span className={`${styles.state} ${stateClass(source.state)}`}>{source.state}</span>
+            <span className={`${styles.state} ${stateClass(source.state)}`}>{source.stale ? 'stalled' : source.state}</span>
           </div>
           <p className={styles.description}>{source.description}</p>
 
@@ -132,6 +140,7 @@ export default function WeedoFactsSourcesPage() {
           <dl>
             <dt>Last started</dt><dd>{formatDate(source.lastStartedAt)}</dd>
             <dt>Last completed</dt><dd>{formatDate(source.lastCompletedAt)}</dd>
+            {source.state === 'running' ? <><dt>Heartbeat</dt><dd>{formatDate(source.lastHeartbeatAt)}</dd></> : null}
             <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open public source ↗</a></dd>
           </dl>
 
@@ -148,13 +157,17 @@ export default function WeedoFactsSourcesPage() {
                   </option>)}
                 </select>
               </label>
-              {selected ? <p>{selected.label}: <strong>{selected.upstreamRecords.toLocaleString()}</strong> upstream records · <strong>{selected.importedRecords.toLocaleString()}</strong> currently tracked in GeoWeedo · last completed {formatDate(selected.lastCompletedAt)}.</p> : <p>Choose one state at a time. GeoWeedo will cache the source file, upsert changed records, skip unchanged rows, and preserve stronger direct-lab evidence.</p>}
+              {selected ? <p>
+                {selected.label}: <strong>{selected.importedRecords.toLocaleString()}</strong> records currently tracked in GeoWeedo · <strong>{selected.progressPercent.toFixed(1)}%</strong> checkpoint progress
+                {selected.nextRowOffset > 0 ? <> · resume row <strong>{selected.nextRowOffset.toLocaleString()}</strong></> : null}
+                {' · '}last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.
+              </p> : <p>Choose one state at a time. GeoWeedo caches the source file, saves progress between chunks, upserts changed records, skips unchanged rows, and preserves stronger direct-lab evidence.</p>}
             </div>
             <details className={styles.regionStatus}>
               <summary>View all Cannlytics state checkpoints</summary>
               <div className={styles.regionTable}>
                 {source.regions.map(region => <div key={region.code}>
-                  <strong>{region.code.toUpperCase()}</strong><span>{region.label}</span><span>{region.importedRecords.toLocaleString()} / {region.upstreamRecords.toLocaleString()}</span><span>{formatDate(region.lastCompletedAt)}</span>
+                  <strong>{region.code.toUpperCase()}</strong><span>{region.label}</span><span>{region.importedRecords.toLocaleString()} / {region.upstreamRecords.toLocaleString()} · {region.progressPercent.toFixed(1)}%</span><span>{region.lastProgressAt ? formatDate(region.lastProgressAt) : formatDate(region.lastCompletedAt)}</span>
                 </div>)}
               </div>
             </details>
@@ -166,9 +179,10 @@ export default function WeedoFactsSourcesPage() {
             disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
             onClick={() => updateSource(source.id, selectedRegion || undefined)}
           >
-            {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `Update ${selected.label}` : `Update ${source.label}`}
+            {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}` : `Update ${source.label}`}
           </button>
-          {source.state === 'running' ? <p className={styles.runningNote}>The update is running in the background. This page refreshes automatically.</p> : null}
+          {source.state === 'running' ? <p className={styles.runningNote}>The updater is alive and reporting a heartbeat. Cannlytics checkpoints are saved between chunks; this page refreshes automatically.</p> : null}
+          {source.stale ? <p className={styles.runningNote}>The previous worker stopped reporting. Select the state and use Resume to continue safely from its saved checkpoint.</p> : null}
         </article>;
       })}
     </section>

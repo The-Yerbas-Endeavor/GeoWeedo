@@ -44,5 +44,8 @@ jobs:
       - name: Test product taxonomy
         run: npm run test:product-taxonomy
 
+      - name: Validate Cannlytics importers
+        run: python3 -m py_compile scripts/import-cannlytics-public.py scripts/import-cannlytics-resumable.py
+
       - name: Build GeoWeedo
         run: npm run build
