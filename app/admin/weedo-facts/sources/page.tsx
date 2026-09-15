@@ -61,7 +61,12 @@ async function responseJson(response: Response) {
   catch { throw new Error(`Source status returned an invalid response (${response.status}).`); }
 }
 
+function stoppedByAdmin(source: Source) {
+  return Boolean(source.lastError?.startsWith('Stopped by admin.'));
+}
+
 function stateClass(source: Source) {
+  if (stoppedByAdmin(source)) return styles.stopped;
   if (source.stale) return styles.errorState;
   if (source.heartbeatDelayed) return styles.delayed;
   if (source.state === 'running') return styles.running;
@@ -120,7 +125,7 @@ export default function WeedoFactsSourcesPage() {
       const response = await fetch('/api/admin/weedo-facts/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId, region: region || null }),
+        body: JSON.stringify({ action: 'start', sourceId, region: region || null }),
       });
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const body = await responseJson(response);
@@ -128,6 +133,30 @@ export default function WeedoFactsSourcesPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to start source update.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function stopCannlytics() {
+    if (!window.confirm('Stop the Cannlytics importer? The active chunk will be terminated and the last saved checkpoint will be preserved for Resume.')) return;
+    setBusy('cannlytics:stop');
+    setError('');
+    setRefreshWarning('');
+    try {
+      const response = await fetch('/api/admin/weedo-facts/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop', sourceId: 'cannlytics' }),
+      });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const body = await responseJson(response);
+      if (!response.ok) throw new Error(body?.error || 'Unable to stop Cannlytics update.');
+      setRefreshWarning(body?.message || 'Stop requested. Waiting for the importer to exit safely…');
+      await new Promise(resolve => window.setTimeout(resolve, 1000));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to stop Cannlytics update.');
     } finally {
       setBusy('');
     }
@@ -154,7 +183,8 @@ export default function WeedoFactsSourcesPage() {
         const selected = source.regions?.find(region => region.code === selectedRegion);
         const sourceBusy = source.state === 'running' || busy === source.id || busy.startsWith(`${source.id}:`);
         const selectedResumable = Boolean(selected?.resumable || (selected && selected.processedRecords > 0 && selected.processedRecords < selected.upstreamRecords && !selected.lastCompletedAt));
-        const stateLabel = source.stale ? 'stalled' : source.heartbeatDelayed ? 'heartbeat delayed' : source.state;
+        const wasStopped = stoppedByAdmin(source);
+        const stateLabel = wasStopped ? 'stopped' : source.stale ? 'stalled' : source.heartbeatDelayed ? 'heartbeat delayed' : source.state;
         return <article className={styles.card} key={source.id}>
           <div className={styles.cardHead}>
             <div>
@@ -178,7 +208,7 @@ export default function WeedoFactsSourcesPage() {
             <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open public source ↗</a></dd>
           </dl>
 
-          {source.lastError ? <div className={styles.sourceError}>{source.lastError}</div> : null}
+          {source.lastError ? <div className={wasStopped ? styles.stopNotice : styles.sourceError}>{source.lastError}</div> : null}
 
           {source.regions?.length ? <>
             <div className={styles.regionControl}>
@@ -208,14 +238,22 @@ export default function WeedoFactsSourcesPage() {
             </details>
           </> : null}
 
-          <button
-            type="button"
-            className={styles.update}
-            disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
-            onClick={() => updateSource(source.id, selectedRegion || undefined)}
-          >
-            {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}` : `Update ${source.label}`}
-          </button>
+          <div className={source.id === 'cannlytics' && source.state === 'running' ? styles.actionRow : undefined}>
+            <button
+              type="button"
+              className={styles.update}
+              disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
+              onClick={() => updateSource(source.id, selectedRegion || undefined)}
+            >
+              {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}` : `Update ${source.label}`}
+            </button>
+            {source.id === 'cannlytics' && source.state === 'running' ? <button
+              type="button"
+              className={styles.stop}
+              disabled={busy === 'cannlytics:stop'}
+              onClick={stopCannlytics}
+            >{busy === 'cannlytics:stop' ? 'Stopping…' : 'Stop Cannlytics'}</button> : null}
+          </div>
           {source.state === 'running' && !source.heartbeatDelayed ? <p className={styles.runningNote}>The updater is reporting normally. Cannlytics checkpoints are saved between chunks; this page refreshes automatically.</p> : null}
           {source.state === 'running' && source.heartbeatDelayed && !source.stale ? <p className={styles.runningNote}>Heartbeat is delayed. The worker may still be processing a long SQLite write; GeoWeedo will keep the last good status and retry automatically.</p> : null}
           {source.stale ? <p className={styles.runningNote}>The previous worker stopped reporting for more than 10 minutes. Select the state and use Resume to continue safely from its saved checkpoint.</p> : null}
