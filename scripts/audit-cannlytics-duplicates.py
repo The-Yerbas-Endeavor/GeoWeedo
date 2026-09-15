@@ -17,8 +17,10 @@ def scalar(db, sql, params=()):
     return int(db.execute(sql, params).fetchone()[0] or 0)
 
 
-def print_rows(title, rows, columns, limit):
+def print_rows(title, rows, columns, limit, note=None):
     print(f"\n{title}: {len(rows):,} candidate group(s)")
+    if note:
+        print(f"  {note}")
     for row in rows[:limit]:
         print("  - " + " | ".join(f"{name}={row[name]!s}" for name in columns))
     if len(rows) > limit:
@@ -97,21 +99,95 @@ def main():
     print_rows("Likely duplicate real-world Cannlytics batches", batch_candidates,
                ["product_name", "producer", "batch_number", "coa_number", "tested_day", "copies", "batch_ids"], args.limit)
 
-    product_candidates = db.execute("""
+    # The importer hashes product identity from (brand OR producer) + product name
+    # + product type. The old audit grouped only on brand/name/type, which made
+    # unbranded products from different producers look like duplicates.
+    product_context_sql = """
+      WITH product_context AS (
+        SELECT
+          p.id product_id,
+          LOWER(TRIM(COALESCE(p.brand_name,''))) brand,
+          LOWER(TRIM(COALESCE(p.product_name,''))) product_name,
+          LOWER(TRIM(COALESCE(p.product_type,''))) product_type,
+          COUNT(DISTINCT NULLIF(LOWER(TRIM(COALESCE(b.producer_name,''))),'')) producer_count,
+          MIN(NULLIF(LOWER(TRIM(COALESCE(b.producer_name,''))),'')) producer,
+          COUNT(*) batch_count
+        FROM cannabis_products p
+        JOIN cannabis_batches b ON b.product_id=p.id AND b.source_name='Cannlytics'
+        GROUP BY p.id
+      ), identities AS (
+        SELECT
+          *,
+          CASE
+            WHEN brand<>'' THEN 'brand:' || brand
+            WHEN producer_count=1 THEN 'producer:' || producer
+            WHEN producer_count=0 THEN 'unknown:'
+            ELSE 'ambiguous:'
+          END effective_owner
+        FROM product_context
+      )
+    """
+
+    identity_collisions = db.execute(product_context_sql + """
       SELECT
-        LOWER(TRIM(COALESCE(brand_name,''))) brand,
-        LOWER(TRIM(COALESCE(product_name,''))) product_name,
-        LOWER(TRIM(COALESCE(product_type,''))) product_type,
+        effective_owner,
+        product_name,
+        product_type,
         COUNT(*) copies,
-        GROUP_CONCAT(id) product_ids
-      FROM cannabis_products
-      WHERE id IN (SELECT DISTINCT product_id FROM cannabis_batches WHERE source_name='Cannlytics')
-      GROUP BY brand,product_name,product_type
+        SUM(batch_count) batches,
+        GROUP_CONCAT(product_id) product_ids
+      FROM identities
+      WHERE effective_owner NOT IN ('unknown:','ambiguous:')
+      GROUP BY effective_owner,product_name,product_type
       HAVING COUNT(*) > 1
       ORDER BY copies DESC,product_name
     """).fetchall()
-    print_rows("Canonical-looking Cannlytics product duplicates", product_candidates,
-               ["brand", "product_name", "product_type", "copies", "product_ids"], args.limit)
+    print_rows(
+        "True Cannlytics product identity collisions",
+        identity_collisions,
+        ["effective_owner", "product_name", "product_type", "copies", "batches", "product_ids"],
+        args.limit,
+        "These use the same brand-or-producer identity rule as the importer and are the product groups most worth reviewing for merge.",
+    )
+
+    appearance_only = db.execute(product_context_sql + """
+      SELECT
+        product_name,
+        product_type,
+        COUNT(*) products,
+        COUNT(DISTINCT effective_owner) owners,
+        GROUP_CONCAT(product_id) product_ids
+      FROM identities
+      GROUP BY product_name,product_type
+      HAVING COUNT(*) > 1 AND COUNT(DISTINCT effective_owner) > 1
+      ORDER BY products DESC,product_name
+    """).fetchall()
+    print_rows(
+        "Same-looking products across different owners (informational)",
+        appearance_only,
+        ["product_name", "product_type", "products", "owners", "product_ids"],
+        args.limit,
+        "These are not duplicates merely because the display name matches; different brands/producers intentionally remain separate identities.",
+    )
+
+    ambiguous_owner = db.execute(product_context_sql + """
+      SELECT
+        product_id,
+        product_name,
+        product_type,
+        producer_count,
+        batch_count
+      FROM identities
+      WHERE brand='' AND producer_count>1
+      ORDER BY producer_count DESC,batch_count DESC,product_name
+    """).fetchall()
+    print_rows(
+        "Unbranded Cannlytics products spanning multiple producers",
+        ambiguous_owner,
+        ["product_id", "product_name", "product_type", "producer_count", "batch_count"],
+        args.limit,
+        "These are ambiguous historical identities and should be reviewed before any split or merge.",
+    )
 
     multi_source_to_batch = db.execute("""
       SELECT batch_id,COUNT(*) source_records,COUNT(DISTINCT state_code) states
@@ -121,13 +197,35 @@ def main():
       HAVING COUNT(*) > 1
       ORDER BY source_records DESC,batch_id
     """).fetchall()
-    print_rows("Multiple Cannlytics source records linked to one batch", multi_source_to_batch,
-               ["batch_id", "source_records", "states"], args.limit)
+    print_rows(
+        "Cannlytics source consolidation onto one batch (informational)",
+        multi_source_to_batch,
+        ["batch_id", "source_records", "states"],
+        args.limit,
+        "Multiple source observations pointing at one batch are usually successful consolidation, not duplicate rows to delete.",
+    )
+
+    orphan_products = db.execute("""
+      SELECT p.id product_id,p.brand_name,p.product_name,p.product_type
+      FROM cannabis_products p
+      WHERE p.id LIKE 'cp-cann-%'
+        AND NOT EXISTS (SELECT 1 FROM cannabis_batches b WHERE b.product_id=p.id)
+      ORDER BY p.product_name COLLATE NOCASE,p.id
+    """).fetchall()
+    print_rows(
+        "Orphaned Cannlytics-created products",
+        orphan_products,
+        ["product_id", "brand_name", "product_name", "product_type"],
+        args.limit,
+        "These have no remaining batch references. If any exist, they are candidates for a separate cleanup after review.",
+    )
 
     print("\nInterpretation")
     print("  Exact source-key duplicates should be impossible because external_key is the primary key.")
-    print("  Batch/product candidate groups are not automatically safe to delete: separate labs or source IDs can legitimately describe the same-looking batch.")
-    print("  Review candidates before any merge/removal, and preserve stronger direct-lab evidence when consolidating.")
+    print("  Do not delete same-looking products across different owners; producer/brand is part of Cannlytics product identity.")
+    print("  Multiple source records mapped to one batch are generally expected consolidation, not duplication.")
+    print("  Review true identity collisions and ambiguous-owner products before any merge/removal.")
+    print("  This audit never changes the database.")
     db.close()
 
 
