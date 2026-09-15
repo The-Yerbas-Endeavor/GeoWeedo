@@ -23,7 +23,7 @@ export const WEEDO_DATA_SOURCES = [
     label: 'Cannlytics Cannabis Results',
     kind: 'Public laboratory / regulatory dataset',
     sourceUrl: 'https://huggingface.co/datasets/cannlytics/cannabis_results',
-    description: 'Import and refresh Cannlytics lab-result datasets one state at a time. Existing records are hash-checked, changed rows are updated, and direct lab evidence is preserved when a matching batch already exists.',
+    description: 'Import and refresh Cannlytics lab-result datasets one state at a time. Large states are checkpointed and resumable; existing records are hash-checked and stronger direct-lab evidence is preserved.',
   },
   {
     id: 'kannapedia' as const,
@@ -34,8 +34,16 @@ export const WEEDO_DATA_SOURCES = [
   },
 ] as const;
 
+const SOURCE_STALE_MS = 10 * 60 * 1000;
+
 function tableExists(db: any, name: string) {
   return Boolean(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name));
+}
+
+function ensureColumn(db: any, table: string, column: string, definition: string) {
+  if (!tableExists(db, table)) return;
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{name?:string}>;
+  if (!columns.some(row => row.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 function ensureSourceSchema() {
@@ -67,6 +75,9 @@ function ensureSourceSchema() {
       updated_at TEXT NOT NULL
     );
   `);
+  ensureColumn(db, 'cannlytics_state_sync', 'next_row_offset', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'cannlytics_state_sync', 'processed_records', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'cannlytics_state_sync', 'last_progress_at', 'TEXT');
 
   if (tableExists(db, 'cannabis_batches')) {
     db.exec(`
@@ -104,6 +115,12 @@ export function beginSourceUpdate(sourceId: WeedoDataSourceId) {
   db.prepare(`UPDATE cannabis_data_sources SET state='running',last_started_at=?,last_error=NULL,updated_at=? WHERE id=?`).run(now, now, sourceId);
 }
 
+export function heartbeatSourceUpdate(sourceId: WeedoDataSourceId) {
+  const db = ensureSourceSchema();
+  const now = new Date().toISOString();
+  db.prepare(`UPDATE cannabis_data_sources SET updated_at=? WHERE id=? AND state='running'`).run(now, sourceId);
+}
+
 export function finishSourceUpdate(sourceId: WeedoDataSourceId, summary?: unknown) {
   const db = ensureSourceSchema();
   const now = new Date().toISOString();
@@ -115,8 +132,8 @@ export function failSourceUpdate(sourceId: WeedoDataSourceId, error: unknown) {
   const db = ensureSourceSchema();
   const now = new Date().toISOString();
   const message = error instanceof Error ? error.message : String(error || 'Source update failed.');
-  db.prepare(`UPDATE cannabis_data_sources SET state='error',last_completed_at=?,last_error=?,updated_at=? WHERE id=?`)
-    .run(now, message.slice(0, 2000), now, sourceId);
+  db.prepare(`UPDATE cannabis_data_sources SET state='error',last_error=?,updated_at=? WHERE id=?`)
+    .run(message.slice(0, 2000), now, sourceId);
 }
 
 function countScLabs(db: any) {
@@ -148,15 +165,26 @@ function countCannlytics(db: any) {
   }
   const regions = CANNLYTICS_REGIONS.map(([code,label,upstreamRecords]) => {
     const sync = syncRows.get(code);
+    const importedRecords = importedByState.get(code) || 0;
+    const processedRecords = Number(sync?.processed_records || 0);
     return {
-      code, label, upstreamRecords,
-      importedRecords: importedByState.get(code) || 0,
+      code, label, upstreamRecords, importedRecords, processedRecords,
+      nextRowOffset: Number(sync?.next_row_offset || 0),
+      progressPercent: upstreamRecords ? Math.min(100, Math.round((processedRecords / upstreamRecords) * 1000) / 10) : 0,
       lastStartedAt: sync?.last_started_at || null,
       lastCompletedAt: sync?.last_completed_at || null,
+      lastProgressAt: sync?.last_progress_at || null,
       lastError: sync?.last_error || null,
+      resumable: Number(sync?.next_row_offset || 0) > 0 && !sync?.last_completed_at,
     };
   });
   return { records, products, primaryLabel:'products', secondaryCount:regions.filter(row => row.importedRecords > 0).length, secondaryLabel:'states imported', regions };
+}
+
+function runningStateIsStale(row: any) {
+  if (row?.state !== 'running') return false;
+  const heartbeat = new Date(row.updated_at || row.last_started_at || '').getTime();
+  return !Number.isFinite(heartbeat) || Date.now() - heartbeat > SOURCE_STALE_MS;
 }
 
 export function getSourceSummaries() {
@@ -167,10 +195,12 @@ export function getSourceSummaries() {
     const counts = row.id === 'sc-labs' ? countScLabs(db) : row.id === 'cannlytics' ? countCannlytics(db) : countKannapedia(db);
     let lastSummary: unknown = null;
     try { lastSummary = row.last_summary_json ? JSON.parse(row.last_summary_json) : null; } catch {}
+    const stale = runningStateIsStale(row);
     return {
       id:row.id,label:row.label,kind:row.source_kind,sourceUrl:row.source_url,description:definition?.description || '',
-      state:row.state as WeedoDataSourceState,lastStartedAt:row.last_started_at,lastCompletedAt:row.last_completed_at,
-      lastError:row.last_error,lastSummary,...counts,
+      state:(stale ? 'error' : row.state) as WeedoDataSourceState,lastStartedAt:row.last_started_at,lastCompletedAt:row.last_completed_at,
+      lastError:stale ? 'The previous update stopped reporting progress. It is safe to resume from the last Cannlytics checkpoint.' : row.last_error,
+      lastHeartbeatAt:row.updated_at,stale,lastSummary,...counts,
     };
   });
 }
@@ -178,8 +208,5 @@ export function getSourceSummaries() {
 export function sourceCanStart(sourceId: WeedoDataSourceId) {
   const source = getSourceSummaries().find(row => row.id === sourceId);
   if (!source) return false;
-  if (source.state !== 'running') return true;
-  if (!source.lastStartedAt) return true;
-  const started = new Date(source.lastStartedAt).getTime();
-  return !Number.isFinite(started) || Date.now() - started > 3 * 60 * 60 * 1000;
+  return source.state !== 'running';
 }
