@@ -3,12 +3,11 @@
 
 The existing importer remains the single implementation of row normalization and
 upsert behavior. This wrapper gives large state datasets a durable raw-row cursor,
-runs bounded chunks, and redirects the historical geoweodo.sqlite typo to the
-actual GeoWeedo runtime database.
+runs bounded chunks, and redirects the historical geoweodo.sqlite typo in-process
+to the actual GeoWeedo runtime database without renaming either file.
 """
 import argparse
 import importlib.util
-import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -17,10 +16,8 @@ from pathlib import Path
 ROOT = Path.cwd()
 LEGACY_SCRIPT = ROOT / "scripts" / "import-cannlytics-public.py"
 CORRECT_DB = ROOT / "data" / "runtime" / "geoweedo.sqlite"
-LEGACY_DB = ROOT / "data" / "runtime" / "geoweodo.sqlite"
 CHECKPOINT_EXIT = 75
 DEFAULT_CHUNK_SIZE = 25000
-ORIGINAL_CONNECT = sqlite3.connect
 
 
 def now_iso():
@@ -36,18 +33,22 @@ def load_legacy():
     return module
 
 
-def ensure_correct_database_alias():
-    if not CORRECT_DB.exists():
-        raise RuntimeError(f"GeoWeedo database not found at {CORRECT_DB}")
-    if os.path.lexists(LEGACY_DB):
-        if LEGACY_DB.is_symlink() and LEGACY_DB.resolve() == CORRECT_DB.resolve():
-            return
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = LEGACY_DB.with_name(f"geoweodo.sqlite.pre-resumable-{stamp}.bak")
-        LEGACY_DB.rename(backup)
-        print(f"Preserved legacy typo-named database as {backup.name}")
-    LEGACY_DB.symlink_to(CORRECT_DB.name)
-    print("Cannlytics database alias now points geoweodo.sqlite -> geoweedo.sqlite")
+def redirect_legacy_path(legacy):
+    """Make only the legacy geoweodo.sqlite path resolve to geoweedo.sqlite."""
+    concrete_path = type(Path())
+
+    class GeoWeedoPath(concrete_path):
+        @classmethod
+        def cwd(cls):
+            return cls(str(ROOT))
+
+        def __truediv__(self, key):
+            candidate = super().__truediv__(key)
+            if self.name == "runtime" and str(key) == "geoweodo.sqlite":
+                return type(self)(str(CORRECT_DB))
+            return candidate
+
+    legacy.Path = GeoWeedoPath
 
 
 def ensure_progress_schema(db, legacy, state, upstream):
@@ -104,15 +105,6 @@ def bootstrap_offset(db, legacy, state, source_file):
     return safe_offset
 
 
-def redirect_legacy_connect(legacy):
-    def corrected_connect(database, *args, **kwargs):
-        requested = Path(str(database))
-        if requested.name == "geoweodo.sqlite":
-            database = str(CORRECT_DB)
-        return ORIGINAL_CONNECT(database, *args, **kwargs)
-    legacy.sqlite3.connect = corrected_connect
-
-
 def main():
     parser = argparse.ArgumentParser(description="Run one resumable Cannlytics import chunk.")
     parser.add_argument("--state", required=True)
@@ -121,13 +113,16 @@ def main():
     state = args.state.lower()
     chunk_size = max(1000, min(100000, args.chunk_size))
 
+    if not CORRECT_DB.exists():
+        raise SystemExit(f"GeoWeedo database not found at {CORRECT_DB}")
+
     legacy = load_legacy()
+    redirect_legacy_path(legacy)
     if state not in legacy.STATE_FILES:
         raise SystemExit(f"Unknown Cannlytics state: {state}")
     extension, upstream_records = legacy.STATE_FILES[state]
 
-    ensure_correct_database_alias()
-    db = ORIGINAL_CONNECT(CORRECT_DB, timeout=60)
+    db = sqlite3.connect(CORRECT_DB, timeout=60)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
@@ -174,13 +169,12 @@ def main():
         tracker["next_offset"] = raw_index
 
     legacy.iter_rows = chunked_rows
-    redirect_legacy_connect(legacy)
     old_argv = sys.argv[:]
     sys.argv = [str(LEGACY_SCRIPT), "--state", state]
     try:
         legacy.main()
     except Exception:
-        db = ORIGINAL_CONNECT(CORRECT_DB, timeout=60)
+        db = sqlite3.connect(CORRECT_DB, timeout=60)
         timestamp = now_iso()
         db.execute("""
           UPDATE cannlytics_state_sync
@@ -193,7 +187,7 @@ def main():
     finally:
         sys.argv = old_argv
 
-    db = ORIGINAL_CONNECT(CORRECT_DB, timeout=60)
+    db = sqlite3.connect(CORRECT_DB, timeout=60)
     timestamp = now_iso()
     imported_records = db.execute(
         "SELECT COUNT(*) FROM cannlytics_source_records WHERE state_code=?", (state,)
