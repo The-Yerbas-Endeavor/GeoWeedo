@@ -71,7 +71,6 @@ function lowPriorityCommand(command) {
   if (sourceId !== 'cannlytics') return command;
 
   const args = ['-n', '19'];
-  if (fs.existsSync('/usr/bin/taskset')) args.push('/usr/bin/taskset', '-c', '0');
   if (fs.existsSync('/usr/bin/ionice')) args.push('/usr/bin/ionice', '-c', '3');
   args.push(command.executable, ...command.args);
 
@@ -108,8 +107,6 @@ function runChunk() {
     env: {
       ...process.env,
       PYTHONUNBUFFERED: '1',
-      CANNLYTICS_COMMIT_EVERY: sourceId === 'cannlytics' ? '25' : (process.env.CANNLYTICS_COMMIT_EVERY || ''),
-      CANNLYTICS_THROTTLE_MS: sourceId === 'cannlytics' ? '40' : (process.env.CANNLYTICS_THROTTLE_MS || ''),
     },
     stdio: ['ignore', log, log],
   });
