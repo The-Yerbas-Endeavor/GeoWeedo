@@ -8,13 +8,13 @@ function tableExists(db: Db, table: string) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1").get(table));
 }
 
+function quoteIdentifier(value: string) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
 function columnsFor(db: Db, table: string) {
   if (!tableExists(db, table)) return [] as Array<{ name: string }>;
   return db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all() as Array<{ name: string }>;
-}
-
-function quoteIdentifier(value: string) {
-  return `"${String(value).replace(/"/g, '""')}"`;
 }
 
 function clean(value: unknown) {
@@ -147,8 +147,33 @@ function mergeLegacyCultivarLinks(db: Db, sourceProductId: string, targetProduct
   db.prepare('UPDATE cannabis_product_cultivar_links SET product_id=? WHERE product_id=?').run(targetProductId, sourceProductId);
 }
 
+function mergePedigreeCultivarLinks(db: Db, sourceProductId: string, targetProductId: string) {
+  if (!tableExists(db, 'cannabis_product_pedigree_cultivars')) return;
+  const columns = new Set(columnsFor(db, 'cannabis_product_pedigree_cultivars').map(column => column.name));
+  if (!columns.has('cultivar_id')) return;
+  const sourceKey = columns.has('source_id') ? "COALESCE(source.source_id,'')" : "''";
+  const targetKey = columns.has('source_id') ? "COALESCE(target.source_id,'')" : "''";
+  db.prepare(`
+    DELETE FROM cannabis_product_pedigree_cultivars AS source
+    WHERE source.product_id=?
+      AND EXISTS (
+        SELECT 1 FROM cannabis_product_pedigree_cultivars target
+        WHERE target.product_id=?
+          AND target.cultivar_id=source.cultivar_id
+          AND ${targetKey}=${sourceKey}
+      )
+  `).run(sourceProductId, targetProductId);
+  db.prepare('UPDATE cannabis_product_pedigree_cultivars SET product_id=? WHERE product_id=?').run(targetProductId, sourceProductId);
+}
+
 function updateProductReferences(db: Db, sourceProductId: string, targetProductId: string) {
-  const skip = new Set(['cannabis_products', 'cannabis_product_merge_history', 'cannabis_product_media', 'cannabis_product_cultivar_links']);
+  const skip = new Set([
+    'cannabis_products',
+    'cannabis_product_merge_history',
+    'cannabis_product_media',
+    'cannabis_product_cultivar_links',
+    'cannabis_product_pedigree_cultivars',
+  ]);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as Array<{ name: string }>;
   const updated: Record<string, number> = {};
   for (const { name } of tables) {
@@ -205,6 +230,7 @@ export function mergeCanonicalProducts(input: { sourceProductId: string; targetP
 
     mergeProductMedia(db, sourceProductId, targetProductId);
     mergeLegacyCultivarLinks(db, sourceProductId, targetProductId);
+    mergePedigreeCultivarLinks(db, sourceProductId, targetProductId);
     const referenceUpdates = updateProductReferences(db, sourceProductId, targetProductId);
 
     db.prepare(`INSERT OR REPLACE INTO cannabis_product_merge_history
