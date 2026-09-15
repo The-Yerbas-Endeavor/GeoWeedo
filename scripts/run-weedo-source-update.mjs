@@ -27,6 +27,8 @@ const log = fs.openSync(logPath, 'a');
 const startedAt = new Date().toISOString();
 fs.writeSync(log, `\n\n=== ${startedAt} starting ${sourceId}${region ? ` ${region.toUpperCase()}` : ''} update ===\n`);
 
+const MIN_CANNLYTICS_FREE_BYTES = 3 * 1024 * 1024 * 1024;
+
 beginSourceUpdate(sourceId);
 let finalized = false;
 const heartbeat = setInterval(() => {
@@ -46,7 +48,9 @@ function finish(code, errorMessage) {
     fs.writeSync(log, `\n=== ${completedAt} ${sourceId}${region ? ` ${region.toUpperCase()}` : ''} update complete ===\n`);
   } else {
     const message = errorMessage || `Updater exited with code ${code ?? 'unknown'}. See ${logPath}.`;
-    failSourceUpdate(sourceId, message);
+    try { failSourceUpdate(sourceId, message); } catch (error) {
+      fs.writeSync(log, `\nSTATE UPDATE WARNING: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
     fs.writeSync(log, `\n=== ${completedAt} ${sourceId}${region ? ` ${region.toUpperCase()}` : ''} update failed: ${message} ===\n`);
   }
   fs.closeSync(log);
@@ -88,8 +92,32 @@ function serverIsBusy() {
   return oneMinuteLoad > maxBackgroundStartLoad;
 }
 
+function freeDiskBytes() {
+  try {
+    const stats = fs.statfsSync(process.cwd());
+    return Number(stats.bavail) * Number(stats.bsize);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function hasCannlyticsDiskHeadroom() {
+  if (sourceId !== 'cannlytics') return true;
+  const freeBytes = freeDiskBytes();
+  if (freeBytes >= MIN_CANNLYTICS_FREE_BYTES) return true;
+
+  const freeGiB = freeBytes / (1024 * 1024 * 1024);
+  const minimumGiB = MIN_CANNLYTICS_FREE_BYTES / (1024 * 1024 * 1024);
+  finish(
+    1,
+    `Cannlytics paused to protect production: only ${freeGiB.toFixed(2)} GiB disk space is free; at least ${minimumGiB.toFixed(0)} GiB is required before starting another chunk. Free disk space, then resume ${region.toUpperCase()}.`,
+  );
+  return false;
+}
+
 function runChunk() {
   if (finalized) return;
+  if (!hasCannlyticsDiskHeadroom()) return;
 
   if (serverIsBusy()) {
     const delayedAt = new Date().toISOString();
