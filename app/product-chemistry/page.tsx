@@ -24,6 +24,7 @@ type Props = {
     q?: string | string[];
     brand?: string | string[];
     type?: string | string[];
+    sort?: string | string[];
     page?: string | string[];
   }>;
 };
@@ -36,6 +37,8 @@ function displayType(value: string | null) {
   if (!value) return null;
   return value.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
+
+const PRODUCT_SORTS = new Set(['category', 'name-asc', 'name-desc', 'brand-asc', 'recent', 'batches-desc']);
 
 export default async function ProductChemistryPage({ searchParams }: Props) {
   const query = await searchParams;
@@ -80,8 +83,10 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const q = one(query.q)?.trim() || '';
   const brand = one(query.brand)?.trim() || '';
   const productCategory = one(query.type)?.trim() || '';
+  const requestedSort = one(query.sort)?.trim() || 'category';
+  const sort = PRODUCT_SORTS.has(requestedSort) ? requestedSort : 'category';
   const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
-  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, page: requestedPage, pageSize: 36 });
+  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, sort, page: requestedPage, pageSize: 36 });
   const filtersActive = Boolean(q || brand || productCategory);
   const resultStart = catalog.matchingProducts ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
   const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingProducts);
@@ -91,6 +96,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     if (q) params.set('q', q);
     if (brand) params.set('brand', brand);
     if (productCategory) params.set('type', productCategory);
+    if (sort !== 'category') params.set('sort', sort);
     if (nextPage > 1) params.set('page', String(nextPage));
     const queryString = params.toString();
     return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
@@ -146,9 +152,20 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                 {catalog.productCategories.map(category => <option value={category.slug} key={category.id}>{category.name}</option>)}
               </select>
             </label>
+            <label>
+              <span>Sort</span>
+              <select name="sort" defaultValue={sort}>
+                <option value="category">Category · Product A–Z</option>
+                <option value="name-asc">Product name A–Z</option>
+                <option value="name-desc">Product name Z–A</option>
+                <option value="brand-asc">Brand A–Z</option>
+                <option value="recent">Newest lab record</option>
+                <option value="batches-desc">Most verified batches</option>
+              </select>
+            </label>
             <div className="productChemistryFilterActions">
-              <button type="submit">Search</button>
-              {filtersActive ? <a href="/product-chemistry">Clear</a> : null}
+              <button type="submit">Apply</button>
+              {filtersActive || sort !== 'category' ? <a href="/product-chemistry">Clear</a> : null}
             </div>
           </form>
 
