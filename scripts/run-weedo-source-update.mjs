@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 import {
@@ -62,17 +63,51 @@ function commandForSource() {
   }
   return {
     executable: 'python3',
-    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '25000'],
+    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '10000'],
   };
+}
+
+function lowPriorityCommand(command) {
+  if (sourceId !== 'cannlytics') return command;
+
+  const args = ['-n', '19'];
+  if (fs.existsSync('/usr/bin/ionice')) args.push('/usr/bin/ionice', '-c', '3');
+  args.push(command.executable, ...command.args);
+
+  return {
+    executable: fs.existsSync('/usr/bin/nice') ? '/usr/bin/nice' : 'nice',
+    args,
+  };
+}
+
+function serverIsBusy() {
+  if (sourceId !== 'cannlytics') return false;
+  const cores = Math.max(1, os.cpus().length);
+  const oneMinuteLoad = os.loadavg()[0] || 0;
+  const maxBackgroundStartLoad = Math.max(1, cores * 0.7);
+  return oneMinuteLoad > maxBackgroundStartLoad;
 }
 
 function runChunk() {
   if (finalized) return;
-  const command = commandForSource();
+
+  if (serverIsBusy()) {
+    const delayedAt = new Date().toISOString();
+    fs.writeSync(log, `\n--- ${delayedAt} production load is elevated; delaying Cannlytics chunk for 30s ---\n`);
+    try { heartbeatSourceUpdate(sourceId); } catch {}
+    setTimeout(runChunk, 30_000);
+    return;
+  }
+
+  const baseCommand = commandForSource();
+  const command = lowPriorityCommand(baseCommand);
   heartbeatSourceUpdate(sourceId);
   const child = spawn(command.executable, command.args, {
     cwd: process.cwd(),
-    env: process.env,
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: '1',
+    },
     stdio: ['ignore', log, log],
   });
 
@@ -85,9 +120,9 @@ function runChunk() {
     if (spawnFailed || finalized) return;
     if (sourceId === 'cannlytics' && code === 75) {
       const checkpointAt = new Date().toISOString();
-      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; continuing next chunk ---\n`);
+      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 15s before next chunk ---\n`);
       heartbeatSourceUpdate(sourceId);
-      setTimeout(runChunk, 250);
+      setTimeout(runChunk, 15_000);
       return;
     }
     finish(code ?? 1);
