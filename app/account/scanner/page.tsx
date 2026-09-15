@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import SiteHeader from '@/components/SiteHeader';
+import AccountWorkspaceTabs from '@/components/AccountWorkspaceTabs';
 import OwnerMenuScanner from '@/components/OwnerMenuScanner';
 import styles from '../shop/shop.module.css';
 
@@ -79,6 +80,7 @@ export default function AccountScannerPage() {
 
   return <main className={styles.shell}>
     <SiteHeader/>
+    <AccountWorkspaceTabs/>
     <div className={styles.page}>
       <header className={styles.hero}>
         <div><span>VERIFIED DISPENSARY OWNER</span><h1>Scanner & public profile</h1><p>Update your public dispensary profile and scan QR codes or barcodes directly into your live GeoWeedo menu.</p></div>
