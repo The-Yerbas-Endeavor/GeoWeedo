@@ -63,7 +63,7 @@ function commandForSource() {
   }
   return {
     executable: 'python3',
-    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '25000'],
+    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '10000'],
   };
 }
 
