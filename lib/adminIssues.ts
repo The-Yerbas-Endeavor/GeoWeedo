@@ -212,7 +212,9 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     JOIN dispensary_menus m ON m.id=mi.menu_id
     JOIN dispensaries d ON d.id=m.dispensary_id
     WHERE mi.active=1 AND m.active=1 AND d.active=1
-      AND LOWER(COALESCE(mi.source_type,m.source_type,'manual')) NOT IN ('manual','community','business-supplied','business_supplied')
+      AND LOWER(COALESCE(mi.source_type,m.source_type,'manual')) NOT IN (
+        'manual','community','business-supplied','business_supplied','verified_owner_scan','owner_reported_scan'
+      )
       AND COALESCE(mi.source_updated_at,mi.updated_at) < ?
   `;
   const staleMenuCount = tableExists('dispensary_menu_items')
@@ -250,7 +252,7 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     },
     {
       category: 'stale_menus', label: 'Stale imported menus', count: staleMenuCount,
-      description: `Imported/feed menu data with no refresh in the last ${staleWindow} hours. Manual listings are excluded.`, href: '/admin/products-menus',
+      description: `Imported/feed menu data with no refresh in the last ${staleWindow} hours. Manual and verified-owner listings are excluded.`, href: '/admin/products-menus',
       samples: staleMenus.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary'), detail:`${Number(row.stale_items||0)} stale listing${Number(row.stale_items||0)===1?'':'s'}`, updatedAt:row.last_observed||null, href:'/admin/products-menus' })),
     },
     {
