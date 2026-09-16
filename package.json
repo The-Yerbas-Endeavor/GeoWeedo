@@ -19,7 +19,7 @@
     "weedo:import:cannlytics": "python3 scripts/import-cannlytics-safe.py",
     "weedo:audit:cannlytics-duplicates": "python3 scripts/audit-cannlytics-duplicates.py",
     "weedo:reconcile:cannlytics-products": "python3 scripts/reconcile-cannlytics-products-v3.py",
-    "weedo:enrich:cannlytics-owners": "python3 scripts/enrich-cannlytics-owners-safe.py",
+    "weedo:enrich:cannlytics-owners": "python3 scripts/enrich-cannlytics-owners-provenance.py",
     "weedo:backfill:cannlytics-provenance": "python3 scripts/backfill-cannlytics-raw-provenance.py",
     "searxng:enable-engines": "sudo bash scripts/configure-searxng-engines.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
