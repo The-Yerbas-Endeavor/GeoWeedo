@@ -34,8 +34,7 @@ export type AdminIssueGroup = {
 };
 
 function tableExists(table: string) {
-  const db = getDatabase();
-  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1").get(table));
+  return Boolean(getDatabase().prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1").get(table));
 }
 
 function ensureIssueEventSchema() {
@@ -88,9 +87,9 @@ export function recordAdminIssueEvent(input: {
 }
 
 export function resolveAdminIssueEvent(id: string) {
-  const db = ensureIssueEventSchema();
-  const result = db.prepare(`UPDATE admin_issue_events SET resolved_at=? WHERE id=? AND resolved_at IS NULL`)
-    .run(new Date().toISOString(), id);
+  const result = ensureIssueEventSchema().prepare(`
+    UPDATE admin_issue_events SET resolved_at=? WHERE id=? AND resolved_at IS NULL
+  `).run(new Date().toISOString(), id);
   return Number(result.changes || 0) > 0;
 }
 
@@ -98,7 +97,8 @@ function rows<T = any>(sql: string, ...params: any[]): T[] {
   return getDatabase().prepare(sql).all(...params) as T[];
 }
 
-function countFrom(row: any) {
+function count(sql: string, ...params: any[]) {
+  const row = getDatabase().prepare(sql).get(...params) as any;
   return Number(row?.count || 0);
 }
 
@@ -107,25 +107,23 @@ function clean(value: unknown, fallback = 'Unknown') {
   return text || fallback;
 }
 
-function recentEventGroup(): AdminIssueGroup {
-  const db = ensureIssueEventSchema();
-  const aggregate = db.prepare(`
-    SELECT COALESCE(SUM(occurrence_count),0) AS count
-    FROM admin_issue_events
-    WHERE category='coa_parse_failure' AND resolved_at IS NULL
-  `).get() as any;
-  const failures = db.prepare(`
+function parseFailureGroup(): AdminIssueGroup {
+  const failures = rows<any>(`
     SELECT id,title,message,last_seen_at,occurrence_count
     FROM admin_issue_events
     WHERE category='coa_parse_failure' AND resolved_at IS NULL
-    ORDER BY last_seen_at DESC
-    LIMIT 6
-  `).all() as any[];
+    ORDER BY last_seen_at DESC LIMIT 6
+  `);
+  const failureCount = count(`
+    SELECT COALESCE(SUM(occurrence_count),0) AS count
+    FROM admin_issue_events
+    WHERE category='coa_parse_failure' AND resolved_at IS NULL
+  `);
   return {
     category: 'coa_parse_failures',
     label: 'COA parse failures',
     description: 'Uploaded COAs that the parser could not understand. Repeated failures are grouped automatically.',
-    count: countFrom(aggregate),
+    count: failureCount,
     href: '/admin/issues?category=coa_parse_failures',
     samples: failures.map(row => ({
       id: String(row.id),
@@ -141,36 +139,31 @@ export function getAdminIssuesDashboard(staleHours = 24) {
   ensureWeedoCoreSchema();
   ensureWeedoFactsUploadSchema();
   ensureIssueEventSchema();
-  const db = getDatabase();
-  const staleCutoff = new Date(Date.now() - Math.max(1, staleHours) * 60 * 60 * 1000).toISOString();
+  const staleWindow = Math.max(1, staleHours);
+  const staleCutoff = new Date(Date.now() - staleWindow * 60 * 60 * 1000).toISOString();
 
   const unknownGroups = listUnknownScanGroups(100);
   const unknownCount = unknownGroups.reduce((sum, row) => sum + Number(row.unique_payloads || 0), 0);
 
-  const pendingCoaCount = tableExists('cannabis_coa_uploads')
-    ? countFrom(db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM cannabis_coa_uploads u
-        LEFT JOIN cannabis_product_submissions s ON s.id=u.submission_id
-        WHERE u.status='submitted' AND (s.status IS NULL OR s.status IN ('pending','needs_info'))
-      `).get())
-    : 0;
+  const pendingCoaCount = tableExists('cannabis_coa_uploads') ? count(`
+    SELECT COUNT(*) AS count
+    FROM cannabis_coa_uploads u
+    LEFT JOIN cannabis_product_submissions s ON s.id=u.submission_id
+    WHERE u.status='submitted' AND (s.status IS NULL OR s.status IN ('pending','needs_info'))
+  `) : 0;
   const pendingCoas = pendingCoaCount ? rows<any>(`
-    SELECT u.id,u.original_filename,u.updated_at,s.id AS submission_id,s.brand_name,s.product_name,s.status
+    SELECT u.id,u.original_filename,u.updated_at,s.brand_name,s.product_name,s.status
     FROM cannabis_coa_uploads u
     LEFT JOIN cannabis_product_submissions s ON s.id=u.submission_id
     WHERE u.status='submitted' AND (s.status IS NULL OR s.status IN ('pending','needs_info'))
     ORDER BY u.updated_at DESC LIMIT 6
   `) : [];
 
-  const unmatchedCount = tableExists('dispensary_menu_items')
-    ? countFrom(db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM dispensary_menu_items mi
-        JOIN dispensary_menus m ON m.id=mi.menu_id
-        WHERE mi.active=1 AND m.active=1 AND mi.product_id IS NULL
-      `).get())
-    : 0;
+  const unmatchedCount = tableExists('dispensary_menu_items') ? count(`
+    SELECT COUNT(*) AS count
+    FROM dispensary_menu_items mi JOIN dispensary_menus m ON m.id=mi.menu_id
+    WHERE mi.active=1 AND m.active=1 AND mi.product_id IS NULL
+  `) : 0;
   const unmatched = unmatchedCount ? rows<any>(`
     SELECT mi.id,mi.item_name,mi.brand_name,mi.updated_at,d.name AS dispensary_name
     FROM dispensary_menu_items mi
@@ -181,7 +174,7 @@ export function getAdminIssuesDashboard(staleHours = 24) {
   `) : [];
 
   const possibleCount = tableExists('dispensary_menu_items')
-    ? countFrom(db.prepare(`SELECT COUNT(*) AS count FROM dispensary_menu_items WHERE active=1 AND match_confidence='possible'`).get())
+    ? count(`SELECT COUNT(*) AS count FROM dispensary_menu_items WHERE active=1 AND match_confidence='possible'`)
     : 0;
   const possible = possibleCount ? rows<any>(`
     SELECT mi.id,mi.item_name,mi.brand_name,mi.match_score,mi.match_reason,mi.matched_at,d.name AS dispensary_name
@@ -192,25 +185,20 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     ORDER BY COALESCE(mi.matched_at,mi.updated_at) DESC LIMIT 6
   `) : [];
 
-  const missingCoordinateCount = tableExists('dispensary_candidates')
-    ? countFrom(db.prepare(`
-        SELECT COUNT(*) AS count FROM dispensary_candidates
-        WHERE status!='rejected' AND (latitude IS NULL OR longitude IS NULL)
-      `).get())
-    : 0;
+  const missingCoordinateCount = tableExists('dispensary_candidates') ? count(`
+    SELECT COUNT(*) AS count FROM dispensary_candidates
+    WHERE status!='rejected' AND (latitude IS NULL OR longitude IS NULL)
+  `) : 0;
   const missingCoordinates = missingCoordinateCount ? rows<any>(`
-    SELECT id,name,city,region,updated_at
-    FROM dispensary_candidates
+    SELECT id,name,city,region,updated_at FROM dispensary_candidates
     WHERE status!='rejected' AND (latitude IS NULL OR longitude IS NULL)
     ORDER BY updated_at DESC LIMIT 6
   `) : [];
 
-  const failedImageryCount = tableExists('dispensary_candidates')
-    ? countFrom(db.prepare(`
-        SELECT COUNT(*) AS count FROM dispensary_candidates
-        WHERE status!='rejected' AND imagery_status IN ('no_coverage','error')
-      `).get())
-    : 0;
+  const failedImageryCount = tableExists('dispensary_candidates') ? count(`
+    SELECT COUNT(*) AS count FROM dispensary_candidates
+    WHERE status!='rejected' AND imagery_status IN ('no_coverage','error')
+  `) : 0;
   const failedImagery = failedImageryCount ? rows<any>(`
     SELECT id,name,city,region,imagery_status,imagery_message,imagery_checked_at,updated_at
     FROM dispensary_candidates
@@ -218,124 +206,67 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     ORDER BY COALESCE(imagery_checked_at,updated_at) DESC LIMIT 6
   `) : [];
 
-  const staleMenus = tableExists('dispensary_menu_items') ? rows<any>(`
-    SELECT d.id,d.name,COUNT(*) AS stale_items,
-           MAX(COALESCE(mi.source_updated_at,mi.updated_at)) AS last_observed
+  const staleWhere = `
     FROM dispensary_menu_items mi
     JOIN dispensary_menus m ON m.id=mi.menu_id
     JOIN dispensaries d ON d.id=m.dispensary_id
     WHERE mi.active=1 AND m.active=1 AND d.active=1
       AND LOWER(COALESCE(mi.source_type,m.source_type,'manual')) NOT IN ('manual','community','business-supplied','business_supplied')
       AND COALESCE(mi.source_updated_at,mi.updated_at) < ?
+  `;
+  const staleMenuCount = tableExists('dispensary_menu_items')
+    ? count(`SELECT COUNT(DISTINCT d.id) AS count ${staleWhere}`, staleCutoff)
+    : 0;
+  const staleMenus = staleMenuCount ? rows<any>(`
+    SELECT d.id,d.name,COUNT(*) AS stale_items,
+           MAX(COALESCE(mi.source_updated_at,mi.updated_at)) AS last_observed
+    ${staleWhere}
     GROUP BY d.id,d.name
-    ORDER BY last_observed ASC
-    LIMIT 100
+    ORDER BY last_observed ASC LIMIT 6
   `, staleCutoff) : [];
 
   const groups: AdminIssueGroup[] = [
-    recentEventGroup(),
+    parseFailureGroup(),
     {
-      category: 'pending_coa_reviews',
-      label: 'COAs awaiting review',
-      description: 'Submitted COA evidence that still needs an approval, rejection, or more information.',
-      count: pendingCoaCount,
-      href: '/admin/weedo-facts',
-      samples: pendingCoas.map(row => ({
-        id: String(row.id),
-        title: [row.brand_name, row.product_name].filter(Boolean).join(' — ') || clean(row.original_filename, 'Submitted COA'),
-        detail: `Review status: ${clean(row.status, 'pending')}`,
-        updatedAt: row.updated_at || null,
-        href: '/admin/weedo-facts',
-      })),
+      category: 'pending_coa_reviews', label: 'COAs awaiting review', count: pendingCoaCount,
+      description: 'Submitted COA evidence that still needs an approval, rejection, or more information.', href: '/admin/weedo-facts',
+      samples: pendingCoas.map(row => ({ id: String(row.id), title: [row.brand_name,row.product_name].filter(Boolean).join(' — ') || clean(row.original_filename,'Submitted COA'), detail: `Review status: ${clean(row.status,'pending')}`, updatedAt: row.updated_at || null, href: '/admin/weedo-facts' })),
     },
     {
-      category: 'unknown_scans',
-      label: 'Unknown scans',
-      description: 'QR, UPC, lab, or identifier formats GeoWeedo has seen but cannot resolve yet.',
-      count: unknownCount,
-      href: '/admin/issues?category=unknown_scans',
-      samples: unknownGroups.slice(0, 6).map((row, index) => ({
-        id: `unknown-${index}-${row.payload_kind}-${row.qr_host}`,
-        title: clean(row.qr_host, clean(row.payload_kind, 'Unknown scan')),
-        detail: `${Number(row.unique_payloads || 0)} unique payload${Number(row.unique_payloads || 0) === 1 ? '' : 's'} · ${Number(row.scan_count || 0)} scan${Number(row.scan_count || 0) === 1 ? '' : 's'} · ${clean(row.resolver, 'generic resolver')}`,
-        updatedAt: row.last_seen_at || null,
-      })),
+      category: 'unknown_scans', label: 'Unknown scans', count: unknownCount,
+      description: 'QR, UPC, lab, or identifier formats GeoWeedo has seen but cannot resolve yet.', href: '/admin/issues?category=unknown_scans',
+      samples: unknownGroups.slice(0,6).map((row,index) => ({ id: `unknown-${index}-${row.payload_kind}-${row.qr_host}`, title: clean(row.qr_host,clean(row.payload_kind,'Unknown scan')), detail: `${Number(row.unique_payloads||0)} unique payload${Number(row.unique_payloads||0)===1?'':'s'} · ${Number(row.scan_count||0)} scan${Number(row.scan_count||0)===1?'':'s'} · ${clean(row.resolver,'generic resolver')}`, updatedAt: row.last_seen_at || null })),
     },
     {
-      category: 'unmatched_menu_products',
-      label: 'Unmatched menu products',
-      description: 'Active dispensary menu listings that are not connected to a canonical GeoWeedo product.',
-      count: unmatchedCount,
-      href: '/admin/products-menus',
-      samples: unmatched.map(row => ({
-        id: String(row.id),
-        title: [row.brand_name, row.item_name].filter(Boolean).join(' — ') || clean(row.item_name),
-        detail: clean(row.dispensary_name, 'Unknown dispensary'),
-        updatedAt: row.updated_at || null,
-        href: '/admin/products-menus',
-      })),
+      category: 'unmatched_menu_products', label: 'Unmatched menu products', count: unmatchedCount,
+      description: 'Active dispensary menu listings that are not connected to a canonical GeoWeedo product.', href: '/admin/products-menus',
+      samples: unmatched.map(row => ({ id:String(row.id), title:[row.brand_name,row.item_name].filter(Boolean).join(' — ')||clean(row.item_name), detail:clean(row.dispensary_name,'Unknown dispensary'), updatedAt:row.updated_at||null, href:'/admin/products-menus' })),
     },
     {
-      category: 'low_confidence_matches',
-      label: 'Low-confidence matches',
-      description: 'Menu listings with only a possible product match. They should not be presented as exact availability.',
-      count: possibleCount,
-      href: '/admin/products-menus',
-      samples: possible.map(row => ({
-        id: String(row.id),
-        title: [row.brand_name, row.item_name].filter(Boolean).join(' — ') || clean(row.item_name),
-        detail: `${clean(row.dispensary_name, 'Unknown dispensary')} · score ${Math.round(Number(row.match_score || 0))}${row.match_reason ? ` · ${row.match_reason}` : ''}`,
-        updatedAt: row.matched_at || null,
-        href: '/admin/products-menus',
-      })),
+      category: 'low_confidence_matches', label: 'Low-confidence matches', count: possibleCount,
+      description: 'Menu listings with only a possible product match. They should not be presented as exact availability.', href: '/admin/products-menus',
+      samples: possible.map(row => ({ id:String(row.id), title:[row.brand_name,row.item_name].filter(Boolean).join(' — ')||clean(row.item_name), detail:`${clean(row.dispensary_name,'Unknown dispensary')} · score ${Math.round(Number(row.match_score||0))}${row.match_reason?` · ${row.match_reason}`:''}`, updatedAt:row.matched_at||null, href:'/admin/products-menus' })),
     },
     {
-      category: 'stale_menus',
-      label: 'Stale imported menus',
-      description: `Imported/feed menu data with no refresh in the last ${Math.max(1, staleHours)} hours. Manual listings are excluded.`,
-      count: staleMenus.length,
-      href: '/admin/products-menus',
-      samples: staleMenus.slice(0, 6).map(row => ({
-        id: String(row.id),
-        title: clean(row.name, 'Dispensary'),
-        detail: `${Number(row.stale_items || 0)} stale listing${Number(row.stale_items || 0) === 1 ? '' : 's'}`,
-        updatedAt: row.last_observed || null,
-        href: '/admin/products-menus',
-      })),
+      category: 'stale_menus', label: 'Stale imported menus', count: staleMenuCount,
+      description: `Imported/feed menu data with no refresh in the last ${staleWindow} hours. Manual listings are excluded.`, href: '/admin/products-menus',
+      samples: staleMenus.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary'), detail:`${Number(row.stale_items||0)} stale listing${Number(row.stale_items||0)===1?'':'s'}`, updatedAt:row.last_observed||null, href:'/admin/products-menus' })),
     },
     {
-      category: 'missing_coordinates',
-      label: 'Missing coordinates',
-      description: 'Active dispensary candidates that cannot enter gameplay or map validation until coordinates are available.',
-      count: missingCoordinateCount,
-      href: '/admin/data',
-      samples: missingCoordinates.map(row => ({
-        id: String(row.id),
-        title: clean(row.name, 'Dispensary candidate'),
-        detail: [row.city, row.region].filter(Boolean).join(', ') || 'Location incomplete',
-        updatedAt: row.updated_at || null,
-        href: '/admin/data',
-      })),
+      category: 'missing_coordinates', label: 'Missing coordinates', count: missingCoordinateCount,
+      description: 'Active dispensary candidates that cannot enter gameplay or map validation until coordinates are available.', href: '/admin/data',
+      samples: missingCoordinates.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary candidate'), detail:[row.city,row.region].filter(Boolean).join(', ')||'Location incomplete', updatedAt:row.updated_at||null, href:'/admin/data' })),
     },
     {
-      category: 'failed_imagery',
-      label: 'Imagery failures',
-      description: 'Coordinate-ready candidates where imagery validation reported no coverage or an error.',
-      count: failedImageryCount,
-      href: '/admin/gameplay-pipeline',
-      samples: failedImagery.map(row => ({
-        id: String(row.id),
-        title: clean(row.name, 'Dispensary candidate'),
-        detail: `${clean(row.imagery_status, 'imagery issue').replace(/_/g, ' ')}${row.imagery_message ? ` · ${row.imagery_message}` : ''}`,
-        updatedAt: row.imagery_checked_at || row.updated_at || null,
-        href: '/admin/gameplay-pipeline',
-      })),
+      category: 'failed_imagery', label: 'Imagery failures', count: failedImageryCount,
+      description: 'Coordinate-ready candidates where imagery validation reported no coverage or an error.', href: '/admin/gameplay-pipeline',
+      samples: failedImagery.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary candidate'), detail:`${clean(row.imagery_status,'imagery issue').replace(/_/g,' ')}${row.imagery_message?` · ${row.imagery_message}`:''}`, updatedAt:row.imagery_checked_at||row.updated_at||null, href:'/admin/gameplay-pipeline' })),
     },
   ];
 
   return {
     generatedAt: new Date().toISOString(),
-    staleHours: Math.max(1, staleHours),
+    staleHours: staleWindow,
     total: groups.reduce((sum, group) => sum + group.count, 0),
     activeGroups: groups.filter(group => group.count > 0).length,
     groups,
