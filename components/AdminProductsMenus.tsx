@@ -3,128 +3,112 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styles from './AdminProductsMenus.module.css';
 
-type Category={id:string;slug:string;name:string;sort_order:number};
-type Product={id:string;brand_name:string|null;product_name:string;product_type:string|null;category_id:string|null;category_name:string|null;category_source:string|null;net_contents:string|null;barcode:string|null;batch_count:number;menu_count:number};
-type VerifiedProduct={id:string;brand_name:string|null;product_name:string;product_type:string|null;category_id:string|null;category_name:string|null;net_contents:string|null;verified_batch_count:number;qr_count:number;qr_scan_events:number;latest_uid:string|null;latest_coa_number:string|null;latest_lab_name:string|null;latest_status:string|null;latest_tested_at:string|null;updated_at:string};
-type QrScan={id:string;qr_value:string;qr_host:string|null;resolver:string;product_id:string|null;batch_id:string|null;external_identifier:string|null;title:string|null;brand_name:string|null;product_name:string|null;product_type:string|null;producer_name:string|null;lab_name:string|null;tested_at:string|null;coa_url:string|null;first_seen_at:string;last_seen_at:string;scan_count:number;canonical_brand_name:string|null;canonical_product_name:string|null;canonical_product_type:string|null;canonical_category_name:string|null;canonical_net_contents:string|null;batch_number:string|null;uid:string|null;coa_number:string|null;overall_status:string|null;canonical_lab_name:string|null;batch_verified:number;batch_source_type:string|null;verified_lab_batch:number};
-type Dispensary={id:string;name:string;city:string;region:string;country:string};
-type MenuItem={id:string;item_name:string;brand_name:string|null;category:string|null;display_category?:string|null;canonical_category_id?:string|null;variant:string|null;package_size:string|null;price_cents:number|null;currency:string;inventory_status:string;verified:number;product_id:string|null;linked_product_name:string|null;source_url:string|null};
+type Tab='overview'|'products'|'scans'|'exceptions';
+type Product={id:string;brand_name:string|null;product_name:string;product_type:string|null;category_name:string|null;net_contents:string|null;barcode:string|null;batch_count:number;menu_count:number};
+type VerifiedProduct={id:string;verified_batch_count:number;qr_count:number;qr_scan_events:number;latest_uid:string|null;latest_coa_number:string|null;latest_lab_name:string|null;latest_status:string|null;latest_tested_at:string|null};
+type QrScan={id:string;qr_value:string;qr_host:string|null;resolver:string;product_id:string|null;batch_id:string|null;title:string|null;brand_name:string|null;product_name:string|null;canonical_brand_name:string|null;canonical_product_name:string|null;canonical_category_name:string|null;canonical_product_type:string|null;canonical_net_contents:string|null;batch_number:string|null;uid:string|null;coa_number:string|null;overall_status:string|null;canonical_lab_name:string|null;lab_name:string|null;last_seen_at:string;scan_count:number;verified_lab_batch:number};
 type Stats={products:number;categorizedProducts:number;uncategorizedProducts:number;verifiedProducts:number;verifiedBatches:number;qrCodes:number;qrScanEvents:number;unlinkedQrs:number;menuItems:number;storesWithMenus:number};
+type Payload={stats:Stats;products:Product[];verifiedProducts:VerifiedProduct[];qrScans:QrScan[]};
 
 const emptyStats:Stats={products:0,categorizedProducts:0,uncategorizedProducts:0,verifiedProducts:0,verifiedBatches:0,qrCodes:0,qrScanEvents:0,unlinkedQrs:0,menuItems:0,storesWithMenus:0};
-function money(cents:number|null|undefined){return Number.isFinite(Number(cents))?`$${(Number(cents)/100).toFixed(2)}`:'—';}
 function dateTime(value:string|null|undefined){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?value:d.toLocaleString();}
-function compact(value:string|null|undefined,max=58){const text=String(value||'').trim();return text.length>max?`${text.slice(0,max-1)}…`:text||'—';}
+function compact(value:string|null|undefined,max=64){const text=String(value||'').trim();return text.length>max?`${text.slice(0,max-1)}…`:text||'—';}
 function isHttp(value:string){return /^https?:\/\//i.test(value);}
 
 export default function AdminProductsMenus(){
- const[stats,setStats]=useState<Stats>(emptyStats),[categories,setCategories]=useState<Category[]>([]),[products,setProducts]=useState<Product[]>([]),[verifiedProducts,setVerifiedProducts]=useState<VerifiedProduct[]>([]),[qrScans,setQrScans]=useState<QrScan[]>([]),[dispensaries,setDispensaries]=useState<Dispensary[]>([]),[menuItems,setMenuItems]=useState<MenuItem[]>([]);
- const[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const[productSearch,setProductSearch]=useState(''),[auditSearch,setAuditSearch]=useState(''),[selectedProductId,setSelectedProductId]=useState(''),[selectedDispensaryId,setSelectedDispensaryId]=useState('');
- const[newProduct,setNewProduct]=useState({brandName:'',productName:'',productType:'',categoryId:'',netContents:'',barcode:''});
- const[menuForm,setMenuForm]=useState({itemName:'',brandName:'',category:'',categoryId:'',variant:'',packageSize:'',price:'',inventoryStatus:'in_stock',sourceUrl:'',verified:false});
+ const[data,setData]=useState<Payload>({stats:emptyStats,products:[],verifiedProducts:[],qrScans:[]});
+ const[tab,setTab]=useState<Tab>('overview');
+ const[query,setQuery]=useState('');
+ const[loading,setLoading]=useState(true);
+ const[error,setError]=useState('');
 
- async function load(options?:{q?:string;dispensaryId?:string}){
-  const params=new URLSearchParams();if(options?.q)params.set('q',options.q);if(options?.dispensaryId)params.set('dispensaryId',options.dispensaryId);
+ async function load(q=''){
+  const params=new URLSearchParams();if(q.trim())params.set('q',q.trim());
   const response=await fetch(`/api/admin/products-menus${params.size?`?${params}`:''}`,{cache:'no-store'});
-  if(response.status===401){window.location.href='/admin/login';return null;}
-  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not load products and menus.');
-  setStats({...emptyStats,...(data.stats||{})});setCategories(Array.isArray(data.categories)?data.categories:[]);setProducts(Array.isArray(data.products)?data.products:[]);setVerifiedProducts(Array.isArray(data.verifiedProducts)?data.verifiedProducts:[]);setQrScans(Array.isArray(data.qrScans)?data.qrScans:[]);setDispensaries(Array.isArray(data.dispensaries)?data.dispensaries:[]);setMenuItems(Array.isArray(data.menuItems)?data.menuItems:[]);return data;
- }
- useEffect(()=>{load().catch(err=>setError(err.message)).finally(()=>setLoading(false));},[]);
- useEffect(()=>{if(!selectedDispensaryId){setMenuItems([]);return;}load({q:productSearch,dispensaryId:selectedDispensaryId}).catch(err=>setError(err.message));},[selectedDispensaryId]);
-
- const selectedProduct=useMemo(()=>products.find(p=>p.id===selectedProductId)||null,[products,selectedProductId]);
- const selectedDispensary=useMemo(()=>dispensaries.find(d=>d.id===selectedDispensaryId)||null,[dispensaries,selectedDispensaryId]);
- const filteredVerifiedProducts=useMemo(()=>{const q=auditSearch.trim().toLowerCase();if(!q)return verifiedProducts;return verifiedProducts.filter(p=>[p.brand_name,p.product_name,p.category_name,p.product_type,p.net_contents,p.latest_uid,p.latest_coa_number,p.latest_lab_name,p.latest_status].some(v=>String(v||'').toLowerCase().includes(q)));},[verifiedProducts,auditSearch]);
- const filteredQrScans=useMemo(()=>{const q=auditSearch.trim().toLowerCase();if(!q)return qrScans;return qrScans.filter(row=>[row.qr_value,row.qr_host,row.resolver,row.external_identifier,row.canonical_brand_name,row.canonical_product_name,row.canonical_category_name,row.product_name,row.batch_number,row.uid,row.coa_number,row.canonical_lab_name,row.lab_name,row.overall_status].some(v=>String(v||'').toLowerCase().includes(q)));},[qrScans,auditSearch]);
-
- async function createProduct(event:FormEvent){
-  event.preventDefault();setSaving(true);setError('');setNotice('');
-  try{
-   const response=await fetch('/api/admin/products-menus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create-product',...newProduct})});
-   const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not create product.');
-   setNotice(`Created ${newProduct.brandName?`${newProduct.brandName} · `:''}${newProduct.productName}.`);setProductSearch(newProduct.productName);setSelectedProductId(data.productId||'');
-   await load({q:newProduct.productName,dispensaryId:selectedDispensaryId});
-   setNewProduct({brandName:'',productName:'',productType:'',categoryId:'',netContents:'',barcode:''});
-  }catch(err){setError(err instanceof Error?err.message:'Could not create product.');}finally{setSaving(false);}
+  if(response.status===401){window.location.href='/admin/login';return;}
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(body.error||'Could not load GeoWeedo Facts data.');
+  setData({stats:{...emptyStats,...(body.stats||{})},products:Array.isArray(body.products)?body.products:[],verifiedProducts:Array.isArray(body.verifiedProducts)?body.verifiedProducts:[],qrScans:Array.isArray(body.qrScans)?body.qrScans:[]});
  }
 
- async function searchProducts(event?:FormEvent){event?.preventDefault();setError('');setLoading(true);try{await load({q:productSearch,dispensaryId:selectedDispensaryId});}catch(err){setError(err instanceof Error?err.message:'Search failed.');}finally{setLoading(false);}}
+ useEffect(()=>{load().catch(err=>setError(err instanceof Error?err.message:'Load failed.')).finally(()=>setLoading(false));},[]);
 
- async function addMenuItem(event:FormEvent){
-  event.preventDefault();if(!selectedDispensaryId||!selectedProductId)return;setSaving(true);setError('');setNotice('');
-  try{
-   const response=await fetch('/api/admin/products-menus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add-menu-item',dispensaryId:selectedDispensaryId,productId:selectedProductId,...menuForm})});
-   const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not add menu item.');
-   setMenuItems(Array.isArray(data.menuItems)?data.menuItems:[]);setNotice(`Added ${menuForm.itemName} to ${selectedDispensary?.name||'the dispensary'} menu.`);
-   setMenuForm({itemName:'',brandName:'',category:'',categoryId:'',variant:'',packageSize:'',price:'',inventoryStatus:'in_stock',sourceUrl:'',verified:false});
-   await load({q:productSearch,dispensaryId:selectedDispensaryId});
-  }catch(err){setError(err instanceof Error?err.message:'Could not add menu item.');}finally{setSaving(false);}
- }
+ async function search(event:FormEvent){event.preventDefault();setLoading(true);setError('');try{await load(query);}catch(err){setError(err instanceof Error?err.message:'Search failed.');}finally{setLoading(false);}}
+ function clearSearch(){setQuery('');setLoading(true);load('').catch(err=>setError(err instanceof Error?err.message:'Load failed.')).finally(()=>setLoading(false));}
 
- if(loading&&!dispensaries.length)return <main className={styles.shell}><div className={styles.loading}>Loading products & menus…</div></main>;
+ const verifiedById=useMemo(()=>new Map(data.verifiedProducts.map(row=>[row.id,row])),[data.verifiedProducts]);
+ const normalizedQuery=query.trim().toLowerCase();
+ const filteredScans=useMemo(()=>{
+  if(!normalizedQuery)return data.qrScans;
+  return data.qrScans.filter(row=>[row.qr_value,row.qr_host,row.resolver,row.canonical_brand_name,row.canonical_product_name,row.canonical_category_name,row.product_name,row.batch_number,row.uid,row.coa_number,row.canonical_lab_name,row.lab_name,row.overall_status].some(v=>String(v||'').toLowerCase().includes(normalizedQuery)));
+ },[data.qrScans,normalizedQuery]);
+ const unlinkedScans=useMemo(()=>filteredScans.filter(row=>!row.product_id||!row.batch_id),[filteredScans]);
+ const uncategorizedProducts=useMemo(()=>data.products.filter(row=>!row.category_name),[data.products]);
+ const attention=data.stats.unlinkedQrs+data.stats.uncategorizedProducts;
+
+ if(loading&&data.stats.products===0)return <main className={styles.shell}><div className={styles.loading}>Loading GeoWeedo Facts…</div></main>;
+
  return <main className={styles.shell}>
-  <header className={styles.header}><div><span>GEOWEEDO FACTS · PRODUCT DATABASE</span><h1>Products & scans</h1><p>Audit uploaded QR codes, verified lab products, canonical product records, categories, and dispensary menu availability from one admin screen.</p></div><a href="/admin">← Admin</a></header>
-  <section className={styles.stats}>
-   <article><strong>{stats.products.toLocaleString()}</strong><span>All products</span></article>
-   <article><strong>{stats.categorizedProducts.toLocaleString()}</strong><span>Categorized</span></article>
-   <article><strong>{stats.uncategorizedProducts.toLocaleString()}</strong><span>Need category</span></article>
-   <article><strong>{stats.verifiedProducts.toLocaleString()}</strong><span>Verified products</span></article>
-   <article><strong>{stats.verifiedBatches.toLocaleString()}</strong><span>Verified batches</span></article>
-   <article><strong>{stats.qrCodes.toLocaleString()}</strong><span>Uploaded QR codes</span></article>
-   <article><strong>{stats.qrScanEvents.toLocaleString()}</strong><span>Total QR scans</span></article>
-   <article><strong>{stats.unlinkedQrs.toLocaleString()}</strong><span>QRs needing linkage</span></article>
+  <header className={styles.header}>
+   <div><span>GEOWEEDO FACTS · PRODUCT DATABASE</span><h1>Products & scans</h1><p>See what imported successfully, find a product or QR scan, and fix only the records that actually need attention.</p></div>
+   <a href="/admin">← Admin</a>
+  </header>
+
+  <section className={styles.summary}>
+   <article><strong>{data.stats.products.toLocaleString()}</strong><span>Products</span></article>
+   <article><strong>{data.stats.verifiedProducts.toLocaleString()}</strong><span>Lab verified</span></article>
+   <article><strong>{data.stats.verifiedBatches.toLocaleString()}</strong><span>Verified batches</span></article>
+   <article><strong>{data.stats.qrCodes.toLocaleString()}</strong><span>QR codes</span></article>
+   <article className={attention?styles.attentionCard:undefined}><strong>{attention.toLocaleString()}</strong><span>Need attention</span></article>
   </section>
-  {error?<div className={styles.error}>{error}</div>:null}{notice?<div className={styles.notice}>{notice}</div>:null}
 
-  <section className={styles.auditPanel}>
-   <div className={styles.auditHead}><div className={styles.panelHead}><span>GEOWEEDO FACTS AUDIT</span><h2>Uploaded QR codes & verified products</h2><p>Every persisted QR appears here. A product is listed as verified only when it has at least one verified lab batch.</p></div><input value={auditSearch} onChange={e=>setAuditSearch(e.target.value)} placeholder="Filter product, category, UID, COA, QR, lab…" aria-label="Filter QR codes and verified products"/></div>
-   <div className={styles.auditGrid}>
-    <section className={styles.auditCard}>
-     <div className={styles.listHead}><div><strong>Verified products</strong><span>{filteredVerifiedProducts.length.toLocaleString()} shown · {verifiedProducts.length.toLocaleString()} total</span></div></div>
-     {filteredVerifiedProducts.length===0?<div className={styles.empty}>No verified products match this filter.</div>:<div className={styles.tableWrap}><table className={styles.auditTable}><thead><tr><th>Product</th><th>Verified</th><th>Latest batch</th><th>Lab / status</th><th>Scans</th></tr></thead><tbody>{filteredVerifiedProducts.map(p=><tr key={p.id}><td><a className={styles.primaryLink} href={`/product/${encodeURIComponent(p.id)}`} target="_blank">{p.brand_name?`${p.brand_name} · `:''}{p.product_name}</a><small>{[p.category_name,p.product_type&&p.product_type!==p.category_name?`Source: ${p.product_type}`:null,p.net_contents].filter(Boolean).join(' · ')||'—'}</small></td><td><b className={styles.good}>✓ {Number(p.verified_batch_count||0)} batch{Number(p.verified_batch_count||0)===1?'':'es'}</b><small>{dateTime(p.latest_tested_at)}</small></td><td><code>{p.latest_uid||'—'}</code><small>COA {p.latest_coa_number||'—'}</small></td><td><span>{p.latest_lab_name||'—'}</span><small>{p.latest_status||'Verified lab evidence'}</small></td><td><span>{Number(p.qr_count||0).toLocaleString()} QR{Number(p.qr_count||0)===1?'':'s'}</span><small>{Number(p.qr_scan_events||0).toLocaleString()} scan events</small></td></tr>)}</tbody></table></div>}
-    </section>
+  {error?<div className={styles.error}>{error}</div>:null}
 
-    <section className={styles.auditCard}>
-     <div className={styles.listHead}><div><strong>Uploaded QR codes</strong><span>{filteredQrScans.length.toLocaleString()} shown · {qrScans.length.toLocaleString()} total</span></div></div>
-     {filteredQrScans.length===0?<div className={styles.empty}>No uploaded QR codes match this filter.</div>:<div className={styles.tableWrap}><table className={styles.auditTable}><thead><tr><th>QR</th><th>Product</th><th>Batch / evidence</th><th>Status</th><th>Activity</th></tr></thead><tbody>{filteredQrScans.map(row=>{const productName=row.canonical_product_name||row.product_name||row.title||'Unlinked QR';const brand=row.canonical_brand_name||row.brand_name;return <tr key={row.id}><td>{isHttp(row.qr_value)?<a className={styles.qrLink} href={row.qr_value} target="_blank" rel="noreferrer" title={row.qr_value}>{compact(row.qr_value)}</a>:<code title={row.qr_value}>{compact(row.qr_value)}</code>}<small>{[row.qr_host,row.resolver].filter(Boolean).join(' · ')||'—'}</small></td><td>{row.product_id?<a className={styles.primaryLink} href={`/product/${encodeURIComponent(row.product_id)}`} target="_blank">{brand?`${brand} · `:''}{productName}</a>:<span>{brand?`${brand} · `:''}{productName}</span>}<small>{[row.canonical_category_name,row.canonical_product_type||row.product_type,row.canonical_net_contents].filter(Boolean).join(' · ')||'Not linked to canonical product'}</small></td><td><code>{row.uid||row.external_identifier||'—'}</code><small>{[row.batch_number?`Batch ${row.batch_number}`:null,row.coa_number?`COA ${row.coa_number}`:null].filter(Boolean).join(' · ')||'No verified batch yet'}</small></td><td>{row.verified_lab_batch?<b className={styles.good}>✓ COA verified</b>:row.product_id&&row.batch_id?<b className={styles.pending}>Source-backed</b>:<b className={styles.muted}>Unlinked</b>}<small>{row.overall_status||row.canonical_lab_name||row.lab_name||'—'}</small></td><td><span>{Number(row.scan_count||0).toLocaleString()} scan{Number(row.scan_count||0)===1?'':'s'}</span><small>Last {dateTime(row.last_seen_at)}</small></td></tr>;})}</tbody></table></div>}
-    </section>
+  <section className={styles.workspace}>
+   <div className={styles.toolbar}>
+    <nav className={styles.tabs} aria-label="Product database sections">
+     {([['overview','Overview'],['products','Products'],['scans','QR scans'],['exceptions','Exceptions']] as [Tab,string][]).map(([id,label])=><button key={id} type="button" className={tab===id?styles.activeTab:''} onClick={()=>setTab(id)}>{label}</button>)}
+    </nav>
+    <form className={styles.search} onSubmit={search}>
+     <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search brand, product, category, UID, COA or QR…" aria-label="Search product database"/>
+     <button type="submit" disabled={loading}>{loading?'Searching…':'Search'}</button>
+     {query?<button type="button" className={styles.clearButton} onClick={clearSearch}>Clear</button>:null}
+    </form>
    </div>
-  </section>
 
-  <div className={styles.columns}>
-   <section className={styles.panel}><div className={styles.panelHead}><span>CATALOG</span><h2>Create product</h2><p>Create a canonical product identity, choose its GeoWeedo category, and preserve any source product type separately.</p></div>
-    <form className={styles.form} onSubmit={createProduct}>
-     <label>Brand<input value={newProduct.brandName} onChange={e=>setNewProduct(v=>({...v,brandName:e.target.value}))} placeholder="MFNY"/></label>
-     <label>Product name<input required value={newProduct.productName} onChange={e=>setNewProduct(v=>({...v,productName:e.target.value}))} placeholder="Hash Burger"/></label>
-     <div className={styles.row}><label>Product category<select required value={newProduct.categoryId} onChange={e=>setNewProduct(v=>({...v,categoryId:e.target.value}))}><option value="">Choose category…</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Net contents<input value={newProduct.netContents} onChange={e=>setNewProduct(v=>({...v,netContents:e.target.value}))} placeholder="3.5 g"/></label></div>
-     <label>Source product type<input value={newProduct.productType} onChange={e=>setNewProduct(v=>({...v,productType:e.target.value}))} placeholder="Optional source wording, e.g. Concentrate, 1g"/></label>
-     <label>UPC / EAN<input inputMode="numeric" value={newProduct.barcode} onChange={e=>setNewProduct(v=>({...v,barcode:e.target.value.replace(/\D/g,'')}))} placeholder="Optional 8–14 digit barcode"/></label>
-     <button disabled={saving||!newProduct.categoryId}>{saving?'Saving…':'Create product'}</button>
-    </form>
-   </section>
+   {tab==='overview'?<section className={styles.overview}>
+    <div className={styles.introCard}><span>AUTOMATIC FIRST</span><h2>Imports should do the work</h2><p>GeoWeedo creates and links source-backed records automatically. Use this screen to confirm coverage and investigate exceptions—not to manually approve thousands of normal imports.</p></div>
+    <div className={styles.quickGrid}>
+     <a href="/admin/data"><strong>Import / refresh data</strong><span>Run official and Cannlytics source imports.</span></a>
+     <button type="button" onClick={()=>setTab('exceptions')}><strong>Review exceptions</strong><span>{attention.toLocaleString()} records currently need a category or QR linkage.</span></button>
+     <a href="/admin/product-maintenance"><strong>Product maintenance</strong><span>Edit an obvious product mistake or merge a real duplicate.</span></a>
+     <a href="#advanced-tools"><strong>Advanced tools</strong><span>Manual category and legacy maintenance tools.</span></a>
+    </div>
+    <div className={styles.healthGrid}>
+     <div><strong>{data.stats.categorizedProducts.toLocaleString()}</strong><span>Categorized automatically</span></div>
+     <div><strong>{data.stats.qrScanEvents.toLocaleString()}</strong><span>Total QR scan events</span></div>
+     <div><strong>{data.stats.menuItems.toLocaleString()}</strong><span>Active menu links</span></div>
+     <div><strong>{data.stats.storesWithMenus.toLocaleString()}</strong><span>Stores with menus</span></div>
+    </div>
+   </section>:null}
 
-   <section className={styles.panel}><div className={styles.panelHead}><span>RETAIL AVAILABILITY</span><h2>Add to dispensary menu</h2><p>Select a real GeoWeedo product and store, then publish its retail availability using the same canonical category.</p></div>
-    <form className={styles.search} onSubmit={searchProducts}><input value={productSearch} onChange={e=>setProductSearch(e.target.value)} placeholder="Search existing products"/><button>Search</button></form>
-    <label className={styles.selectLabel}>Product<select value={selectedProductId} onChange={e=>{const id=e.target.value;setSelectedProductId(id);const p=products.find(x=>x.id===id);if(p)setMenuForm(v=>({...v,itemName:p.product_name,brandName:p.brand_name||v.brandName,packageSize:p.net_contents||v.packageSize,category:p.product_type||v.category,categoryId:p.category_id||''}));}}><option value="">Choose product…</option>{products.map(p=><option key={p.id} value={p.id}>{p.brand_name?`${p.brand_name} · `:''}{p.product_name}{p.category_name?` · ${p.category_name}`:''}{p.net_contents?` · ${p.net_contents}`:''}</option>)}</select></label>
-    {selectedProduct?<div className={styles.selection}><strong>{selectedProduct.brand_name?`${selectedProduct.brand_name} · `:''}{selectedProduct.product_name}</strong><span>{[selectedProduct.category_name,selectedProduct.product_type&&selectedProduct.product_type!==selectedProduct.category_name?`Source: ${selectedProduct.product_type}`:null,selectedProduct.net_contents,selectedProduct.barcode?`UPC/EAN ${selectedProduct.barcode}`:null,`${selectedProduct.menu_count} menu listings`].filter(Boolean).join(' · ')}</span><a href={`/product/${encodeURIComponent(selectedProduct.id)}`} target="_blank">Open product page ↗</a></div>:null}
-    <label className={styles.selectLabel}>Dispensary<select value={selectedDispensaryId} onChange={e=>setSelectedDispensaryId(e.target.value)}><option value="">Choose dispensary…</option>{dispensaries.map(d=><option key={d.id} value={d.id}>{d.region} · {d.city} · {d.name}</option>)}</select></label>
-    <form className={styles.form} onSubmit={addMenuItem}>
-     <label>Menu item name<input required value={menuForm.itemName} onChange={e=>setMenuForm(v=>({...v,itemName:e.target.value}))} placeholder="Retail menu title"/></label>
-     <div className={styles.row}><label>Brand<input value={menuForm.brandName} onChange={e=>setMenuForm(v=>({...v,brandName:e.target.value}))}/></label><label>Product category<select value={menuForm.categoryId} onChange={e=>setMenuForm(v=>({...v,categoryId:e.target.value}))}><option value="">Use product category</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label></div>
-     <div className={styles.row}><label>Variant<input value={menuForm.variant} onChange={e=>setMenuForm(v=>({...v,variant:e.target.value}))} placeholder="Indica, 510 cart…"/></label><label>Package size<input value={menuForm.packageSize} onChange={e=>setMenuForm(v=>({...v,packageSize:e.target.value}))} placeholder="3.5 g"/></label></div>
-     <div className={styles.row}><label>Price USD<input inputMode="decimal" value={menuForm.price} onChange={e=>setMenuForm(v=>({...v,price:e.target.value}))} placeholder="35.00"/></label><label>Inventory<select value={menuForm.inventoryStatus} onChange={e=>setMenuForm(v=>({...v,inventoryStatus:e.target.value}))}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="unknown">Unknown</option><option value="out_of_stock">Out of stock</option></select></label></div>
-     <label>Menu/source URL<input type="url" value={menuForm.sourceUrl} onChange={e=>setMenuForm(v=>({...v,sourceUrl:e.target.value}))} placeholder="https://dispensary.example/menu/..."/></label>
-     <label className={styles.check}><input type="checkbox" checked={menuForm.verified} onChange={e=>setMenuForm(v=>({...v,verified:e.target.checked}))}/><span>Mark this retail listing verified. Use only after checking the source.</span></label>
-     <button disabled={saving||!selectedProductId||!selectedDispensaryId}>{saving?'Saving…':'Add menu item'}</button>
-    </form>
-   </section>
-  </div>
+   {tab==='products'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>CATALOG</span><h2>Products</h2><p>{query?`Search results for “${query}”.`:'Latest 150 products. Search to find anything else in the catalog.'}</p></div><a href="/admin/product-maintenance">Edit / merge products →</a></div>
+    {data.products.length===0?<div className={styles.empty}>No products match this search.</div>:<div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Product</th><th>Status</th><th>Category</th><th>Batches</th><th>Identifiers</th></tr></thead><tbody>{data.products.map(product=>{const verified=verifiedById.get(product.id);return <tr key={product.id}><td><a className={styles.primaryLink} href={`/product/${encodeURIComponent(product.id)}`} target="_blank">{product.brand_name?`${product.brand_name} · `:''}{product.product_name}</a><small>{[product.net_contents,product.product_type].filter(Boolean).join(' · ')||'—'}</small></td><td>{verified?<><b className={styles.good}>✓ Lab verified</b><small>{Number(verified.verified_batch_count||0).toLocaleString()} verified batch{Number(verified.verified_batch_count||0)===1?'':'es'}</small></>:<><b className={styles.neutral}>Imported</b><small>Source-backed product</small></>}</td><td>{product.category_name||<b className={styles.warn}>Needs category</b>}</td><td>{Number(product.batch_count||0).toLocaleString()}</td><td><span>{product.barcode||'—'}</span><small>{Number(product.menu_count||0).toLocaleString()} menu link{Number(product.menu_count||0)===1?'':'s'}</small></td></tr>;})}</tbody></table></div>}
+   </section>:null}
 
-  <section className={styles.menuPanel}><div className={styles.panelHead}><span>STORE MENU</span><h2>{selectedDispensary?.name||'Choose a dispensary'}</h2><p>{selectedDispensary?'Active GeoWeedo menu listings for this store.':'Select a dispensary above to inspect its current menu.'}</p></div>
-   {selectedDispensary&&menuItems.length===0?<div className={styles.empty}>No menu items yet.</div>:null}
-   <div className={styles.menuList}>{menuItems.map(item=><article key={item.id}><div><strong>{item.brand_name?`${item.brand_name} · `:''}{item.item_name}</strong><span>{[item.display_category||item.category,item.variant,item.package_size,item.inventory_status].filter(Boolean).join(' · ')}</span></div><div><b>{money(item.price_cents)}</b><small>{item.verified?'✓ Verified':'Reported'}</small>{item.product_id?<a href={`/product/${encodeURIComponent(item.product_id)}`} target="_blank">Product ↗</a>:null}</div></article>)}</div>
+   {tab==='scans'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>QR ACTIVITY</span><h2>QR scans</h2><p>Newest scans first. Linked and verified records require no manual action.</p></div><span>{filteredScans.length.toLocaleString()} shown</span></div>
+    {filteredScans.length===0?<div className={styles.empty}>No QR scans match this search.</div>:<div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>QR / source</th><th>Product</th><th>Batch / COA</th><th>Status</th><th>Activity</th></tr></thead><tbody>{filteredScans.slice(0,250).map(row=>{const productName=row.canonical_product_name||row.product_name||row.title||'Unlinked QR';const brand=row.canonical_brand_name||row.brand_name;return <tr key={row.id}><td>{isHttp(row.qr_value)?<a className={styles.primaryLink} href={row.qr_value} target="_blank" rel="noreferrer">{compact(row.qr_value)}</a>:<code>{compact(row.qr_value)}</code>}<small>{[row.qr_host,row.resolver].filter(Boolean).join(' · ')||'—'}</small></td><td>{row.product_id?<a className={styles.primaryLink} href={`/product/${encodeURIComponent(row.product_id)}`} target="_blank">{brand?`${brand} · `:''}{productName}</a>:<span>{brand?`${brand} · `:''}{productName}</span>}<small>{[row.canonical_category_name,row.canonical_net_contents].filter(Boolean).join(' · ')||'—'}</small></td><td><code>{row.uid||row.batch_number||'—'}</code><small>{row.coa_number?`COA ${row.coa_number}`:'—'}</small></td><td>{row.verified_lab_batch?<b className={styles.good}>✓ Verified</b>:row.product_id&&row.batch_id?<b className={styles.neutral}>Linked</b>:<b className={styles.warn}>Needs linkage</b>}<small>{row.overall_status||row.canonical_lab_name||row.lab_name||'—'}</small></td><td>{Number(row.scan_count||0).toLocaleString()}<small>{dateTime(row.last_seen_at)}</small></td></tr>;})}</tbody></table>{filteredScans.length>250?<div className={styles.tableNote}>Showing newest 250. Search to narrow the list.</div>:null}</div>}
+   </section>:null}
+
+   {tab==='exceptions'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>ACTIONABLE ONLY</span><h2>Exceptions</h2><p>These are the records worth looking at. Normal imported products and owner candidates are intentionally excluded.</p></div></div>
+    <div className={styles.exceptionGrid}>
+     <article><div className={styles.exceptionTitle}><strong>Unlinked QR codes</strong><span>{data.stats.unlinkedQrs.toLocaleString()} total</span></div>{unlinkedScans.length===0?<p>No unlinked QR codes match this search.</p>:<div className={styles.exceptionList}>{unlinkedScans.slice(0,50).map(row=><div key={row.id}><div><strong>{compact(row.canonical_product_name||row.product_name||row.title||row.qr_value,72)}</strong><small>{compact(row.qr_value,80)}</small></div><b>{!row.product_id?'No product':'No batch'}</b></div>)}</div>}</article>
+     <article><div className={styles.exceptionTitle}><strong>Products without category</strong><span>{data.stats.uncategorizedProducts.toLocaleString()} total</span></div>{uncategorizedProducts.length===0?<p>No uncategorized products are in the current result set.</p>:<div className={styles.exceptionList}>{uncategorizedProducts.slice(0,50).map(product=><div key={product.id}><div><a className={styles.primaryLink} href={`/product/${encodeURIComponent(product.id)}`} target="_blank">{product.brand_name?`${product.brand_name} · `:''}{product.product_name}</a><small>{Number(product.batch_count||0).toLocaleString()} batch{Number(product.batch_count||0)===1?'':'es'}</small></div><b>Category</b></div>)}</div>}</article>
+    </div>
+   </section>:null}
   </section>
  </main>;
 }
