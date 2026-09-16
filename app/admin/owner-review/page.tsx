@@ -1,8 +1,8 @@
-import AdminOwnerReviewCenter from '@/components/AdminOwnerReviewCenter';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'GeoWeedo Admin · Owner Review' };
+export const metadata = { title: 'GeoWeedo Admin · Products & scans' };
 
 export default function OwnerReviewPage() {
-  return <AdminOwnerReviewCenter />;
+  redirect('/admin/products-menus?view=exceptions');
 }
