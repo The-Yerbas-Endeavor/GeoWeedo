@@ -25,6 +25,23 @@ function ensure() {
   const db = getDatabase();
   ensureProductCategorySchema(db);
   ensureProductMaintenanceSchema(db);
+
+  // Product Maintenance is an interactive admin screen. These indexes keep its
+  // duplicate lookup and page-level linked-row counts from scanning whole tables.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS cannabis_products_normalized_name_maintenance_idx
+      ON cannabis_products(normalized_name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS cannabis_batches_product_maintenance_idx
+      ON cannabis_batches(product_id);
+    CREATE INDEX IF NOT EXISTS cannabis_product_identifiers_product_maintenance_idx
+      ON cannabis_product_identifiers(product_id);
+    CREATE INDEX IF NOT EXISTS cannabis_product_variants_product_maintenance_idx
+      ON cannabis_product_variants(product_id);
+    CREATE INDEX IF NOT EXISTS dispensary_menu_items_product_maintenance_idx
+      ON dispensary_menu_items(product_id);
+    CREATE INDEX IF NOT EXISTS cannabis_qr_scans_product_maintenance_idx
+      ON cannabis_qr_scans(product_id);
+  `);
   return db;
 }
 
@@ -35,10 +52,28 @@ const SORTS: Record<string, string> = {
   brand_desc: "COALESCE(p.brand_name,'') COLLATE NOCASE DESC,p.product_name COLLATE NOCASE ASC",
   updated_desc: 'p.updated_at DESC,p.product_name COLLATE NOCASE ASC',
   updated_asc: 'p.updated_at ASC,p.product_name COLLATE NOCASE ASC',
-  batches_desc: 'batch_count DESC,p.product_name COLLATE NOCASE ASC',
-  batches_asc: 'batch_count ASC,p.product_name COLLATE NOCASE ASC',
-  duplicates: 'possible_duplicate_count DESC,p.product_name COLLATE NOCASE ASC,COALESCE(p.brand_name,\'\') COLLATE NOCASE ASC',
+  batches_desc: 'COALESCE(bc.batch_count,0) DESC,p.product_name COLLATE NOCASE ASC',
+  batches_asc: 'COALESCE(bc.batch_count,0) ASC,p.product_name COLLATE NOCASE ASC',
+  duplicates: "possible_duplicate_count DESC,p.product_name COLLATE NOCASE ASC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
 };
+
+type Db = ReturnType<typeof getDatabase>;
+
+type CountRow = { product_id: string; n: number };
+
+function countMapForPage(db: Db, table: string, productIds: string[]) {
+  const counts = new Map<string, number>();
+  if (!productIds.length) return counts;
+  const placeholders = productIds.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT product_id,COUNT(*) AS n
+    FROM ${table}
+    WHERE product_id IN (${placeholders})
+    GROUP BY product_id
+  `).all(...productIds) as CountRow[];
+  for (const row of rows) counts.set(String(row.product_id), Number(row.n || 0));
+  return counts;
+}
 
 export async function GET(request: NextRequest) {
   if (!getAdminFromRequest(request)) return unauthorized();
@@ -48,6 +83,7 @@ export async function GET(request: NextRequest) {
   const pageSize = Math.max(10, Math.min(100, Math.floor(Number(request.nextUrl.searchParams.get('pageSize') || 25)) || 25));
   const sort = text(request.nextUrl.searchParams.get('sort')) || 'duplicates';
   const orderBy = SORTS[sort] || SORTS.duplicates;
+  const needsBatchSort = sort === 'batches_desc' || sort === 'batches_asc';
   const params: string[] = [];
   let where = '';
   if (q) {
@@ -60,31 +96,58 @@ export async function GET(request: NextRequest) {
   const page = Math.min(requestedPage, pageCount);
   const offset = (page - 1) * pageSize;
 
-  const products = db.prepare(`
+  // Do the expensive catalog-wide work once, then limit to the requested page.
+  // Linked-data counts are intentionally NOT calculated here; they are fetched
+  // only for the 10-100 products that actually appear on the page below.
+  const batchJoin = needsBatchSort ? `
+    LEFT JOIN (
+      SELECT product_id,COUNT(*) AS batch_count
+      FROM cannabis_batches
+      GROUP BY product_id
+    ) bc ON bc.product_id=p.id
+  ` : '';
+
+  const pageRows = db.prepare(`
+    WITH duplicate_counts AS (
+      SELECT normalized_name COLLATE NOCASE AS normalized_key,COUNT(*) AS group_count
+      FROM cannabis_products
+      WHERE normalized_name IS NOT NULL AND normalized_name<>''
+      GROUP BY normalized_name COLLATE NOCASE
+    )
     SELECT p.id,p.brand_name,p.product_name,p.product_type,p.net_contents,p.normalized_name,p.updated_at,
       p.category_id,c.name AS category_name,
-      (SELECT COUNT(*) FROM cannabis_batches b WHERE b.product_id=p.id) AS batch_count,
-      (SELECT COUNT(*) FROM cannabis_product_identifiers i WHERE i.product_id=p.id) AS identifier_count,
-      (SELECT COUNT(*) FROM cannabis_product_variants v WHERE v.product_id=p.id) AS variant_count,
-      (SELECT COUNT(*) FROM dispensary_menu_items mi WHERE mi.product_id=p.id) AS menu_count,
-      (SELECT COUNT(*) FROM cannabis_qr_scans qrs WHERE qrs.product_id=p.id) AS qr_count,
-      (SELECT COUNT(*) FROM cannabis_products d
-        WHERE d.id<>p.id
-          AND LOWER(TRIM(COALESCE(d.normalized_name,'')))=LOWER(TRIM(COALESCE(p.normalized_name,'')))
-          AND TRIM(COALESCE(p.normalized_name,''))<>'') AS possible_duplicate_count
+      CASE WHEN COALESCE(dc.group_count,0)>1 THEN dc.group_count-1 ELSE 0 END AS possible_duplicate_count
     FROM cannabis_products p
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
+    LEFT JOIN duplicate_counts dc ON dc.normalized_key=p.normalized_name COLLATE NOCASE
+    ${batchJoin}
     ${where}
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `).all(...params, pageSize, offset) as any[];
 
+  const productIds = pageRows.map(row => String(row.id));
+  const batchCounts = countMapForPage(db, 'cannabis_batches', productIds);
+  const identifierCounts = countMapForPage(db, 'cannabis_product_identifiers', productIds);
+  const variantCounts = countMapForPage(db, 'cannabis_product_variants', productIds);
+  const menuCounts = countMapForPage(db, 'dispensary_menu_items', productIds);
+  const qrCounts = countMapForPage(db, 'cannabis_qr_scans', productIds);
+
+  const products = pageRows.map(row => ({
+    ...row,
+    batch_count: batchCounts.get(String(row.id)) || 0,
+    identifier_count: identifierCounts.get(String(row.id)) || 0,
+    variant_count: variantCounts.get(String(row.id)) || 0,
+    menu_count: menuCounts.get(String(row.id)) || 0,
+    qr_count: qrCounts.get(String(row.id)) || 0,
+  }));
+
   const duplicateGroups = Number((db.prepare(`
     SELECT COUNT(*) AS n FROM (
-      SELECT LOWER(TRIM(normalized_name)) AS k
+      SELECT normalized_name COLLATE NOCASE AS k
       FROM cannabis_products
-      WHERE TRIM(COALESCE(normalized_name,''))<>''
-      GROUP BY LOWER(TRIM(normalized_name))
+      WHERE normalized_name IS NOT NULL AND normalized_name<>''
+      GROUP BY normalized_name COLLATE NOCASE
       HAVING COUNT(*)>1
     )
   `).get() as any)?.n || 0);
