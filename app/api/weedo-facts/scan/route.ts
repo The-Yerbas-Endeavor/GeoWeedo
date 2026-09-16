@@ -6,6 +6,7 @@ import { fetchRetailId1A4, isRetailId1A4Url, retailIdFrom1A4Url, type RetailId1A
 import { ingestRetailId1A4 } from '../../../../lib/retailId1a4Ingest';
 import { ingestRetailIdCoaEvidence } from '../../../../lib/retailIdCoaIngestion';
 import { persistQrScan, persistRetailId1A4Scan } from '../../../../lib/weedoFactsQrPersistence';
+import { classifyWeedoScanPayload } from '../../../../lib/weedoCore';
 import { confirmVerifiedProductDatabaseWrite } from '../../../../lib/verifiedProductDatabase';
 
 export const runtime = 'nodejs';
@@ -63,12 +64,13 @@ function requestedIdentifierType(body: any, identifier: string): IdentifierType 
   const requestedType = String(body?.type || '').trim().toLowerCase();
   const allowed: IdentifierType[] = ['qr', 'upc', 'uid', 'batch', 'coa', 'unknown'];
   if (allowed.includes(requestedType as IdentifierType)) return requestedType as IdentifierType;
-  if (/^https?:\/\//i.test(identifier)) return 'qr';
-  if (/^\d{8,14}$/.test(identifier)) return 'upc';
+  const kind = classifyWeedoScanPayload(identifier);
+  if (kind === 'upc') return 'upc';
+  if (['metrc_retail_id', 'lab_url', 'url'].includes(kind)) return 'qr';
   return undefined;
 }
 
-function validQrPayload(identifier: string) {
+function validScanPayload(identifier: string) {
   if (!identifier || identifier.length > 512) return false;
   if (/^https?:\/\//i.test(identifier)) {
     try {
@@ -99,9 +101,6 @@ function canonicalRetailIdUrl(value: string) {
   try {
     const url = new URL(value);
     if (!isRetailId1A4Url(value)) return value;
-    // Preserve 1a4.com/<short-token> links so the Retail ID adapter can resolve
-    // their real landing page. Only canonicalize URLs that already expose the
-    // public /landingpage/<id>/<index> route.
     if (!/^\/landingpage\//i.test(url.pathname)) return url.toString();
     url.protocol = 'https:';
     url.hostname = 'app.1a4.com';
@@ -129,8 +128,6 @@ async function fetchRetailIdWithRetry(identifier: string) {
       if (!usableRetailIdData(record)) {
         throw new Error('Retail ID data API returned no product or lab data.');
       }
-      // Preserve the QR/landing URL that was actually scanned as the public
-      // source URL even when we canonicalize the API host internally.
       return { ...record, url: identifier };
     } catch (error) {
       lastError = error;
@@ -148,18 +145,22 @@ export async function POST(request: NextRequest) {
   }
 
   const identifierType = requestedIdentifierType(body, identifier);
-  const isQr = identifierType === 'qr';
+  const scanKind = classifyWeedoScanPayload(identifier);
   let persistedQr: ReturnType<typeof persistQrScan> | null = null;
 
   try {
-    if (isQr && validQrPayload(identifier)) {
+    if (validScanPayload(identifier)) {
       persistedQr = persistQrScan({
         qrValue: identifier,
         resolver: isScLabsSampleUrl(identifier)
           ? 'sc_labs_public_page'
           : isRetailId1A4Url(identifier)
             ? 'metrc_retail_id'
-            : 'generic_qr',
+            : scanKind === 'upc'
+              ? 'upc_lookup'
+              : scanKind === 'text'
+                ? 'identifier_lookup'
+                : 'generic_qr',
         sourceUrl: /^https?:\/\//i.test(identifier) ? identifier : null,
       });
     }
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
       const ingestion = ingestScLabsSample(sample);
       const record = normalizeEvidenceRecord(lookupWeedoFacts({ identifier: sample.coaNumber || sample.sampleId, identifierType: 'coa' }));
       const productDatabase = confirmVerifiedProductDatabaseWrite(ingestion.productId, ingestion.batchId);
-      if (isQr) {
+      if (persistedQr) {
         persistedQr = persistQrScan({
           qrValue: identifier,
           resolver: 'sc_labs_public_page',
@@ -204,21 +205,14 @@ export async function POST(request: NextRequest) {
 
     if (isRetailId1A4Url(identifier)) {
       const pathRetailId = retailIdFrom1A4Url(identifier);
-      // Long landing URLs expose the UID directly. Short 1A4 URLs do not, so
-      // use the already-persisted QR identifier as the local fallback key.
       const localRecord = normalizeEvidenceRecord(pathRetailId
         ? lookupWeedoFacts({ identifier: pathRetailId, identifierType: 'uid' })
         : lookupWeedoFacts({ identifier, identifierType: 'qr' }));
 
       let retailId: RetailId1A4Record;
       try {
-        // Always refresh a 1A4 QR from its public data API. Retry short-lived
-        // upstream failures/empty payloads before using the local GeoWeedo copy.
         retailId = await fetchRetailIdWithRetry(identifier);
       } catch (error) {
-        // 1A4 is a source, not the sole owner of data already ingested by
-        // GeoWeedo. If this UID/QR is known locally, keep the scan useful while
-        // the public source is slow or temporarily unavailable.
         if (localRecord) {
           persistedQr = persistQrScan({
             qrValue: identifier,
@@ -260,15 +254,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (pathRetailId) retailId.retailId = pathRetailId;
-
-      // Persist or reuse the source-backed Retail ID product/batch identity first.
       const ingestion = ingestRetailId1A4(retailId);
       const productId = localRecord?.productId || ingestion.productId || null;
-
-      // Exact package UID + named lab + structured COA evidence (or reachable
-      // original COA URL) promotes/enriches the same UID as a verified lab batch.
       const coaIngestion = await ingestRetailIdCoaEvidence(retailId, productId);
-
       const linkedRecord = normalizeEvidenceRecord(retailId.retailId
         ? lookupWeedoFacts({ identifier: retailId.retailId, identifierType: 'uid' })
         : null);
@@ -306,10 +294,10 @@ export async function POST(request: NextRequest) {
     }
 
     const record = normalizeEvidenceRecord(lookupWeedoFacts({ identifier, identifierType }));
-    if (isQr && persistedQr) {
+    if (persistedQr) {
       persistedQr = persistQrScan({
         qrValue: identifier,
-        resolver: record ? 'local_weedo_facts' : 'generic_qr',
+        resolver: record ? 'local_weedo_facts' : persistedQr.resolver,
         productId: record?.productId || null,
         batchId: record?.batchId || null,
         sourceUrl: /^https?:\/\//i.test(identifier) ? identifier : null,
