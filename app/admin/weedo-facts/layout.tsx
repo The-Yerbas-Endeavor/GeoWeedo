@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
 import styles from './weedo-facts-nav.module.css';
 
-export default function WeedoFactsAdminLayout({ children }: { children: React.ReactNode }) {
+export default function WeedoFactsAdminLayout({ children }: { children: ReactNode }) {
   return <>
     <nav className={styles.nav} aria-label="Weedo Facts admin">
       <a href="/admin">Admin</a>
