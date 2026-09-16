@@ -49,6 +49,17 @@ function ensureColumn(db: Db, table: string, column: string, definition: string)
   if (!columns.some(row => row.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+function runTransaction(db: Db, work: () => void) {
+  db.exec('BEGIN');
+  try {
+    work();
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* transaction may already be closed */ }
+    throw error;
+  }
+}
+
 export function normalizeIdentityText(value: unknown) {
   return String(value ?? '')
     .normalize('NFKD')
@@ -118,7 +129,7 @@ export function ensureWeedoCoreSchema() {
       updated_at=excluded.updated_at
   `);
   const linkBrand = db.prepare(`UPDATE cannabis_products SET brand_id=? WHERE brand_id IS NULL AND LOWER(TRIM(brand_name))=LOWER(?)`);
-  const transaction = db.transaction(() => {
+  runTransaction(db, () => {
     for (const row of brands) {
       const normalized = normalizeIdentityText(row.brand_name);
       if (!normalized) continue;
@@ -127,7 +138,6 @@ export function ensureWeedoCoreSchema() {
       linkBrand.run(id, row.brand_name);
     }
   });
-  transaction();
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS cannabis_products_brand_idx ON cannabis_products(brand_id);
@@ -153,7 +163,6 @@ export function findCanonicalProductMatch(input: {
   batchNumber?: string | null;
 }): CanonicalProductMatch {
   const db = ensureWeedoCoreSchema();
-  const reasons: string[] = [];
 
   for (const identifier of input.identifiers || []) {
     const normalized = normalizeProductIdentifier(identifier.type, identifier.value);
@@ -284,7 +293,7 @@ export function refreshDerivedScanState() {
   const db = ensureWeedoCoreSchema();
   const rows = db.prepare(`SELECT id,qr_value,product_id,batch_id FROM cannabis_qr_scans`).all() as any[];
   const update = db.prepare(`UPDATE cannabis_qr_scans SET payload_kind=?,resolution_status=? WHERE id=?`);
-  const transaction = db.transaction(() => {
+  runTransaction(db, () => {
     for (const row of rows) {
       update.run(
         classifyWeedoScanPayload(row.qr_value),
@@ -293,7 +302,6 @@ export function refreshDerivedScanState() {
       );
     }
   });
-  transaction();
 }
 
 export function listUnknownScanGroups(limit = 100) {
