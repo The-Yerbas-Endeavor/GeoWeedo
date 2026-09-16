@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/userAuth';
 import { parseScLabsCoaPdf } from '@/lib/scLabsCoaPdf';
 import { saveCoaUpload } from '@/lib/weedoFactsUploads';
+import { recordAdminIssueEvent } from '@/lib/adminIssues';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
 const allowedTypes = new Set(['qr', 'upc', 'uid', 'batch', 'coa', 'unknown']);
+
+function sourceLabel(identifier: string) {
+  try { return new URL(identifier).hostname.toLowerCase(); } catch { return 'uploaded COA'; }
+}
 
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request);
@@ -25,7 +30,27 @@ export async function POST(request: NextRequest) {
     if (upload.type && upload.type !== 'application/pdf') return NextResponse.json({ error: 'Only PDF uploads are accepted.' }, { status: 415 });
 
     const bytes = new Uint8Array(await upload.arrayBuffer());
-    const parsed = await parseScLabsCoaPdf(bytes);
+    let parsed;
+    try {
+      parsed = await parseScLabsCoaPdf(bytes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to parse this COA PDF.';
+      const source = sourceLabel(identifierValue);
+      recordAdminIssueEvent({
+        category: 'coa_parse_failure',
+        fingerprint: `coa-parse:${identifierType}:${source}:${message}`,
+        title: `COA parser failure · ${source}`,
+        message,
+        details: {
+          identifierType,
+          source,
+          originalFilename: upload.name || null,
+          bytes: upload.size,
+        },
+      });
+      throw error;
+    }
+
     const saved = saveCoaUpload({ userId: user.id, identifierType, identifierValue, originalFilename: upload.name || null, bytes, parsed });
     const analyteGroups = parsed.analytes.reduce((acc: Record<string, number>, row) => { acc[row.groupName] = (acc[row.groupName] || 0) + 1; return acc; }, {});
 
