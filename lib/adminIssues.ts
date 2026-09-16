@@ -79,7 +79,8 @@ export function recordAdminIssueEvent(input: {
       title=excluded.title,
       message=excluded.message,
       details_json=excluded.details_json,
-      occurrence_count=admin_issue_events.occurrence_count+1,
+      occurrence_count=CASE WHEN admin_issue_events.resolved_at IS NULL THEN admin_issue_events.occurrence_count+1 ELSE 1 END,
+      first_seen_at=CASE WHEN admin_issue_events.resolved_at IS NULL THEN admin_issue_events.first_seen_at ELSE excluded.first_seen_at END,
       last_seen_at=excluded.last_seen_at,
       resolved_at=NULL
   `).run(id, input.category, fingerprint, input.title, input.message || null, details, now, now);
