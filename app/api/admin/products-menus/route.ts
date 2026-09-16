@@ -28,13 +28,40 @@ function ensure() {
   return db;
 }
 
-function productRows(search = '') {
+const PRODUCT_SORTS: Record<string, string> = {
+  updated_desc: "p.updated_at DESC,p.product_name COLLATE NOCASE ASC",
+  updated_asc: "p.updated_at ASC,p.product_name COLLATE NOCASE ASC",
+  name_asc: "p.product_name COLLATE NOCASE ASC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
+  name_desc: "p.product_name COLLATE NOCASE DESC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
+  brand_asc: "COALESCE(p.brand_name,'') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC",
+  brand_desc: "COALESCE(p.brand_name,'') COLLATE NOCASE DESC,p.product_name COLLATE NOCASE ASC",
+  batches_desc: "batch_count DESC,p.product_name COLLATE NOCASE ASC",
+  menus_desc: "menu_count DESC,p.product_name COLLATE NOCASE ASC",
+};
+
+function productCatalog(search = '', requestedPage = 1, requestedPageSize = 50, requestedSort = 'updated_desc') {
   const db = ensure();
   const q = search.trim().toLowerCase();
+  const pageSize = Math.max(10, Math.min(100, Math.floor(requestedPageSize) || 50));
+  const sort = PRODUCT_SORTS[requestedSort] ? requestedSort : 'updated_desc';
+  const orderBy = PRODUCT_SORTS[sort];
   const params: string[] = [];
-  const where = q ? `WHERE LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?` : '';
+  const where = q
+    ? `WHERE LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?`
+    : '';
   if (q) params.push(`%${q}%`);
-  return db.prepare(`
+
+  const total = Number((db.prepare(`
+    SELECT COUNT(*) AS n
+      FROM cannabis_products p
+      LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
+      ${where}
+  `).get(...params) as any)?.n || 0);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), pageCount);
+  const offset = (page - 1) * pageSize;
+
+  const products = db.prepare(`
     SELECT p.id,p.brand_name,p.product_name,p.product_type,p.net_contents,p.category_id,p.category_source,c.name AS category_name,c.slug AS category_slug,p.created_at,p.updated_at,
            (SELECT identifier_value FROM cannabis_product_identifiers i WHERE i.product_id=p.id AND i.identifier_type IN ('upc','ean') ORDER BY i.verified DESC,i.created_at LIMIT 1) AS barcode,
            (SELECT image_url FROM cannabis_product_media pm WHERE pm.product_id=p.id ORDER BY pm.is_primary DESC,pm.updated_at DESC LIMIT 1) AS image_url,
@@ -43,13 +70,17 @@ function productRows(search = '') {
       FROM cannabis_products p
       LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
       ${where}
-     ORDER BY p.updated_at DESC,p.product_name COLLATE NOCASE
-     LIMIT 150
-  `).all(...params) as any[];
+     ORDER BY ${orderBy}
+     LIMIT ? OFFSET ?
+  `).all(...params, pageSize, offset) as any[];
+
+  return { products, total, page, pageSize, pageCount, sort };
 }
 
-function verifiedProductRows() {
+function verifiedProductRows(productIds: string[]) {
+  if (!productIds.length) return [];
   const db = ensure();
+  const placeholders = productIds.map(() => '?').join(',');
   return db.prepare(`
     SELECT p.id,p.brand_name,p.product_name,p.product_type,p.net_contents,p.category_id,c.name AS category_name,p.updated_at,
       COUNT(DISTINCT b.id) AS verified_batch_count,MAX(b.tested_at) AS latest_tested_at,
@@ -62,9 +93,9 @@ function verifiedProductRows() {
     FROM cannabis_products p
     JOIN cannabis_batches b ON b.product_id=p.id AND b.verified=1 AND LOWER(b.source_type)='lab'
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
+    WHERE p.id IN (${placeholders})
     GROUP BY p.id
-    ORDER BY COALESCE(MAX(b.tested_at),p.updated_at) DESC,p.product_name COLLATE NOCASE
-  `).all() as any[];
+  `).all(...productIds) as any[];
 }
 
 function qrScanRows() {
@@ -80,6 +111,7 @@ function qrScanRows() {
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
     LEFT JOIN cannabis_batches b ON b.id=q.batch_id
     ORDER BY q.last_seen_at DESC,q.first_seen_at DESC
+    LIMIT 500
   `).all() as any[];
 }
 
@@ -90,8 +122,12 @@ function dispensaryRows() {
 export async function GET(request: NextRequest) {
   if (!getAdminFromRequest(request)) return unauthorized();
   const search = text(request.nextUrl.searchParams.get('q'));
+  const requestedPage = Math.max(1, Math.floor(Number(request.nextUrl.searchParams.get('page') || 1)) || 1);
+  const requestedPageSize = Math.max(10, Math.min(100, Math.floor(Number(request.nextUrl.searchParams.get('pageSize') || 50)) || 50));
+  const requestedSort = text(request.nextUrl.searchParams.get('sort')) || 'updated_desc';
   const dispensaryId = text(request.nextUrl.searchParams.get('dispensaryId'));
   const db = ensure();
+  const catalog = productCatalog(search, requestedPage, requestedPageSize, requestedSort);
   const stats = {
     products: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0),
     categorizedProducts: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products WHERE category_id IS NOT NULL').get() as any)?.n || 0),
@@ -106,9 +142,10 @@ export async function GET(request: NextRequest) {
   };
   return NextResponse.json({
     stats,
+    catalog: { total: catalog.total, page: catalog.page, pageSize: catalog.pageSize, pageCount: catalog.pageCount, sort: catalog.sort },
     categories: listProductCategories(db),
-    products: productRows(search),
-    verifiedProducts: verifiedProductRows(),
+    products: catalog.products,
+    verifiedProducts: verifiedProductRows(catalog.products.map(product => String(product.id))),
     qrScans: qrScanRows(),
     dispensaries: dispensaryRows(),
     menuItems: dispensaryId ? listDispensaryMenu(dispensaryId) : [],
@@ -128,7 +165,7 @@ export async function POST(request: NextRequest) {
     if (!productId || !categoryId) return invalid('Product and category are required.');
     try {
       const category = assignProductCategory(productId, categoryId, 'admin', db);
-      return NextResponse.json({ ok: true, productId, category, product: productRows('')[0] || null });
+      return NextResponse.json({ ok: true, productId, category });
     } catch (error) {
       return invalid(error instanceof Error ? error.message : 'Could not assign product category.');
     }
@@ -163,7 +200,7 @@ export async function POST(request: NextRequest) {
     if (barcode) db.prepare('INSERT INTO cannabis_product_identifiers (id,product_id,identifier_type,identifier_value,source,verified,created_at) VALUES (?,?,?,?,?,?,?)')
       .run(`pid-${randomUUID()}`, productId, barcode.length === 12 ? 'upc' : 'ean', barcode, 'admin-manual', 0, new Date().toISOString());
     if (imageUrl) setProductPrimaryImage(productId, imageUrl, { sourceType: 'admin-manual' });
-    return NextResponse.json({ productId, product: productRows(`${brandName || ''} ${productName}`)[0] || null }, { status: 201 });
+    return NextResponse.json({ productId }, { status: 201 });
   }
 
   if (action === 'add-menu-item') {
