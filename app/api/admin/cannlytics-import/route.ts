@@ -32,6 +32,7 @@ type RunStatus = {
   exitCode?: number | null;
   logFile?: string;
   error?: string;
+  warning?: string;
 };
 
 function unauthorized() {
@@ -110,6 +111,15 @@ function syncRows() {
   `).all() as any[];
 }
 
+function checkpointWal() {
+  try {
+    getDatabase().exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? `Import completed, but the SQLite WAL checkpoint failed: ${error.message}` : 'Import completed, but the SQLite WAL checkpoint failed.';
+  }
+}
+
 export async function GET(request: NextRequest) {
   if (!getAdminFromRequest(request)) return unauthorized();
   const status = normalizeStatus();
@@ -183,12 +193,14 @@ export async function POST(request: NextRequest) {
   });
 
   child.once('exit', code => {
+    const warning = code === 0 && !dryRun ? checkpointWal() : undefined;
     writeStatus({
       ...started,
       running: false,
       completedAt: new Date().toISOString(),
       exitCode: code,
       error: code === 0 ? undefined : `Importer exited with code ${code ?? 'unknown'}.`,
+      warning,
     });
   });
 
