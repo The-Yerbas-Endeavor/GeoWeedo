@@ -1,0 +1,49 @@
+.home-promo-explore-updated > button[aria-label="Findo Weedo on the dispensary map"],
+.home-promo-explore-updated > .home-promo-intro{display:none!important}
+.home-promo-explore-updated > .game-selector{display:none!important}
+.home-promo-explore-updated.home-promo-play-open > .game-selector{display:grid!important;animation:homeExploreReveal .18s ease-out}
+
+.home-explore-category-host{display:grid;gap:11px}
+.home-explore-intro{text-align:center;padding:0 18px 2px}
+.home-explore-kicker{font-size:17px;font-weight:900;letter-spacing:.05em;color:#f3f7f4}
+.home-explore-intro p{max-width:590px;margin:5px auto 0;color:#d6dfd8;font-size:14px;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.home-explore-categories{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.home-explore-card{appearance:none;width:100%;min-width:0;min-height:132px;padding:16px;border:1px solid rgba(255,255,255,.13);border-radius:16px;background:rgba(7,12,9,.34);color:#f3f7f4;text-decoration:none;font:inherit;display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto;gap:9px 11px;text-align:left;align-items:start;cursor:pointer;transition:transform .15s ease,border-color .15s ease,background .15s ease,box-shadow .15s ease}
+.home-explore-card:hover,.home-explore-card:focus-visible{transform:translateY(-2px);border-color:rgba(126,217,87,.62);background:rgba(126,217,87,.10);box-shadow:0 10px 26px rgba(0,0,0,.16);outline:none}
+.home-explore-card.active{border-color:rgba(126,217,87,.7);background:rgba(126,217,87,.12)}
+.home-explore-search{border-color:rgba(126,217,87,.35)}
+.home-explore-scan{border-color:rgba(110,188,255,.28)}
+.home-explore-play{border-color:rgba(245,196,81,.30)}
+.home-explore-icon{font-size:29px;line-height:1}
+.home-explore-copy{display:grid;gap:5px;min-width:0}
+.home-explore-copy strong{font-size:15px;line-height:1.2}
+.home-explore-copy small{color:#c9d4cc;font-size:10px;line-height:1.4}
+.home-explore-card>b{grid-column:2;color:#7ed957;font-size:10px;letter-spacing:.08em;align-self:end}
+.home-explore-scan>b{color:#8bc9ff}
+.home-explore-play>b{color:#f5c451}
+
+@keyframes homeExploreReveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:900px){
+  .home-explore-categories{grid-template-columns:1fr}
+  .home-explore-card{min-height:88px;grid-template-columns:auto 1fr auto;grid-template-rows:1fr;align-items:center;padding:12px 14px}
+  .home-explore-card>b{grid-column:auto;white-space:nowrap;align-self:center}
+}
+
+@media(max-width:650px){
+  .home-explore-category-host{gap:8px}
+  .home-explore-intro{padding:0 8px}
+  .home-explore-kicker{font-size:14px}
+  .home-explore-intro p{font-size:11px;margin-top:3px}
+  .home-explore-categories{gap:7px}
+  .home-explore-card{min-height:72px;padding:9px 10px;border-radius:13px;gap:7px 9px}
+  .home-explore-icon{font-size:22px}
+  .home-explore-copy strong{font-size:13px}
+  .home-explore-copy small{font-size:9px}
+  .home-explore-card>b{font-size:9px}
+}
+
+@media(max-width:430px){
+  .home-explore-card{grid-template-columns:auto 1fr;grid-template-rows:1fr auto}
+  .home-explore-card>b{grid-column:2;justify-self:start}
+}
