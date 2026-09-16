@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (upload.type && upload.type !== 'application/pdf') return NextResponse.json({ error: 'Only PDF uploads are accepted.' }, { status: 415 });
 
     const bytes = new Uint8Array(await upload.arrayBuffer());
-    let parsed;
+    let parsed: Awaited<ReturnType<typeof parseScLabsCoaPdf>>;
     try {
       parsed = await parseScLabsCoaPdf(bytes);
     } catch (error) {
