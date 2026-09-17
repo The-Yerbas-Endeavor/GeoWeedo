@@ -26,16 +26,24 @@ function analyticsSummary() {
   const since = new Date(now - 7 * 86400000).toISOString();
   const activeSince = new Date(now - 10 * 60000).toISOString();
   const nonAdminSession = `EXISTS (SELECT 1 FROM analytics_events ae WHERE ae.session_id=s.id AND ae.event_type='page_view' AND COALESCE(ae.path,'/') NOT LIKE '/admin%')`;
-  const liveTrend: Array<{ at: string; active: number }> = [];
-  const bucketMs = 5 * 60000;
-  for (let index = 0; index < 12; index += 1) {
-    const startMs = now - (12 - index) * bucketMs;
-    const endMs = startMs + bucketMs;
-    liveTrend.push({
-      at: new Date(startMs).toISOString(),
-      active: scalar(db, `SELECT COUNT(DISTINCT e.visitor_id) value FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.created_at>=? AND e.created_at<? AND COALESCE(e.path,'/') NOT LIKE '/admin%' AND ${HUMAN_SQL}`, new Date(startMs).toISOString(), new Date(endMs).toISOString()),
-    });
-  }
+
+  const visitorRows = db.prepare(`
+    SELECT substr(e.created_at,1,10) day, COUNT(DISTINCT e.visitor_id) visitors
+    FROM analytics_events e
+    JOIN analytics_sessions s ON s.id=e.session_id
+    WHERE e.event_type='page_view'
+      AND e.created_at>=?
+      AND COALESCE(e.path,'/') NOT LIKE '/admin%'
+      AND ${HUMAN_SQL}
+    GROUP BY day
+    ORDER BY day
+  `).all(since) as Array<{ day:string; visitors:number }>;
+  const visitorsByDay = new Map(visitorRows.map(row => [String(row.day), Number(row.visitors || 0)]));
+  const visitorTrend = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(now - (6 - index) * 86400000).toISOString().slice(0, 10);
+    return { day, visitors: visitorsByDay.get(day) || 0 };
+  });
+
   const currentVisitors = db.prepare(`
     SELECT visitor_id,path,last_seen_at,country,region,city FROM (
       SELECT s.visitor_id,
@@ -48,13 +56,14 @@ function analyticsSummary() {
     ORDER BY last_seen_at DESC
     LIMIT 8
   `).all(activeSince) as any[];
+
   return {
     days: 7,
     activeNow: scalar(db, `SELECT COUNT(DISTINCT s.visitor_id) value FROM analytics_sessions s WHERE s.last_seen_at>=? AND ${HUMAN_SQL} AND ${nonAdminSession}`, activeSince),
     visitors: scalar(db, `SELECT COUNT(DISTINCT s.visitor_id) value FROM analytics_sessions s WHERE s.started_at>=? AND ${HUMAN_SQL} AND ${nonAdminSession}`, since),
     sessions: scalar(db, `SELECT COUNT(*) value FROM analytics_sessions s WHERE s.started_at>=? AND ${HUMAN_SQL} AND ${nonAdminSession}`, since),
     pageViews: scalar(db, `SELECT COUNT(*) value FROM analytics_events e JOIN analytics_sessions s ON s.id=e.session_id WHERE e.event_type='page_view' AND e.created_at>=? AND COALESCE(e.path,'/') NOT LIKE '/admin%' AND ${HUMAN_SQL}`, since),
-    liveTrend,
+    visitorTrend,
     currentVisitors: currentVisitors.map(row => ({
       visitorId: String(row.visitor_id || ''),
       path: String(row.path || '/'),
