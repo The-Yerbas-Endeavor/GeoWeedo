@@ -44,7 +44,6 @@ export default function AdminSettingsPage() {
     <section className={styles.section}>
       <div className={styles.sectionHead}><h2>Platform</h2><p>Tools you may need occasionally, but not every time you open Admin.</p></div>
       <div className={styles.rows}>
-        <a href="/admin/analytics"><div><strong>Analytics</strong><span>Traffic, sessions, referrals, and client reliability.</span></div><b>→</b></a>
         <a href="/admin/sponsorships"><div><strong>Business & sponsorships</strong><span>Featured listings and sponsorship records.</span></div><b>→</b></a>
       </div>
     </section>
