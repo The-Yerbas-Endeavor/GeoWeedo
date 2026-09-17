@@ -186,24 +186,29 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     ORDER BY COALESCE(mi.matched_at,mi.updated_at) DESC LIMIT 6
   `) : [];
 
+  // Raw imported candidates with no coordinates are an automated data backlog,
+  // not thousands of individual operator tasks. Only records already promoted
+  // into review/approval should interrupt the Issues queue.
   const missingCoordinateCount = tableExists('dispensary_candidates') ? count(`
     SELECT COUNT(*) AS count FROM dispensary_candidates
-    WHERE status!='rejected' AND (latitude IS NULL OR longitude IS NULL)
+    WHERE status IN ('reviewing','approved') AND (latitude IS NULL OR longitude IS NULL)
   `) : 0;
   const missingCoordinates = missingCoordinateCount ? rows<any>(`
     SELECT id,name,city,region,updated_at FROM dispensary_candidates
-    WHERE status!='rejected' AND (latitude IS NULL OR longitude IS NULL)
+    WHERE status IN ('reviewing','approved') AND (latitude IS NULL OR longitude IS NULL)
     ORDER BY updated_at DESC LIMIT 6
   `) : [];
 
+  // No imagery coverage is a valid terminal validation result. Only actual
+  // provider/processing errors need operator attention here.
   const failedImageryCount = tableExists('dispensary_candidates') ? count(`
     SELECT COUNT(*) AS count FROM dispensary_candidates
-    WHERE status!='rejected' AND imagery_status IN ('no_coverage','error')
+    WHERE status!='rejected' AND imagery_status='error'
   `) : 0;
   const failedImagery = failedImageryCount ? rows<any>(`
     SELECT id,name,city,region,imagery_status,imagery_message,imagery_checked_at,updated_at
     FROM dispensary_candidates
-    WHERE status!='rejected' AND imagery_status IN ('no_coverage','error')
+    WHERE status!='rejected' AND imagery_status='error'
     ORDER BY COALESCE(imagery_checked_at,updated_at) DESC LIMIT 6
   `) : [];
 
@@ -257,12 +262,12 @@ export function getAdminIssuesDashboard(staleHours = 24) {
     },
     {
       category: 'missing_coordinates', label: 'Missing coordinates', count: missingCoordinateCount,
-      description: 'Active dispensary candidates that cannot enter gameplay or map validation until coordinates are available.', href: '/admin/data',
+      description: 'Reviewing or approved dispensary candidates that cannot move forward until coordinates are available. Raw import backlog stays in Data Import.', href: '/admin/data',
       samples: missingCoordinates.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary candidate'), detail:[row.city,row.region].filter(Boolean).join(', ')||'Location incomplete', updatedAt:row.updated_at||null, href:'/admin/data' })),
     },
     {
-      category: 'failed_imagery', label: 'Imagery failures', count: failedImageryCount,
-      description: 'Coordinate-ready candidates where imagery validation reported no coverage or an error.', href: '/admin/gameplay-pipeline',
+      category: 'failed_imagery', label: 'Imagery errors', count: failedImageryCount,
+      description: 'Candidates where imagery validation encountered an actual provider or processing error. Normal no-coverage results are excluded.', href: '/admin/gameplay-pipeline',
       samples: failedImagery.map(row => ({ id:String(row.id), title:clean(row.name,'Dispensary candidate'), detail:`${clean(row.imagery_status,'imagery issue').replace(/_/g,' ')}${row.imagery_message?` · ${row.imagery_message}`:''}`, updatedAt:row.imagery_checked_at||row.updated_at||null, href:'/admin/gameplay-pipeline' })),
     },
   ];
