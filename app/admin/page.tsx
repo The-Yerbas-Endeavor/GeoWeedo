@@ -12,14 +12,14 @@ type AdminUser = {
   permissions?: AdminPermission[];
 };
 
-type LiveTrendRow = { at:string; active:number };
+type VisitorTrendRow = { day:string; visitors:number };
 type CurrentVisitor = { visitorId:string; path:string; lastSeenAt:string; location:string };
 
 type OverviewPayload = {
   admin: AdminUser;
   analytics: null | {
     days:number; activeNow:number; visitors:number; sessions:number; pageViews:number;
-    liveTrend:LiveTrendRow[];
+    visitorTrend:VisitorTrendRow[];
     currentVisitors:CurrentVisitor[];
   };
   scans: null | {
@@ -63,24 +63,29 @@ function sparklinePoints(values:number[],width=520,height=96){
   }).join(' ');
 }
 
-function LiveAnalytics({trend,currentVisitors,activeNow}:{trend:LiveTrendRow[];currentVisitors:CurrentVisitor[];activeNow:number}){
-  const values=trend.map(row=>Number(row.active||0));
+function dayLabel(day:string){
+  const date=new Date(`${day}T00:00:00Z`);
+  return Number.isFinite(date.getTime())?date.toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'}):day;
+}
+
+function LiveAnalytics({trend,currentVisitors,activeNow}:{trend:VisitorTrendRow[];currentVisitors:CurrentVisitor[];activeNow:number}){
+  const values=trend.map(row=>Number(row.visitors||0));
   const peak=Math.max(0,...values);
   return <div className={styles.dashboardLive}>
     <div className={styles.dashboardLiveHead}>
-      <div><strong>Active visitors</strong><span>5-minute activity windows over the last hour</span></div>
-      <div><b>{activeNow.toLocaleString()}</b><span>current · peak {peak.toLocaleString()}</span></div>
+      <div><strong>Visitor trend</strong><span>Daily unique public visitors · last 7 days</span></div>
+      <div><b>{activeNow.toLocaleString()}</b><span>current · daily peak {peak.toLocaleString()}</span></div>
     </div>
     <div className={styles.dashboardLiveChart}>
-      <svg viewBox="0 0 520 96" preserveAspectRatio="none" role="img" aria-label="Active visitors during the last hour">
+      <svg viewBox="0 0 520 96" preserveAspectRatio="none" role="img" aria-label="Daily unique visitors during the last seven days">
         <line x1="0" x2="520" y1="88" y2="88"/>
         <line x1="0" x2="520" y1="48" y2="48"/>
         <polyline points={sparklinePoints(values)} fill="none" vectorEffect="non-scaling-stroke"/>
       </svg>
-      <div className={styles.dashboardLiveAxis}><span>60m ago</span><span>now</span></div>
+      <div className={styles.dashboardLiveAxis}>{trend.map(row=><span key={row.day}>{dayLabel(row.day)}</span>)}</div>
     </div>
     <div className={styles.dashboardCurrentVisitors}>
-      <div className={styles.dashboardRecentHead}><strong>Current visitors</strong><span>{activeNow.toLocaleString()} seen in the last 10 minutes · refreshes every 30s</span></div>
+      <div className={styles.dashboardRecentHead}><strong>Current visitors & pages</strong><span>{activeNow.toLocaleString()} seen in the last 10 minutes · refreshes every 30s</span></div>
       {currentVisitors.length?currentVisitors.map(row=><div className={styles.dashboardCurrentRow} key={row.visitorId}>
         <div><i aria-hidden="true"/><strong>{row.path}</strong><span>{row.location||'Location unavailable'}</span></div>
         <time>{dateLabel(row.lastSeenAt)}</time>
@@ -145,7 +150,7 @@ export default function AdminHomePage() {
           <Metric value={data.analytics.sessions} label="Sessions"/>
           <Metric value={data.analytics.pageViews} label="Page views"/>
         </div>
-        <LiveAnalytics trend={data.analytics.liveTrend} currentVisitors={data.analytics.currentVisitors} activeNow={data.analytics.activeNow}/>
+        <LiveAnalytics trend={data.analytics.visitorTrend} currentVisitors={data.analytics.currentVisitors} activeNow={data.analytics.activeNow}/>
         <p className={styles.dashboardNote}>Public traffic only; Admin page views are excluded.</p>
       </article>:null}
 
