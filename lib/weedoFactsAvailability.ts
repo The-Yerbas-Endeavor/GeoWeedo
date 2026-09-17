@@ -69,8 +69,9 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
       batchVerified: Boolean(row.batch_verified),
       matchConfidence: row.match_confidence || null,
     });
-    const latitude = Number(row.latitude);
-    const longitude = Number(row.longitude);
+    const latitude = row.latitude === null || row.latitude === undefined || row.latitude === '' ? null : Number(row.latitude);
+    const longitude = row.longitude === null || row.longitude === undefined || row.longitude === '' ? null : Number(row.longitude);
+    const priceCents = row.price_cents === null || row.price_cents === undefined || row.price_cents === '' ? null : Number(row.price_cents);
     return {
       menuItemId: row.menu_item_id,
       productId: row.product_id,
@@ -84,15 +85,15 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
         city: row.city || null,
         region: row.region || null,
         country: row.country || null,
-        latitude: Number.isFinite(latitude) ? latitude : null,
-        longitude: Number.isFinite(longitude) ? longitude : null,
+        latitude: latitude !== null && Number.isFinite(latitude) ? latitude : null,
+        longitude: longitude !== null && Number.isFinite(longitude) ? longitude : null,
       },
       itemName: row.item_name,
       brandName: row.brand_name || null,
       category: row.category || null,
       variant: row.variant || null,
       packageSize: row.package_size || null,
-      priceCents: Number.isFinite(Number(row.price_cents)) ? Number(row.price_cents) : null,
+      priceCents: priceCents !== null && Number.isFinite(priceCents) ? priceCents : null,
       currency: row.currency || 'USD',
       inventoryStatus: row.inventory_status || 'unknown',
       verified: Boolean(row.item_verified),
