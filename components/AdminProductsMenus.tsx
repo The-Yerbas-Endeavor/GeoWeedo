@@ -68,8 +68,7 @@ export default function AdminProductsMenus(){
 
  return <main className={styles.shell}>
   <header className={styles.header}>
-   <div><span>GEOWEEDO FACTS · PRODUCT DATABASE</span><h1>Products & scans</h1><p>See what imported successfully, find a product or QR scan, and fix only the records that actually need attention.</p></div>
-   <a href="/admin">← Admin</a>
+   <div><span>GEOWEEDO ADMIN · PRODUCTS</span><h1>Products & scans</h1><p>See what imported successfully, find a product or QR scan, and fix only the records that actually need attention.</p></div>
   </header>
 
   <section className={styles.summary}>
