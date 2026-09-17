@@ -16,6 +16,15 @@ function hasAny(admin: AdminUser | null, permissions: AdminPermission[]) {
   return permissions.some(permission => admin?.permissions?.includes(permission));
 }
 
+function inSettings(pathname: string) {
+  return pathname.startsWith('/admin/settings')
+    || pathname.startsWith('/admin/analytics')
+    || pathname.startsWith('/admin/sponsorships')
+    || pathname.startsWith('/admin/wallet')
+    || pathname.startsWith('/admin/rewards')
+    || pathname.startsWith('/admin/withdrawals');
+}
+
 export default function AdminPrimaryNav() {
   const pathname = usePathname();
   const [admin, setAdmin] = useState<AdminUser | null>(null);
@@ -33,7 +42,7 @@ export default function AdminPrimaryNav() {
   }, [pathname]);
 
   const primary = useMemo<NavItem[]>(() => {
-    if (!admin) return [{ label: 'Overview', href: '/admin', active: pathname === '/admin' }];
+    if (!admin) return [{ label: 'Overview', href: '/admin', active: pathname === '/admin' || pathname.startsWith('/admin/issues') }];
     if (admin.role === 'verified_dispensary') {
       return [
         { label: 'Overview', href: '/admin', active: pathname === '/admin' },
@@ -41,7 +50,7 @@ export default function AdminPrimaryNav() {
       ];
     }
 
-    const items: NavItem[] = [{ label: 'Overview', href: '/admin', active: pathname === '/admin' }];
+    const items: NavItem[] = [{ label: 'Overview', href: '/admin', active: pathname === '/admin' || pathname.startsWith('/admin/issues') }];
     if (hasAny(admin, ['data.manage'])) {
       items.push({
         label: 'Products',
@@ -64,7 +73,7 @@ export default function AdminPrimaryNav() {
       });
     }
     if (admin.role === 'admin') {
-      items.push({ label: 'Settings', href: '/admin/settings', active: pathname.startsWith('/admin/settings') });
+      items.push({ label: 'Settings', href: '/admin/settings', active: inSettings(pathname) });
     }
     return items;
   }, [admin, pathname]);
