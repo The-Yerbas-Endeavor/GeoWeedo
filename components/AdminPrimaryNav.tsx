@@ -20,7 +20,6 @@ function hasAny(admin: AdminUser | null, permissions: AdminPermission[]) {
 
 function inSettings(pathname: string) {
   return pathname.startsWith('/admin/settings')
-    || pathname.startsWith('/admin/analytics')
     || pathname.startsWith('/admin/sponsorships')
     || pathname.startsWith('/admin/wallet')
     || pathname.startsWith('/admin/rewards')
@@ -85,6 +84,9 @@ export default function AdminPrimaryNav() {
         href: '/admin/users',
         active: pathname.startsWith('/admin/users') || pathname.startsWith('/admin/staff'),
       });
+    }
+    if (hasAny(admin, ['dashboard.view'])) {
+      items.push({ label: 'Analytics', href: '/admin/analytics', active: pathname.startsWith('/admin/analytics') });
     }
     if (admin.role === 'admin') {
       items.push({ label: 'Settings', href: '/admin/settings', active: inSettings(pathname) });
