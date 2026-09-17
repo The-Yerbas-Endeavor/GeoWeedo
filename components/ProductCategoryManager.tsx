@@ -27,9 +27,9 @@ export default function ProductCategoryManager() {
   const [notice, setNotice] = useState('');
 
   async function load(search = '') {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ view: 'categories' });
     if (search.trim()) params.set('q', search.trim());
-    const response = await fetch(`/api/admin/products-menus${params.size ? `?${params}` : ''}`, { cache: 'no-store' });
+    const response = await fetch(`/api/admin/products-menus?${params}`, { cache: 'no-store' });
     if (response.status === 401) { window.location.href = '/admin/login'; return; }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || 'Could not load product categories.');
