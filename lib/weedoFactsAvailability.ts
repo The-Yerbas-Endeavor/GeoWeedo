@@ -15,6 +15,8 @@ export type WeedoFactsAvailabilityItem = {
     city: string | null;
     region: string | null;
     country: string | null;
+    latitude: number | null;
+    longitude: number | null;
   };
   itemName: string;
   brandName: string | null;
@@ -42,6 +44,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
            mi.inventory_status, mi.verified AS item_verified, mi.source_url, mi.source_updated_at,
            mi.match_confidence,
            d.id AS dispensary_id, d.name AS dispensary_name, d.city, d.region, d.country,
+           d.latitude, d.longitude,
            b.batch_number, b.uid, b.verified AS batch_verified
       FROM dispensary_menu_items mi
       JOIN dispensary_menus m ON m.id = mi.menu_id
@@ -66,6 +69,9 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
       batchVerified: Boolean(row.batch_verified),
       matchConfidence: row.match_confidence || null,
     });
+    const latitude = row.latitude === null || row.latitude === undefined || row.latitude === '' ? null : Number(row.latitude);
+    const longitude = row.longitude === null || row.longitude === undefined || row.longitude === '' ? null : Number(row.longitude);
+    const priceCents = row.price_cents === null || row.price_cents === undefined || row.price_cents === '' ? null : Number(row.price_cents);
     return {
       menuItemId: row.menu_item_id,
       productId: row.product_id,
@@ -79,13 +85,15 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
         city: row.city || null,
         region: row.region || null,
         country: row.country || null,
+        latitude: latitude !== null && Number.isFinite(latitude) ? latitude : null,
+        longitude: longitude !== null && Number.isFinite(longitude) ? longitude : null,
       },
       itemName: row.item_name,
       brandName: row.brand_name || null,
       category: row.category || null,
       variant: row.variant || null,
       packageSize: row.package_size || null,
-      priceCents: Number.isFinite(Number(row.price_cents)) ? Number(row.price_cents) : null,
+      priceCents: priceCents !== null && Number.isFinite(priceCents) ? priceCents : null,
       currency: row.currency || 'USD',
       inventoryStatus: row.inventory_status || 'unknown',
       verified: Boolean(row.item_verified),

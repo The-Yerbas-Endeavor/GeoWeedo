@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import WeedoFactsNearby from '@/components/WeedoFactsNearby';
 
 function measure(value: any) {
   if (!value || value.value === null || value.value === undefined) return '—';
@@ -65,8 +66,14 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
     return rows;
   }, [data, sort]);
 
-  if (error) return <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p className="weedoFactsError">{error}</p></section>;
-  if (!data) return <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading verified batches…</p></section>;
+  if (error) return <>
+    <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
+    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p className="weedoFactsError">{error}</p></section>
+  </>;
+  if (!data) return <>
+    <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
+    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading verified batches…</p></section>
+  </>;
 
   const summary = data.summary || {};
   const pageCount = Math.max(1, Math.ceil(batches.length / pageSize));
@@ -76,68 +83,71 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
   const rangeStart = batches.length ? start + 1 : 0;
   const rangeEnd = Math.min(start + pageSize, batches.length);
 
-  return <section className="weedoFactsBatchHistory">
-    <div className="weedoFactsBatchHistoryHead">
-      <div><h3>Batch history</h3><p>Verified lab history for this product. Different batches can test differently.</p></div>
-      <strong>{summary.verifiedBatchCount || 0} verified {summary.verifiedBatchCount === 1 ? 'batch' : 'batches'}</strong>
-    </div>
+  return <>
+    <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
+    <section className="weedoFactsBatchHistory">
+      <div className="weedoFactsBatchHistoryHead">
+        <div><h3>Batch history</h3><p>Verified lab history for this product. Different batches can test differently.</p></div>
+        <strong>{summary.verifiedBatchCount || 0} verified {summary.verifiedBatchCount === 1 ? 'batch' : 'batches'}</strong>
+      </div>
 
-    {batches.length ? <>
-      <div className="weedoFactsBatchSummary">
-        <div><span>THC range</span><strong>{range(summary.thcRange, summary.thcUnit)}</strong></div>
-        <div><span>Terpene range</span><strong>{range(summary.terpeneRange, summary.terpeneUnit)}</strong></div>
-        <div><span>Recurring dominant terpenes</span><strong>{summary.dominantTerpenes?.length ? summary.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></div>
-      </div>
-      <div className="weedoFactsBatchControls">
-        <label>Sort
-          <select value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}>
-            <option value="newest">Newest test first</option>
-            <option value="oldest">Oldest test first</option>
-            <option value="batch-asc">Batch A–Z</option>
-            <option value="thc-desc">Highest THC</option>
-            <option value="terpenes-desc">Highest terpenes</option>
-          </select>
-        </label>
-        <label>Rows
-          <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-          </select>
-        </label>
-      </div>
-      <div className="weedoFactsBatchHistoryList">
-        {visibleBatches.map((batch: any) => {
-          const lookupIdentifier = batch.uid || batch.coa_number || batch.batch_number;
-          const lookupType = batch.uid ? 'uid' : batch.coa_number ? 'coa' : 'batch';
-          const current = batch.id === currentBatchId;
-          return <article className={`weedoFactsBatchHistoryItem ${current ? 'current' : ''}`} key={batch.id}>
-            <div className="weedoFactsBatchHistoryTitle">
-              <strong>{batchLabel(batch)}</strong>
-              {current ? <span>Current scan</span> : null}
-            </div>
-            <div className="weedoFactsBatchHistoryMeta">
-              <span>{batch.tested_at ? `Tested ${new Date(batch.tested_at).toLocaleDateString()}` : 'Test date unavailable'}</span>
-              <span>{batch.lab_name || batch.source_name || 'Verified lab source'}</span>
-              {batch.overall_status ? <span>Lab status: {batch.overall_status}</span> : null}
-            </div>
-            <div className="weedoFactsBatchHistoryMeasures">
-              <span>THC <strong>{measure(batch.totalThc)}</strong></span>
-              <span>Terpenes <strong>{measure(batch.terpeneTotal)}</strong></span>
-              <span>Dominant <strong>{batch.dominantTerpenes?.length ? batch.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></span>
-            </div>
-            <div className="weedoFactsBatchHistoryLinks">
-              {lookupIdentifier ? <a href={`/api/weedo-facts/lookup?identifier=${encodeURIComponent(lookupIdentifier)}&type=${lookupType}`} target="_blank" rel="noreferrer">Open batch lookup →</a> : null}
-              {batch.coa_url ? <a href={batch.coa_url} target="_blank" rel="noreferrer">Original COA ↗</a> : null}
-            </div>
-          </article>;
-        })}
-      </div>
-      <div className="weedoFactsBatchPager">
-        <button type="button" disabled={currentPage <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>← Previous</button>
-        <strong>{rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of {batches.length.toLocaleString()} · Page {currentPage.toLocaleString()} of {pageCount.toLocaleString()}</strong>
-        <button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>Next →</button>
-      </div>
-    </> : <p>No verified historical batches are available yet.</p>}
-  </section>;
+      {batches.length ? <>
+        <div className="weedoFactsBatchSummary">
+          <div><span>THC range</span><strong>{range(summary.thcRange, summary.thcUnit)}</strong></div>
+          <div><span>Terpene range</span><strong>{range(summary.terpeneRange, summary.terpeneUnit)}</strong></div>
+          <div><span>Recurring dominant terpenes</span><strong>{summary.dominantTerpenes?.length ? summary.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></div>
+        </div>
+        <div className="weedoFactsBatchControls">
+          <label>Sort
+            <select value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}>
+              <option value="newest">Newest test first</option>
+              <option value="oldest">Oldest test first</option>
+              <option value="batch-asc">Batch A–Z</option>
+              <option value="thc-desc">Highest THC</option>
+              <option value="terpenes-desc">Highest terpenes</option>
+            </select>
+          </label>
+          <label>Rows
+            <select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </label>
+        </div>
+        <div className="weedoFactsBatchHistoryList">
+          {visibleBatches.map((batch: any) => {
+            const lookupIdentifier = batch.uid || batch.coa_number || batch.batch_number;
+            const lookupType = batch.uid ? 'uid' : batch.coa_number ? 'coa' : 'batch';
+            const current = batch.id === currentBatchId;
+            return <article className={`weedoFactsBatchHistoryItem ${current ? 'current' : ''}`} key={batch.id}>
+              <div className="weedoFactsBatchHistoryTitle">
+                <strong>{batchLabel(batch)}</strong>
+                {current ? <span>Current scan</span> : null}
+              </div>
+              <div className="weedoFactsBatchHistoryMeta">
+                <span>{batch.tested_at ? `Tested ${new Date(batch.tested_at).toLocaleDateString()}` : 'Test date unavailable'}</span>
+                <span>{batch.lab_name || batch.source_name || 'Verified lab source'}</span>
+                {batch.overall_status ? <span>Lab status: {batch.overall_status}</span> : null}
+              </div>
+              <div className="weedoFactsBatchHistoryMeasures">
+                <span>THC <strong>{measure(batch.totalThc)}</strong></span>
+                <span>Terpenes <strong>{measure(batch.terpeneTotal)}</strong></span>
+                <span>Dominant <strong>{batch.dominantTerpenes?.length ? batch.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></span>
+              </div>
+              <div className="weedoFactsBatchHistoryLinks">
+                {lookupIdentifier ? <a href={`/api/weedo-facts/lookup?identifier=${encodeURIComponent(lookupIdentifier)}&type=${lookupType}`} target="_blank" rel="noreferrer">Open batch lookup →</a> : null}
+                {batch.coa_url ? <a href={batch.coa_url} target="_blank" rel="noreferrer">Original COA ↗</a> : null}
+              </div>
+            </article>;
+          })}
+        </div>
+        <div className="weedoFactsBatchPager">
+          <button type="button" disabled={currentPage <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>← Previous</button>
+          <strong>{rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of {batches.length.toLocaleString()} · Page {currentPage.toLocaleString()} of {pageCount.toLocaleString()}</strong>
+          <button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>Next →</button>
+        </div>
+      </> : <p>No verified historical batches are available yet.</p>}
+    </section>
+  </>;
 }
