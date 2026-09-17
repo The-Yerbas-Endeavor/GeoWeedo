@@ -1,60 +1,113 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import AdminImageryProviderSettings from '@/components/AdminImageryProviderSettings';
 import type { AdminPermission } from '@/lib/adminPermissions';
 import styles from './admin.module.css';
 
-type AdminUser = { id:string; username:string; displayName?:string; role:string; permissions?:AdminPermission[] };
-type ModuleCard = { title:string; description:string; href?:string; status:'live'|'partial'|'planned'; action?:string; secondaryHref?:string; secondaryAction?:string; permission?:AdminPermission };
+type AdminUser = {
+  username: string;
+  displayName?: string;
+  role: string;
+  permissions?: AdminPermission[];
+};
 
-const liveModules:ModuleCard[]=[
-  {title:'Issues',description:'Start here. One queue for COA parser failures, pending COAs, unknown scans, menu matching problems, stale imported menus, missing coordinates, and imagery failures.',href:'/admin/issues',status:'live',action:'Open issues',permission:'data.manage'},
-  {title:'Analytics',description:'First-party visitor, session, page-view, duration, referral, coarse-location, and client reliability analytics stored by GeoWeedo.',href:'/admin/analytics',status:'live',action:'Open analytics',permission:'dashboard.view'},
-  {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and prepare locations for downstream processing.',href:'/admin/data',status:'live',action:'Open data import',permission:'data.manage'},
-  {title:'GeoWeedo Facts COA review',description:'Review submitted SC Labs COA PDFs, promote approved evidence, and refresh Product Chemistry and cultivar/genetics data sources.',href:'/admin/weedo-facts',status:'live',action:'Review COAs',secondaryHref:'/admin/weedo-facts/sources',secondaryAction:'Update sources',permission:'data.manage'},
-  {title:'Cultivar genetics',description:'Curate canonical cultivars, aliases, breeder/source evidence, pedigree claims, product links, and measured genetic relationships.',href:'/admin/cultivar-genetics',status:'live',action:'Manage cultivar pedigree',secondaryHref:'/admin/cultivar-genetics/import',secondaryAction:'Import licensed dataset',permission:'data.manage'},
-  {title:'Products, scans & menus',description:'Audit every uploaded QR code and COA-verified product, manage canonical cannabis products, and publish product availability to verified dispensary menus.',href:'/admin/products-menus',status:'live',action:'Open products & scans',permission:'data.manage'},
-  {title:'Gameplay pipeline',description:'Process coordinate-ready or Automated Enrichment-approved candidates through Street View validation and promote passing locations into gameplay.',href:'/admin/gameplay-pipeline',status:'live',action:'Open gameplay pipeline',permission:'data.manage'},
-  {title:'Dispensary information',description:'Review enabled dispensaries, edit business details, validate imagery, and activate or deactivate gameplay locations.',href:'/admin/dispensaries',status:'live',action:'Manage dispensaries',permission:'locations.view'},
-  {title:'Community moderation',description:'Approve user reviews and photos, review public ownership claims, and control verified shop-edit access.',href:'/admin/community',status:'live',action:'Moderate community',permission:'locations.manage'},
-  {title:'User information',description:'Open a consolidated player record with account status, verified YERB address, balance, deposits, withdrawals, rewards, and recorded game history.',href:'/admin/users',status:'live',action:'Manage users',permission:'users.view'},
-  {title:'Yerbas wallet dashboard',description:'Unified view of player wallets, active deposit addresses, ledger balance, deposits, withdrawals, rewards, and pending finance activity.',href:'/admin/wallet',status:'live',action:'Open wallet dashboard',permission:'finance.view'},
-  {title:'Rewards',description:'Review the YERB reward ledger, gameplay reward policy, and player reward activity.',href:'/admin/rewards',status:'live',action:'Open rewards',permission:'rewards.manage'},
-  {title:'Withdrawals',description:'Review player withdrawal requests and the custody workflow for YERB leaving GeoWeedo.',href:'/admin/withdrawals',status:'live',action:'Open withdrawals',permission:'finance.withdrawals'},
-  {title:'Sponsorships',description:'Manage dispensary sponsorship records and featured-location activity.',href:'/admin/sponsorships',status:'live',action:'Open sponsorships',permission:'sponsorships.manage'},
-  {title:'Staff & permissions',description:'Create moderator positions, assign granular permissions, promote administrators, and deactivate staff access.',href:'/admin/staff',status:'live',action:'Manage staff',permission:'staff.manage'},
-];
+type IssueGroup = {
+  category: string;
+  label: string;
+  count: number;
+  href: string;
+};
 
-const plannedModules:ModuleCard[]=[
-  {title:'Wallet RPC & worker health',description:'Live Yerbas Core RPC connectivity, hot-wallet on-chain balance, sync height, network fees, deposit scanner status, and withdrawal worker health.',status:'planned'},
-  {title:'Imagery coverage',description:'State-by-state KartaView and GeoWeedo 360 coverage, failed validation reasons, stale imagery, and locations needing review.',status:'planned'},
-  {title:'System health',description:'Application instances, database health, background workers, backups, deployment status, and recent errors.',status:'planned'},
-];
+type IssueDashboard = {
+  total: number;
+  activeGroups: number;
+  groups: IssueGroup[];
+};
 
-export default function AdminHomePage(){
-  const[admin,setAdmin]=useState<AdminUser|null>(null),[loading,setLoading]=useState(true);
-  useEffect(()=>{fetch('/api/admin/auth/me',{cache:'no-store'}).then(async r=>{if(r.status===401){window.location.href='/admin/login';return null;}const d=await r.json();if(!r.ok)throw new Error(d.error||'Admin session check failed.');return d.admin||d;}).then(value=>{if(value)setAdmin(value);}).catch(()=>{window.location.href='/admin/login';}).finally(()=>setLoading(false));},[]);
-  const visibleModules=useMemo(()=>liveModules.filter(card=>!card.permission||admin?.permissions?.includes(card.permission)),[admin]);
-  const canManageImagery=Boolean(admin?.permissions?.includes('data.manage'));
-  const ownerMode=admin?.role==='verified_dispensary';
-  async function logout(){await fetch('/api/admin/auth/logout',{method:'POST'});window.location.href='/admin/login';}
-  if(loading)return <main className={styles.shell}><div className={styles.loading}>Loading GeoWeedo Admin…</div></main>;
+function hasAny(admin: AdminUser | null, permissions: AdminPermission[]) {
+  return permissions.some(permission => admin?.permissions?.includes(permission));
+}
+
+export default function AdminHomePage() {
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [issues, setIssues] = useState<IssueDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/auth/me', { cache: 'no-store' })
+      .then(async response => {
+        if (response.status === 401) { window.location.href = '/admin/login'; return null; }
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Admin session check failed.');
+        return body.admin || body;
+      })
+      .then(async value => {
+        if (!value) return;
+        setAdmin(value);
+        if (value.permissions?.includes('data.manage')) {
+          const response = await fetch('/api/admin/issues', { cache: 'no-store' });
+          if (response.ok) setIssues(await response.json());
+        }
+      })
+      .catch(() => { window.location.href = '/admin/login'; })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const areas = useMemo(() => {
+    if (!admin) return [];
+    if (admin.role === 'verified_dispensary') {
+      return [{ title: 'My dispensary', description: 'Manage your public shop profile and current menu.', href: '/admin/my-dispensary' }];
+    }
+    const result: Array<{ title: string; description: string; href: string }> = [];
+    if (hasAny(admin, ['data.manage'])) result.push({ title: 'Products', description: 'Products, batches, COAs, scans, menus, and cultivar data.', href: '/admin/products-menus' });
+    if (hasAny(admin, ['locations.view', 'locations.manage', 'data.manage'])) result.push({ title: 'Dispensaries', description: 'Locations, imports, playability, imagery, and community records.', href: '/admin/dispensaries' });
+    if (hasAny(admin, ['users.view', 'users.manage', 'staff.manage'])) result.push({ title: 'People', description: 'Player accounts, staff, roles, and permissions.', href: '/admin/users' });
+    if (admin.role === 'admin') result.push({ title: 'Settings', description: 'Platform controls, analytics, business tools, and advanced/legacy systems.', href: '/admin/settings' });
+    return result;
+  }, [admin]);
+
+  async function logout() {
+    await fetch('/api/admin/auth/logout', { method: 'POST' });
+    window.location.href = '/admin/login';
+  }
+
+  if (loading) return <main className={styles.shell}><p className={styles.loading}>Loading GeoWeedo Admin…</p></main>;
+
+  const activeIssues = issues?.groups.filter(group => group.count > 0) || [];
+
   return <main className={styles.shell}>
     <header className={styles.header}>
-      <div><a href="/admin" className={styles.adminHomeLink} aria-label="GeoWeedo Admin home"><span className={styles.eyebrow}>GEOWEEDO ADMIN</span></a><h1>Control center</h1><p>{ownerMode?'Verified dispensary owner workspace. Your account can update only the public profile and menu assigned to your shop.':admin?.role==='moderator'?'Moderator workspace. Only tools granted to your account are shown.':'Manage the live GeoWeedo platform and keep administration tools organized in one place.'}</p></div>
-      <div className={styles.headerActions}><div className={styles.adminIdentity}><strong>{admin?.displayName||admin?.username||'Administrator'}</strong><span>{admin?.role||'admin'}</span></div><a href="/" className={styles.ghost}>View game</a><button type="button" className={styles.ghost} onClick={logout}>Log out</button></div>
+      <div>
+        <span className={styles.eyebrow}>OVERVIEW</span>
+        <h1>GeoWeedo Admin</h1>
+        <p>{admin?.role === 'verified_dispensary' ? 'Manage your GeoWeedo business presence.' : 'See what needs attention, then go directly to the part of GeoWeedo you want to manage.'}</p>
+      </div>
+      <div className={styles.identity}>
+        <span>{admin?.displayName || admin?.username}</span>
+        <button type="button" onClick={logout}>Log out</button>
+      </div>
     </header>
 
-    <section className={styles.section}>
-      <div className={styles.sectionHead}><div><span className={styles.eyebrow}>AVAILABLE NOW</span><h2>Current operations</h2></div><span className={styles.count}>{visibleModules.length+(canManageImagery?1:0)+(ownerMode?1:0)} modules</span></div>
-      <div className={styles.grid}>
-        {ownerMode&&<article className={styles.card}><div className={styles.cardTop}><span className={styles.liveBadge}>LIVE</span><h3>My dispensary</h3></div><p>Edit your verified shop profile and scan canonical GeoWeedo Facts products directly into the menu for your assigned dispensary.</p><div className={styles.cardActions}><a className={styles.primaryLink} href="/admin/my-dispensary">Manage my shop & menu</a></div></article>}
-        {visibleModules.map(card=><article className={styles.card} key={card.title}><div className={styles.cardTop}><span className={card.status==='live'?styles.liveBadge:styles.partialBadge}>{card.status==='live'?'LIVE':'PARTIAL'}</span><h3>{card.title}</h3></div><p>{card.description}</p><div className={styles.cardActions}>{card.href&&<a className={styles.primaryLink} href={card.href}>{card.action||'Open'}</a>}{card.secondaryHref&&<a className={styles.secondaryLink} href={card.secondaryHref}>{card.secondaryAction||'Open'}</a>}</div></article>)}
-        {canManageImagery&&<article className={styles.card}><div className={styles.cardTop}><span className={styles.liveBadge}>LIVE</span><h3>Street imagery provider</h3></div><p>Switch live Street View between Google, KartaView, or automatic fallback and watch today's Google request usage.</p><AdminImageryProviderSettings compact /></article>}
+    {admin?.permissions?.includes('data.manage') ? <section className={styles.attention}>
+      <div className={styles.sectionTitle}>
+        <div><span className={styles.eyebrow}>NEEDS ATTENTION</span><h2>{issues ? `${issues.total} item${issues.total === 1 ? '' : 's'}` : 'Checking…'}</h2></div>
+        {issues?.total ? <a href="/admin/issues">View details</a> : null}
+      </div>
+      {issues && activeIssues.length === 0 ? <p className={styles.clear}>Nothing currently needs manual attention.</p> : null}
+      {activeIssues.length ? <div className={styles.issueRows}>
+        {activeIssues.map(group => <a href={group.href} key={group.category} className={styles.issueRow}>
+          <strong>{group.count}</strong><span>{group.label}</span><b>→</b>
+        </a>)}
+      </div> : null}
+    </section> : null}
+
+    <section className={styles.manage}>
+      <div className={styles.sectionTitle}><div><span className={styles.eyebrow}>MANAGE</span><h2>Where do you want to work?</h2></div></div>
+      <div className={styles.areaRows}>
+        {areas.map(area => <a href={area.href} key={area.title} className={styles.areaRow}>
+          <div><strong>{area.title}</strong><span>{area.description}</span></div><b>→</b>
+        </a>)}
       </div>
     </section>
-
-    {admin?.role==='admin'&&<section className={styles.section}><div className={styles.sectionHead}><div><span className={styles.eyebrow}>ROADMAP</span><h2>Future administration</h2></div><span className={styles.count}>{plannedModules.length} planned</span></div><div className={styles.grid}>{plannedModules.map(card=><article className={`${styles.card} ${styles.plannedCard}`} key={card.title}><div className={styles.cardTop}><span className={styles.plannedBadge}>PLANNED</span><h3>{card.title}</h3></div><p>{card.description}</p><div className={styles.futureNote}>Reserved for the next admin layer</div></article>)}</div></section>}
   </main>;
 }

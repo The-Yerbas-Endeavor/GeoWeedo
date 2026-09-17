@@ -1,7 +1,9 @@
 import './analytics-users.css';
-import AdminHeaderHomeLink from '@/components/AdminHeaderHomeLink';
-import AdminTreasuryBalance from '@/components/AdminTreasuryBalance';
+import AdminPrimaryNav from '@/components/AdminPrimaryNav';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}<AdminHeaderHomeLink /><AdminTreasuryBalance /></>;
+  return <>
+    <AdminPrimaryNav />
+    {children}
+  </>;
 }
