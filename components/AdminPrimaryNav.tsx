@@ -23,7 +23,11 @@ export default function AdminPrimaryNav() {
   useEffect(() => {
     if (pathname === '/admin/login') return;
     fetch('/api/admin/auth/me', { cache: 'no-store' })
-      .then(async response => response.ok ? (await response.json()).admin || await response.json() : null)
+      .then(async response => {
+        if (!response.ok) return null;
+        const body = await response.json();
+        return body.admin || body;
+      })
       .then(value => { if (value) setAdmin(value); })
       .catch(() => undefined);
   }, [pathname]);
