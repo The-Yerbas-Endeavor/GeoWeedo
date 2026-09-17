@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import type { AdminPermission } from '@/lib/adminPermissions';
@@ -11,6 +12,7 @@ type AdminUser = {
 };
 
 type NavItem = { label: string; href: string; active: boolean };
+const ADMIN_CACHE_KEY = 'geoweedo-admin-shell-user';
 
 function hasAny(admin: AdminUser | null, permissions: AdminPermission[]) {
   return permissions.some(permission => admin?.permissions?.includes(permission));
@@ -31,15 +33,27 @@ export default function AdminPrimaryNav() {
 
   useEffect(() => {
     if (pathname === '/admin/login') return;
+    try {
+      const cached = sessionStorage.getItem(ADMIN_CACHE_KEY);
+      if (cached) setAdmin(JSON.parse(cached));
+    } catch { /* cache is optional */ }
+
     fetch('/api/admin/auth/me', { cache: 'no-store' })
       .then(async response => {
         if (!response.ok) return null;
         const body = await response.json();
         return body.admin || body;
       })
-      .then(value => { if (value) setAdmin(value); })
+      .then(value => {
+        if (!value) return;
+        setAdmin(value);
+        try { sessionStorage.setItem(ADMIN_CACHE_KEY, JSON.stringify(value)); } catch { /* optional */ }
+      })
       .catch(() => undefined);
-  }, [pathname]);
+    // The admin layout persists across Next.js client navigation. Auth only needs
+    // to be resolved once for the shell instead of on every section click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const primary = useMemo<NavItem[]>(() => {
     if (!admin) return [{ label: 'Overview', href: '/admin', active: pathname === '/admin' || pathname.startsWith('/admin/issues') }];
@@ -108,14 +122,14 @@ export default function AdminPrimaryNav() {
 
   return <div className={styles.shell}>
     <nav className={styles.primary} aria-label="GeoWeedo Admin primary navigation">
-      <a className={styles.brand} href="/admin">GEOWEEDO ADMIN</a>
+      <Link className={styles.brand} href="/admin">GEOWEEDO ADMIN</Link>
       <div className={styles.links}>
-        {primary.map(item => <a key={item.href} href={item.href} className={item.active ? styles.active : undefined}>{item.label}</a>)}
+        {primary.map(item => <Link key={item.href} href={item.href} className={item.active ? styles.active : undefined}>{item.label}</Link>)}
       </div>
-      <a className={styles.site} href="/">View site ↗</a>
+      <Link className={styles.site} href="/">View site ↗</Link>
     </nav>
     {secondary.length ? <nav className={styles.secondary} aria-label="Admin section navigation">
-      {secondary.map(item => <a key={item.href} href={item.href} className={item.active ? styles.secondaryActive : undefined}>{item.label}</a>)}
+      {secondary.map(item => <Link key={item.href} href={item.href} className={item.active ? styles.secondaryActive : undefined}>{item.label}</Link>)}
     </nav> : null}
   </div>;
 }
