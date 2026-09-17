@@ -1,12 +1,162 @@
 'use client';
-import {useEffect,useMemo,useState} from 'react';import{createPortal}from'react-dom';
-type Row={usage_date:string;provider:string;request_type:string;request_count:number};
-type Cost={sku:string;currency:string;freeMonthlyEvents:number;usdPer1000:number;monthEvents:number;monthRows:Array<{usage_date:string;request_count:number}>;allowancePct:number;remainingFreeEvents:number;billableEvents:number;estimatedMonthCostUsd:number;projectedMonthEvents:number;projectedMonthCostUsd:number;warningLevel:number;warningThresholds:number[];billingMonthUtc:string;isEstimate:boolean};
-type Status={days:number;provider:string;envDefault:string;mapsKeyConfigured:boolean;placesAvailable:boolean;placesKeySource:'dedicated'|'maps-fallback'|'missing';usage:{rows:Row[];googleToday:number;googleImagesToday:number;googleMetadataToday:number;googlePanoramasToday:number};cost:Cost;accounting:{includesGoogleBilling:boolean;note:string}};
-const money=(v:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
-function Card({label,value,note,warn=false}:{label:string;value:string;note?:string;warn?:boolean}){return <article style={{padding:16,border:`1px solid ${warn?'rgba(245,196,81,.45)':'rgba(255,255,255,.09)'}`,borderRadius:15,background:warn?'rgba(245,196,81,.055)':'#131815',minHeight:118}}><div style={{fontSize:10,fontWeight:900,letterSpacing:'.11em',color:warn?'#f5c451':'#67d66e'}}>{label}</div><strong style={{display:'block',fontSize:24,marginTop:9}}>{value}</strong>{note&&<div style={{marginTop:7,color:'#9aa69d',fontSize:11,lineHeight:1.45}}>{note}</div>}</article>}
-export default function AdminGoogleApiStatus(){const[target,setTarget]=useState<HTMLElement|null>(null),[days,setDays]=useState(7),[data,setData]=useState<Status|null>(null),[error,setError]=useState('');
- useEffect(()=>{if(location.pathname!=='/admin/analytics')return;const main=document.querySelector('main');if(!main)return;let node=document.getElementById('google-api-analytics-portal') as HTMLElement|null;if(!node){node=document.createElement('section');node.id='google-api-analytics-portal';node.style.maxWidth='1500px';node.style.margin='0 auto 40px';const sections=Array.from(main.querySelectorAll(':scope > section')) as HTMLElement[];const before=sections.find(s=>(s.textContent||'').includes('NETWORK TRAFFIC'));before?main.insertBefore(node,before):main.appendChild(node)}setTarget(node)},[]);
- useEffect(()=>{if(!target)return;setError('');fetch(`/api/admin/google-api-status?days=${days}`,{cache:'no-store'}).then(async r=>{const b=await r.json().catch(()=>({}));if(r.status===401){location.href='/admin/login';return null}if(!r.ok)throw new Error(b.error||'Could not load Google API status.');return b}).then(v=>v&&setData(v)).catch(e=>setError(e instanceof Error?e.message:'Could not load Google API status.'))},[target,days]);
- const chart=useMemo(()=>{if(!data)return[];const m=new Map<string,{panorama:number;images:number;metadata:number}>();for(const r of data.usage.rows){if(r.provider!=='google')continue;const x=m.get(r.usage_date)||{panorama:0,images:0,metadata:0};const n=Number(r.request_count||0);if(r.request_type==='panorama')x.panorama+=n;else if(r.request_type==='image')x.images+=n;else if(r.request_type==='metadata')x.metadata+=n;m.set(r.usage_date,x)}const rows=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0]));const max=Math.max(1,...rows.map(([,v])=>v.panorama));return rows.map(([date,v])=>({date,...v,pct:v.panorama/max*100}))},[data]);if(!target)return null;
- const c=data?.cost;const content=<div><div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'flex-end',flexWrap:'wrap',marginBottom:16}}><div><span style={{color:'#67d66e',fontSize:11,fontWeight:900,letterSpacing:'.15em'}}>GOOGLE MAPS PLATFORM</span><h2 style={{margin:'5px 0 4px'}}>Usage & Cost</h2><p style={{margin:0,color:'#9aa69d',fontSize:13}}>GeoWeedo-observed usage with estimated Dynamic Street View cost. This is not Google billing data.</p></div><div style={{display:'flex',gap:7}}>{[1,7,30,90].map(v=><button key={v} onClick={()=>setDays(v)} style={{padding:'7px 10px',borderRadius:8,border:`1px solid ${days===v?'#67d66e':'rgba(255,255,255,.12)'}`,background:days===v?'rgba(103,214,110,.12)':'#131815',color:'#fff'}}>{v===1?'Today':`${v}d`}</button>)}</div></div>{error?<p>{error}</p>:!data||!c?<p>Loading Google usage…</p>:<><div style={{padding:'12px 14px',border:'1px solid rgba(245,196,81,.35)',background:'rgba(245,196,81,.055)',borderRadius:12,marginBottom:12,fontSize:12,lineHeight:1.5}}><strong style={{color:'#f5c451'}}>GEOWEEDO ESTIMATE — NOT GOOGLE BILLING</strong><br/>Costs below apply public pay-as-you-go list pricing to panorama objects GeoWeedo records. Check Google Cloud for the authoritative invoice, credits and quota usage.</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}}><Card label="PANORAMAS TODAY" value={data.usage.googlePanoramasToday.toLocaleString()} note="Dynamic Street View objects instantiated"/><Card label="BILLING MONTH" value={c.monthEvents.toLocaleString()} note={`${c.billingMonthUtc} · GeoWeedo counter`}/><Card label="FREE ALLOWANCE" value={`${Math.min(100,c.allowancePct).toFixed(1)}%`} note={`${c.remainingFreeEvents.toLocaleString()} of ${c.freeMonthlyEvents.toLocaleString()} free events remaining`} warn={c.warningLevel>=75}/><Card label="EST. COST THIS MONTH" value={money(c.estimatedMonthCostUsd)} note={`${c.billableEvents.toLocaleString()} estimated billable events`} warn={c.estimatedMonthCostUsd>0}/><Card label="PROJECTED MONTH-END" value={money(c.projectedMonthCostUsd)} note={`${c.projectedMonthEvents.toLocaleString()} projected panorama loads`} warn={c.projectedMonthCostUsd>0}/><Card label="PAY-AS-YOU-GO RATE" value={`$${c.usdPer1000.toFixed(2)}/1K`} note={`${c.sku} after ${c.freeMonthlyEvents.toLocaleString()} free monthly events`}/></div><article style={{marginTop:14,padding:18,border:'1px solid rgba(255,255,255,.09)',borderRadius:16,background:'#131815'}}><div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><h3 style={{margin:0}}>Dynamic Street View panorama loads</h3><p style={{margin:'5px 0 0',fontSize:12,color:'#9aa69d'}}>Each bar is a GeoWeedo-recorded panorama initialization.</p></div><div style={{fontSize:11,color:'#9aa69d'}}>Selected range: {days===1?'Today':`${days} days`}</div></div><div style={{display:'grid',gap:8,marginTop:16}}>{chart.length?chart.map(r=><div key={r.date} style={{display:'grid',gridTemplateColumns:'90px 1fr 55px',gap:10,alignItems:'center'}}><span style={{fontSize:11,color:'#9aa69d'}}>{r.date}</span><div style={{height:12,borderRadius:999,background:'rgba(255,255,255,.05)',overflow:'hidden'}}><div style={{height:'100%',width:`${r.pct}%`,background:'#67d66e'}}/></div><strong style={{fontSize:12,textAlign:'right'}}>{r.panorama}</strong></div>):<div style={{color:'#9aa69d'}}>No panorama initializations recorded in this range yet.</div>}</div></article><article style={{marginTop:12,padding:16,border:'1px solid rgba(255,255,255,.09)',borderRadius:14,background:'#101512'}}><strong>Free-allowance warnings</strong><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7,marginTop:10}}>{c.warningThresholds.map(t=><div key={t} style={{padding:'10px 6px',textAlign:'center',borderRadius:9,border:`1px solid ${c.allowancePct>=t?'#f5c451':'rgba(255,255,255,.1)'}`,color:c.allowancePct>=t?'#f5c451':'#879188',fontWeight:800}}>{t}%</div>)}</div><p style={{fontSize:11,color:'#8e9a91',marginBottom:0}}>{c.warningLevel?`GeoWeedo has crossed the ${c.warningLevel}% warning level.`:'No free-allowance warning threshold has been crossed.'}</p></article><div style={{marginTop:12,fontSize:11,color:'#8e9a91',lineHeight:1.5}}>{data.accounting.note}</div></>}</div>;return createPortal(content,target)}
+
+import { useEffect, useMemo, useState } from 'react';
+
+type Row = { usage_date: string; provider: string; request_type: string; request_count: number };
+type Cost = {
+  sku: string;
+  currency: string;
+  freeMonthlyEvents: number;
+  usdPer1000: number;
+  monthEvents: number;
+  monthRows: Array<{ usage_date: string; request_count: number }>;
+  allowancePct: number;
+  remainingFreeEvents: number;
+  billableEvents: number;
+  estimatedMonthCostUsd: number;
+  projectedMonthEvents: number;
+  projectedMonthCostUsd: number;
+  warningLevel: number;
+  warningThresholds: number[];
+  billingMonthUtc: string;
+  isEstimate: boolean;
+};
+type Status = {
+  days: number;
+  provider: string;
+  envDefault: string;
+  mapsKeyConfigured: boolean;
+  placesAvailable: boolean;
+  placesKeySource: 'dedicated' | 'maps-fallback' | 'missing';
+  usage: {
+    rows: Row[];
+    googleToday: number;
+    googleImagesToday: number;
+    googleMetadataToday: number;
+    googlePanoramasToday: number;
+  };
+  cost: Cost;
+  accounting: { includesGoogleBilling: boolean; note: string };
+};
+
+const money = (value: number) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(value);
+
+function Card({ label, value, note, warn = false }: { label: string; value: string; note?: string; warn?: boolean }) {
+  return <article style={{
+    padding: 16,
+    border: `1px solid ${warn ? 'rgba(245,196,81,.45)' : 'rgba(255,255,255,.09)'}`,
+    borderRadius: 15,
+    background: warn ? 'rgba(245,196,81,.055)' : '#131815',
+    minHeight: 118,
+  }}>
+    <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: '.11em', color: warn ? '#f5c451' : '#67d66e' }}>{label}</div>
+    <strong style={{ display: 'block', fontSize: 24, marginTop: 9 }}>{value}</strong>
+    {note ? <div style={{ marginTop: 7, color: '#9aa69d', fontSize: 11, lineHeight: 1.45 }}>{note}</div> : null}
+  </article>;
+}
+
+export default function AdminGoogleApiStatus() {
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState<Status | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setError('');
+    fetch(`/api/admin/google-api-status?days=${days}`, { cache: 'no-store' })
+      .then(async response => {
+        const body = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          location.href = '/admin/login';
+          return null;
+        }
+        if (!response.ok) throw new Error(body.error || 'Could not load Google API status.');
+        return body;
+      })
+      .then(value => { if (value) setData(value); })
+      .catch(cause => setError(cause instanceof Error ? cause.message : 'Could not load Google API status.'));
+  }, [days]);
+
+  const chart = useMemo(() => {
+    if (!data) return [];
+    const map = new Map<string, { panorama: number; images: number; metadata: number }>();
+    for (const row of data.usage.rows) {
+      if (row.provider !== 'google') continue;
+      const value = map.get(row.usage_date) || { panorama: 0, images: 0, metadata: 0 };
+      const count = Number(row.request_count || 0);
+      if (row.request_type === 'panorama') value.panorama += count;
+      else if (row.request_type === 'image') value.images += count;
+      else if (row.request_type === 'metadata') value.metadata += count;
+      map.set(row.usage_date, value);
+    }
+    const rows = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const max = Math.max(1, ...rows.map(([, value]) => value.panorama));
+    return rows.map(([date, value]) => ({ date, ...value, pct: value.panorama / max * 100 }));
+  }, [data]);
+
+  const cost = data?.cost;
+
+  return <div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
+      <div>
+        <span style={{ color: '#67d66e', fontSize: 11, fontWeight: 900, letterSpacing: '.15em' }}>GOOGLE MAPS PLATFORM</span>
+        <h2 style={{ margin: '5px 0 4px' }}>Usage & projected cost</h2>
+        <p style={{ margin: 0, color: '#9aa69d', fontSize: 13 }}>GeoWeedo-observed Dynamic Street View usage and estimated monthly cost.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 7 }}>
+        {[1, 7, 30, 90].map(value => <button key={value} type="button" onClick={() => setDays(value)} style={{
+          padding: '7px 10px',
+          borderRadius: 8,
+          border: `1px solid ${days === value ? '#67d66e' : 'rgba(255,255,255,.12)'}`,
+          background: days === value ? 'rgba(103,214,110,.12)' : '#131815',
+          color: '#fff',
+          cursor: 'pointer',
+        }}>{value === 1 ? 'Today' : `${value}d`}</button>)}
+      </div>
+    </div>
+
+    {error ? <p>{error}</p> : !data || !cost ? <p>Loading Google usage…</p> : <>
+      <div style={{ padding: '12px 14px', border: '1px solid rgba(245,196,81,.35)', background: 'rgba(245,196,81,.055)', borderRadius: 12, marginBottom: 12, fontSize: 12, lineHeight: 1.5 }}>
+        <strong style={{ color: '#f5c451' }}>GEOWEEDO ESTIMATE — NOT GOOGLE BILLING</strong><br />
+        Costs apply the configured public pay-as-you-go estimate to panorama objects recorded by GeoWeedo. Google Cloud remains authoritative for invoices, credits, quotas, and billing adjustments.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
+        <Card label="PANORAMAS TODAY" value={data.usage.googlePanoramasToday.toLocaleString()} note="Dynamic Street View objects instantiated" />
+        <Card label="BILLING MONTH" value={cost.monthEvents.toLocaleString()} note={`${cost.billingMonthUtc} · GeoWeedo counter`} />
+        <Card label="FREE ALLOWANCE" value={`${Math.min(100, cost.allowancePct).toFixed(1)}%`} note={`${cost.remainingFreeEvents.toLocaleString()} of ${cost.freeMonthlyEvents.toLocaleString()} free events remaining`} warn={cost.warningLevel >= 75} />
+        <Card label="EST. COST THIS MONTH" value={money(cost.estimatedMonthCostUsd)} note={`${cost.billableEvents.toLocaleString()} estimated billable events`} warn={cost.estimatedMonthCostUsd > 0} />
+        <Card label="PROJECTED MONTH-END" value={money(cost.projectedMonthCostUsd)} note={`${cost.projectedMonthEvents.toLocaleString()} projected panorama loads`} warn={cost.projectedMonthCostUsd > 0} />
+        <Card label="PAY-AS-YOU-GO RATE" value={`$${cost.usdPer1000.toFixed(2)}/1K`} note={`${cost.sku} after ${cost.freeMonthlyEvents.toLocaleString()} free monthly events`} />
+      </div>
+
+      <article style={{ marginTop: 14, padding: 18, border: '1px solid rgba(255,255,255,.09)', borderRadius: 16, background: '#131815' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div><h3 style={{ margin: 0 }}>Dynamic Street View panorama loads</h3><p style={{ margin: '5px 0 0', fontSize: 12, color: '#9aa69d' }}>Each bar is a GeoWeedo-recorded panorama initialization.</p></div>
+          <div style={{ fontSize: 11, color: '#9aa69d' }}>Selected range: {days === 1 ? 'Today' : `${days} days`}</div>
+        </div>
+        <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+          {chart.length ? chart.map(row => <div key={row.date} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 55px', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#9aa69d' }}>{row.date}</span>
+            <div style={{ height: 12, borderRadius: 999, background: 'rgba(255,255,255,.05)', overflow: 'hidden' }}><div style={{ height: '100%', width: `${row.pct}%`, background: '#67d66e' }} /></div>
+            <strong style={{ fontSize: 12, textAlign: 'right' }}>{row.panorama}</strong>
+          </div>) : <div style={{ color: '#9aa69d' }}>No panorama initializations recorded in this range yet.</div>}
+        </div>
+      </article>
+
+      <article style={{ marginTop: 12, padding: 16, border: '1px solid rgba(255,255,255,.09)', borderRadius: 14, background: '#101512' }}>
+        <strong>Free-allowance warnings</strong>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7, marginTop: 10 }}>
+          {cost.warningThresholds.map(threshold => <div key={threshold} style={{ padding: '10px 6px', textAlign: 'center', borderRadius: 9, border: `1px solid ${cost.allowancePct >= threshold ? '#f5c451' : 'rgba(255,255,255,.1)'}`, color: cost.allowancePct >= threshold ? '#f5c451' : '#879188', fontWeight: 800 }}>{threshold}%</div>)}
+        </div>
+        <p style={{ fontSize: 11, color: '#8e9a91', marginBottom: 0 }}>{cost.warningLevel ? `GeoWeedo has crossed the ${cost.warningLevel}% warning level.` : 'No free-allowance warning threshold has been crossed.'}</p>
+      </article>
+
+      <div style={{ marginTop: 12, fontSize: 11, color: '#8e9a91', lineHeight: 1.5 }}>{data.accounting.note}</div>
+    </>}
+  </div>;
+}
