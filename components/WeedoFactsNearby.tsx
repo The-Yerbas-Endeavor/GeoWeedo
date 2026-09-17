@@ -82,7 +82,7 @@ function inventoryLabel(value: string) {
   return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Availability unknown';
 }
 
-export default function WeedoFactsNearby({ productId, batchId, productName }: { productId: string; batchId?: string | null; productName: string }) {
+export default function WeedoFactsNearby({ productId, batchId, productName }: { productId: string; batchId?: string | null; productName?: string | null }) {
   const [zip, setZip] = useState('');
   const [origin, setOrigin] = useState<Coordinates | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
@@ -176,9 +176,11 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
     }
   }
 
+  const productLabel = String(productName || '').trim();
+
   return <section className={styles.shell}>
     <div className={styles.head}>
-      <div><span>FIND THIS PRODUCT</span><h3>Find {productName} nearby</h3><p>GeoWeedo checks current menu records after showing the confirmed facts. Exact tested-batch matches are identified separately from same-product and possible matches.</p></div>
+      <div><span>FIND THIS PRODUCT</span><h3>{productLabel ? `Find ${productLabel} nearby` : 'Find this product nearby'}</h3><p>GeoWeedo checks current menu records after showing the confirmed facts. Exact tested-batch matches are identified separately from same-product and possible matches.</p></div>
     </div>
 
     <div className={styles.locationControls}>
