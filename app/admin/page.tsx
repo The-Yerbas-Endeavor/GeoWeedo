@@ -12,9 +12,16 @@ type AdminUser = {
   permissions?: AdminPermission[];
 };
 
+type LiveTrendRow = { at:string; active:number };
+type CurrentVisitor = { visitorId:string; path:string; lastSeenAt:string; location:string };
+
 type OverviewPayload = {
   admin: AdminUser;
-  analytics: null | { days:number; activeNow:number; visitors:number; sessions:number; pageViews:number };
+  analytics: null | {
+    days:number; activeNow:number; visitors:number; sessions:number; pageViews:number;
+    liveTrend:LiveTrendRow[];
+    currentVisitors:CurrentVisitor[];
+  };
   scans: null | {
     products:number; qrCodes:number; scanEvents:number; recentQrCodes:number; unlinkedQrCodes:number;
     recent:Array<{id:string;name:string;brand:string;source:string;linked:boolean;scans:number;lastSeenAt:string}>;
@@ -46,22 +53,65 @@ function Metric({value,label,attention=false}:{value:number;label:string;attenti
   return <div className={`${styles.dashboardMetric} ${attention?styles.dashboardMetricAttention:''}`}><strong>{value.toLocaleString()}</strong><span>{label}</span></div>;
 }
 
+function sparklinePoints(values:number[],width=520,height=96){
+  if(!values.length)return '';
+  const max=Math.max(1,...values);
+  return values.map((value,index)=>{
+    const x=values.length===1?width/2:(index/(values.length-1))*width;
+    const y=height-8-(value/max)*(height-18);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
+function LiveAnalytics({trend,currentVisitors,activeNow}:{trend:LiveTrendRow[];currentVisitors:CurrentVisitor[];activeNow:number}){
+  const values=trend.map(row=>Number(row.active||0));
+  const peak=Math.max(0,...values);
+  return <div className={styles.dashboardLive}>
+    <div className={styles.dashboardLiveHead}>
+      <div><strong>Active visitors</strong><span>5-minute activity windows over the last hour</span></div>
+      <div><b>{activeNow.toLocaleString()}</b><span>current · peak {peak.toLocaleString()}</span></div>
+    </div>
+    <div className={styles.dashboardLiveChart}>
+      <svg viewBox="0 0 520 96" preserveAspectRatio="none" role="img" aria-label="Active visitors during the last hour">
+        <line x1="0" x2="520" y1="88" y2="88"/>
+        <line x1="0" x2="520" y1="48" y2="48"/>
+        <polyline points={sparklinePoints(values)} fill="none" vectorEffect="non-scaling-stroke"/>
+      </svg>
+      <div className={styles.dashboardLiveAxis}><span>60m ago</span><span>now</span></div>
+    </div>
+    <div className={styles.dashboardCurrentVisitors}>
+      <div className={styles.dashboardRecentHead}><strong>Current visitors</strong><span>{activeNow.toLocaleString()} seen in the last 10 minutes · refreshes every 30s</span></div>
+      {currentVisitors.length?currentVisitors.map(row=><div className={styles.dashboardCurrentRow} key={row.visitorId}>
+        <div><i aria-hidden="true"/><strong>{row.path}</strong><span>{row.location||'Location unavailable'}</span></div>
+        <time>{dateLabel(row.lastSeenAt)}</time>
+      </div>):<p className={styles.dashboardEmpty}>No public visitors active right now.</p>}
+    </div>
+  </div>;
+}
+
 export default function AdminHomePage() {
   const [data,setData]=useState<OverviewPayload|null>(null);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
 
   useEffect(()=>{
-    fetch('/api/admin/overview',{cache:'no-store'})
-      .then(async response=>{
-        if(response.status===401){window.location.href='/admin/login';return null;}
-        const body=await response.json().catch(()=>({}));
-        if(!response.ok)throw new Error(body.error||'Could not load Admin overview.');
-        return body as OverviewPayload;
-      })
-      .then(value=>{if(value)setData(value);})
-      .catch(err=>setError(err instanceof Error?err.message:'Could not load Admin overview.'))
-      .finally(()=>setLoading(false));
+    let cancelled=false;
+    let first=true;
+    const load=()=>{
+      fetch('/api/admin/overview',{cache:'no-store'})
+        .then(async response=>{
+          if(response.status===401){window.location.href='/admin/login';return null;}
+          const body=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(body.error||'Could not load Admin overview.');
+          return body as OverviewPayload;
+        })
+        .then(value=>{if(!cancelled&&value){setData(value);setError('');}})
+        .catch(err=>{if(!cancelled&&first)setError(err instanceof Error?err.message:'Could not load Admin overview.');})
+        .finally(()=>{if(!cancelled&&first){first=false;setLoading(false);}});
+    };
+    load();
+    const timer=window.setInterval(load,30000);
+    return()=>{cancelled=true;window.clearInterval(timer);};
   },[]);
 
   async function logout(){
@@ -95,6 +145,7 @@ export default function AdminHomePage() {
           <Metric value={data.analytics.sessions} label="Sessions"/>
           <Metric value={data.analytics.pageViews} label="Page views"/>
         </div>
+        <LiveAnalytics trend={data.analytics.liveTrend} currentVisitors={data.analytics.currentVisitors} activeNow={data.analytics.activeNow}/>
         <p className={styles.dashboardNote}>Public traffic only; Admin page views are excluded.</p>
       </article>:null}
 
