@@ -15,7 +15,16 @@ function automatedEnrichmentApprovedIds(){
  }catch{return new Set<string>();}
 }
 
-export async function GET(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const candidates=await listCandidates(),enriched=automatedEnrichmentApprovedIds();return NextResponse.json({candidates:candidates.map(item=>({...item,automatedEnrichmentApproved:enriched.has(String(item.id))}))},{headers:{'Cache-Control':'no-store'}});}
+export async function GET(request:NextRequest){
+ if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
+ if(request.nextUrl.searchParams.get('summary')==='1'){
+  const db=getDatabase();
+  const row=db.prepare(`SELECT COUNT(*) AS total,COUNT(DISTINCT NULLIF(TRIM(region),'')) AS regions FROM dispensary_candidates`).get() as {total:number;regions:number}|undefined;
+  return NextResponse.json({summary:{total:Number(row?.total||0),regions:Number(row?.regions||0)}},{headers:{'Cache-Control':'no-store'}});
+ }
+ const candidates=await listCandidates(),enriched=automatedEnrichmentApprovedIds();
+ return NextResponse.json({candidates:candidates.map(item=>({...item,automatedEnrichmentApproved:enriched.has(String(item.id))}))},{headers:{'Cache-Control':'no-store'}});
+}
 
 function selectedStartingPhotoId(message?:string){
  const match=String(message||'').match(/Starting view\s+([^\s.]+)\./i);
@@ -40,33 +49,9 @@ async function promoteCandidate(item:DispensaryCandidate){
   const adminSelected=String(item.imageryMessage||'').startsWith('ADMIN_SELECTED_STREET_VIEW');
   const adminConfirmed=/^ADMIN_(?:CONFIRMED|SELECTED)_STREET_VIEW/.test(String(item.imageryMessage||''));
 
-  // A Google panorama selected in the editor has already been loaded successfully
-  // and explicitly confirmed by an admin. Do not immediately perform a second
-  // nearby lookup that can resolve a different pano and contradict that confirmation.
   if(adminSelected&&selectedProvider==='google'&&requestedPhotoId){
-   const photo={
-    id:requestedPhotoId,
-    sequenceId:requestedPhotoId,
-    lat:item.latitude as number,
-    lng:item.longitude as number,
-    heading:0,
-    fieldOfView:360,
-    projection:'GOOGLE_PANORAMA',
-    imageUrl:`/api/street-imagery/google-image?pano=${encodeURIComponent(requestedPhotoId)}&heading=0`
-   };
-   const saved=await saveApprovedDispensary({
-    name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,
-    imageryProvider:'google' as any,
-    imageryPhotoId:photo.id,
-    imagerySequenceId:photo.sequenceId,
-    imageryLatitude:photo.lat,
-    imageryLongitude:photo.lng,
-    imageryHeading:photo.heading,
-    imageryFieldOfView:photo.fieldOfView,
-    imageryProjection:photo.projection,
-    imageryUrl:photo.imageUrl,
-    active:true
-   });
+   const photo={id:requestedPhotoId,sequenceId:requestedPhotoId,lat:item.latitude as number,lng:item.longitude as number,heading:0,fieldOfView:360,projection:'GOOGLE_PANORAMA',imageUrl:`/api/street-imagery/google-image?pano=${encodeURIComponent(requestedPhotoId)}&heading=0`};
+   const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:'google' as any,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
    await updateCandidate(item.id,{status:'approved',imageryMessage:`Promoted to gameplay with admin-selected Street View · google. Starting view ${photo.id}.`});
    return{ok:true,dispensaryId:saved.id};
   }
@@ -77,19 +62,7 @@ async function promoteCandidate(item:DispensaryCandidate){
   const photo=requestedPhotoId?photos.find(candidate=>String(candidate.id)===requestedPhotoId)||defaultPhoto:defaultPhoto;
   if((!inspection.quality?.playable&&!adminConfirmed)||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
   if(requestedPhotoId&&String(photo.id)!==requestedPhotoId)return{ok:false,reason:'selected_imagery_no_longer_available'};
-  const saved=await saveApprovedDispensary({
-   name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,
-   imageryProvider:inspection.provider,
-   imageryPhotoId:photo.id,
-   imagerySequenceId:photo.sequenceId||undefined,
-   imageryLatitude:photo.lat,
-   imageryLongitude:photo.lng,
-   imageryHeading:photo.heading,
-   imageryFieldOfView:photo.fieldOfView,
-   imageryProjection:photo.projection,
-   imageryUrl:photo.imageUrl,
-   active:true
-  });
+  const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:inspection.provider,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId||undefined,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
   await updateCandidate(item.id,{status:'approved',imageryMessage:adminConfirmed?`Promoted to gameplay with admin-confirmed Street View · ${inspection.provider}. Starting view ${photo.id}.`:`Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`});
   return{ok:true,dispensaryId:saved.id};
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
