@@ -15,6 +15,8 @@ export type WeedoFactsAvailabilityItem = {
     city: string | null;
     region: string | null;
     country: string | null;
+    latitude: number | null;
+    longitude: number | null;
   };
   itemName: string;
   brandName: string | null;
@@ -42,6 +44,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
            mi.inventory_status, mi.verified AS item_verified, mi.source_url, mi.source_updated_at,
            mi.match_confidence,
            d.id AS dispensary_id, d.name AS dispensary_name, d.city, d.region, d.country,
+           d.latitude, d.longitude,
            b.batch_number, b.uid, b.verified AS batch_verified
       FROM dispensary_menu_items mi
       JOIN dispensary_menus m ON m.id = mi.menu_id
@@ -66,6 +69,8 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
       batchVerified: Boolean(row.batch_verified),
       matchConfidence: row.match_confidence || null,
     });
+    const latitude = Number(row.latitude);
+    const longitude = Number(row.longitude);
     return {
       menuItemId: row.menu_item_id,
       productId: row.product_id,
@@ -79,6 +84,8 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
         city: row.city || null,
         region: row.region || null,
         country: row.country || null,
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
       },
       itemName: row.item_name,
       brandName: row.brand_name || null,
