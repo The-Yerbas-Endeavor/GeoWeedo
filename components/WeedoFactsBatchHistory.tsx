@@ -67,12 +67,12 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
   }, [data, sort]);
 
   if (error) return <>
-    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p className="weedoFactsError">{error}</p></section>
     <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
+    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p className="weedoFactsError">{error}</p></section>
   </>;
   if (!data) return <>
-    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading verified batches…</p></section>
     <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
+    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading verified batches…</p></section>
   </>;
 
   const summary = data.summary || {};
@@ -84,6 +84,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
   const rangeEnd = Math.min(start + pageSize, batches.length);
 
   return <>
+    <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
     <section className="weedoFactsBatchHistory">
       <div className="weedoFactsBatchHistoryHead">
         <div><h3>Batch history</h3><p>Verified lab history for this product. Different batches can test differently.</p></div>
@@ -148,6 +149,5 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
         </div>
       </> : <p>No verified historical batches are available yet.</p>}
     </section>
-    <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
   </>;
 }
