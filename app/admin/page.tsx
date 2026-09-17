@@ -9,6 +9,7 @@ type AdminUser = { id:string; username:string; displayName?:string; role:string;
 type ModuleCard = { title:string; description:string; href?:string; status:'live'|'partial'|'planned'; action?:string; secondaryHref?:string; secondaryAction?:string; permission?:AdminPermission };
 
 const liveModules:ModuleCard[]=[
+  {title:'Issues',description:'Start here. One queue for COA parser failures, pending COAs, unknown scans, menu matching problems, stale imported menus, missing coordinates, and imagery failures.',href:'/admin/issues',status:'live',action:'Open issues',permission:'data.manage'},
   {title:'Analytics',description:'First-party visitor, session, page-view, duration, referral, coarse-location, and client reliability analytics stored by GeoWeedo.',href:'/admin/analytics',status:'live',action:'Open analytics',permission:'dashboard.view'},
   {title:'Data import',description:'Import official dispensary data, enrich coordinates, review candidates, and prepare locations for downstream processing.',href:'/admin/data',status:'live',action:'Open data import',permission:'data.manage'},
   {title:'GeoWeedo Facts COA review',description:'Review submitted SC Labs COA PDFs, promote approved evidence, and refresh Product Chemistry and cultivar/genetics data sources.',href:'/admin/weedo-facts',status:'live',action:'Review COAs',secondaryHref:'/admin/weedo-facts/sources',secondaryAction:'Update sources',permission:'data.manage'},
