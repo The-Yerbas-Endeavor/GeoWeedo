@@ -120,6 +120,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
   const ranked = useMemo<RankedItem[]>(() => {
     if (!origin) return [];
     return items.flatMap(item => {
+      if (item.dispensary.latitude === null || item.dispensary.longitude === null) return [];
       const latitude = Number(item.dispensary.latitude);
       const longitude = Number(item.dispensary.longitude);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
