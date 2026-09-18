@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   const placeholders = dispensaryIds.map(() => '?').join(',');
-  const validRows = db.prepare(`SELECT id FROM dispensaries WHERE id IN (${placeholders}) AND active=1 AND verified=1 AND imagery_photo_id IS NOT NULL AND imagery_photo_id<>''`).all(...dispensaryIds) as any[];
+  const validRows = db.prepare(`SELECT id FROM dispensaries WHERE id IN (${placeholders}) AND active=1 AND verified=1 AND gameplay_enabled=1 AND imagery_photo_id IS NOT NULL AND imagery_photo_id<>''`).all(...dispensaryIds) as any[];
   if (validRows.length !== dispensaryIds.length) return NextResponse.json({ error: 'One or more gameplay locations are no longer eligible.' }, { status: 409 });
 
   const policy = getGameRewardPolicy();
