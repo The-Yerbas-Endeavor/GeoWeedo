@@ -120,7 +120,7 @@ function dispensarySummary(db: Db, includeSponsorships: boolean) {
   if (!tableExists(db, 'dispensaries')) return null;
   const now = new Date().toISOString();
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const recent = db.prepare(`SELECT id,name,city,region,active,imagery_provider,updated_at FROM dispensaries ORDER BY updated_at DESC LIMIT 5`).all() as any[];
+  const recent = db.prepare(`SELECT id,name,city,region,active,gameplay_enabled,imagery_provider,updated_at FROM dispensaries ORDER BY updated_at DESC LIMIT 5`).all() as any[];
   const storesWithMenus = tableExists(db, 'dispensary_menus') && tableExists(db, 'dispensary_menu_items')
     ? scalar(db, `SELECT COUNT(DISTINCT m.dispensary_id) value FROM dispensary_menus m JOIN dispensary_menu_items mi ON mi.menu_id=m.id WHERE m.active=1 AND mi.active=1`)
     : 0;
@@ -133,7 +133,7 @@ function dispensarySummary(db: Db, includeSponsorships: boolean) {
   return {
     total: scalar(db, `SELECT COUNT(*) value FROM dispensaries`),
     active: scalar(db, `SELECT COUNT(*) value FROM dispensaries WHERE active=1`),
-    playable: scalar(db, `SELECT COUNT(*) value FROM dispensaries WHERE active=1 AND latitude IS NOT NULL AND longitude IS NOT NULL AND COALESCE(imagery_provider,'')<>''`),
+    playable: scalar(db, `SELECT COUNT(*) value FROM dispensaries WHERE active=1 AND gameplay_enabled=1 AND latitude IS NOT NULL AND longitude IS NOT NULL AND COALESCE(imagery_provider,'')<>''`),
     storesWithMenus,
     activeFeatured,
     activeCampaigns,
@@ -144,7 +144,7 @@ function dispensarySummary(db: Db, includeSponsorships: boolean) {
       name: String(row.name),
       location: [row.city, row.region].filter(Boolean).join(', '),
       active: Number(row.active) === 1,
-      playable: Number(row.active) === 1 && Boolean(row.imagery_provider),
+      playable: Number(row.active) === 1 && Number(row.gameplay_enabled ?? 1) === 1 && Boolean(row.imagery_provider),
       updatedAt: String(row.updated_at || ''),
     })),
   };
