@@ -142,7 +142,7 @@ function upsert(item: ApprovedDispensary) {
     item.sourceLicense ?? null, item.recreational ? 1 : 0, item.medical ? 1 : 0, item.imageryProvider,
     item.imageryPhotoId, item.imagerySequenceId ?? null, item.imageryLatitude, item.imageryLongitude,
     item.imageryHeading ?? null, item.imageryFieldOfView ?? null, item.imageryProjection ?? null,
-    item.imageryUrl, item.priorityWeight ?? null, item.sponsoredUntil ?? null, 1, item.gameplayEnabled ? 1 : 0, item.active ? 1 : 0,
+    item.imageryUrl, item.priorityWeight ?? null, item.sponsoredUntil ?? null, 1, item.gameplayEnabled !== false ? 1 : 0, item.active ? 1 : 0,
     item.createdAt, item.updatedAt,
   );
 }
@@ -182,13 +182,13 @@ export async function saveApprovedDispensary(input: Omit<ApprovedDispensary, 'id
   const db = getDatabase();
   const now = new Date().toISOString();
   const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const existing = db.prepare('SELECT id, created_at FROM dispensaries WHERE slug = ?').get(slug) as { id: string; created_at: string } | undefined;
+  const existing = db.prepare('SELECT id, created_at, gameplay_enabled FROM dispensaries WHERE slug = ?').get(slug) as { id: string; created_at: string; gameplay_enabled: number } | undefined;
 
   const next: ApprovedDispensary = {
     ...input,
     slug,
     id: existing?.id ?? `disp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    gameplayEnabled: input.gameplayEnabled !== false,
+    gameplayEnabled: input.gameplayEnabled ?? (existing ? Number(existing.gameplay_enabled) !== 0 : true),
     verified: true,
     createdAt: existing?.created_at ?? now,
     updatedAt: now,
