@@ -8,7 +8,6 @@ export default function OwnerLayout({ children }: { children: ReactNode }) {
         <a href="/account" style={{border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',textDecoration:'none',fontWeight:800,color:'inherit',background:'rgba(255,255,255,.02)'}}>Account</a>
         <a href="/account/shop" style={{border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',textDecoration:'none',fontWeight:800,color:'inherit',background:'rgba(103,214,110,.07)'}}>Shop dashboard</a>
         <a href="/account/products" style={{border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',textDecoration:'none',fontWeight:800,color:'inherit',background:'rgba(103,214,110,.07)'}}>Products / menu</a>
-        <a href="/account/scanner" style={{border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',textDecoration:'none',fontWeight:800,color:'inherit',background:'rgba(255,255,255,.02)'}}>Scanner / profile</a>
       </nav>
     </div>
     {children}
