@@ -492,6 +492,10 @@ function initializeSchema(db: DatabaseSync) {
     try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`); } catch { /* column already exists */ }
   }
 
+  // Preserve the intent of the former Admin gameplay toggle for existing rows.
+  // New edits use gameplay_enabled directly; verified remains approval/provenance state.
+  try { db.exec('UPDATE dispensaries SET gameplay_enabled=0 WHERE verified=0;'); } catch {}
+
   db.prepare(`
     INSERT OR IGNORE INTO schema_migrations(version, name, applied_at)
     VALUES(1, 'initial application schema', ?)
