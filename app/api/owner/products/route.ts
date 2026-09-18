@@ -18,6 +18,21 @@ function cents(value: unknown) {
   return Math.max(0, Math.min(10_000_000, Math.round(parsed)));
 }
 
+function ensureOwnerScanColumns(db: ReturnType<typeof getDatabase>) {
+  const columns = db.prepare('PRAGMA table_info(dispensary_menu_items)').all() as Array<{name?:string}>;
+  const names = new Set(columns.map(column => String(column.name || '')));
+  if (!names.has('owner_scan_type')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN owner_scan_type TEXT');
+  if (!names.has('owner_scan_value')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN owner_scan_value TEXT');
+}
+
+function normalizedScanType(value: unknown, scanValue: string) {
+  const supplied = cleanText(value, 24).toLowerCase();
+  if (['qr','upc','barcode'].includes(supplied)) return supplied;
+  if (/^https?:\/\//i.test(scanValue)) return 'qr';
+  if (/^\d{8,14}$/.test(scanValue.replace(/[\s-]/g,''))) return 'upc';
+  return 'barcode';
+}
+
 function ownerAccess(request: NextRequest, locationId: string) {
   const user = getUserFromRequest(request);
   if (!user) return { error: NextResponse.json({ error: 'Sign in required.' }, { status: 401 }) } as const;
@@ -35,6 +50,7 @@ export async function GET(request: NextRequest) {
 
   ensureWeedoMenuSchema();
   const db = getDatabase();
+  ensureOwnerScanColumns(db);
   const query = cleanText(searchParams.get('q'), 120);
   if (query) {
     const like = `%${query.replace(/[%_]/g, '')}%`;
@@ -67,9 +83,15 @@ export async function POST(request: NextRequest) {
   if (!itemName) return NextResponse.json({ error: 'Product name is required.' }, { status: 400 });
 
   try {
+    ensureWeedoMenuSchema();
+    const db = getDatabase();
+    ensureOwnerScanColumns(db);
+    const productId = cleanText(body?.productId, 180) || null;
+    const scanValue = cleanText(body?.scanValue, 512);
+    const scanType = scanValue ? normalizedScanType(body?.identifierType, scanValue) : null;
     const id = addDispensaryMenuItem({
       dispensaryId: locationId,
-      productId: cleanText(body?.productId, 180) || null,
+      productId,
       itemName,
       brandName: cleanText(body?.brandName, 180) || null,
       categoryId: cleanText(body?.categoryId, 120) || null,
@@ -80,9 +102,14 @@ export async function POST(request: NextRequest) {
       priceCents: cents(body?.priceCents),
       currency: 'USD',
       inventoryStatus: cleanText(body?.inventoryStatus, 40) || 'in_stock',
-      sourceType: 'owner',
+      sourceType: scanValue ? (productId ? 'verified_owner_scan' : 'owner_reported_scan') : 'owner',
+      sourceUrl: /^https?:\/\//i.test(scanValue) ? scanValue : null,
       verified: true,
     });
+    if (scanValue) {
+      db.prepare('UPDATE dispensary_menu_items SET owner_scan_type=?,owner_scan_value=?,updated_at=? WHERE id=?')
+        .run(scanType, scanValue, new Date().toISOString(), id);
+    }
     const item = listDispensaryMenu(locationId).find(row => row.id === id) || null;
     return NextResponse.json({ ok: true, item });
   } catch (error) {
@@ -100,6 +127,7 @@ export async function PATCH(request: NextRequest) {
 
   ensureWeedoMenuSchema();
   const db = getDatabase();
+  ensureOwnerScanColumns(db);
   const existing = db.prepare(`
     SELECT mi.id FROM dispensary_menu_items mi
     JOIN dispensary_menus m ON m.id=mi.menu_id
@@ -121,10 +149,17 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  const scanValue = cleanText(body?.scanValue, 512);
+  const scanType = scanValue ? normalizedScanType(body?.identifierType, scanValue) : null;
   db.prepare(`
     UPDATE dispensary_menu_items
        SET product_id=?,item_name=?,brand_name=?,category_id=?,category_source=?,variant=?,package_size=?,
-           price_cents=?,currency='USD',inventory_status=?,source_type='owner',verified=1,active=1,updated_at=?
+           price_cents=?,currency='USD',inventory_status=?,
+           source_type=CASE WHEN ?<>'' THEN ? ELSE source_type END,
+           source_url=CASE WHEN ? LIKE 'http%' THEN ? ELSE source_url END,
+           owner_scan_type=CASE WHEN ?<>'' THEN ? ELSE owner_scan_type END,
+           owner_scan_value=CASE WHEN ?<>'' THEN ? ELSE owner_scan_value END,
+           verified=1,active=1,updated_at=?
      WHERE id=?
   `).run(
     productId,
@@ -136,6 +171,14 @@ export async function PATCH(request: NextRequest) {
     cleanText(body?.packageSize, 120) || null,
     cents(body?.priceCents),
     cleanText(body?.inventoryStatus, 40) || 'in_stock',
+    scanValue,
+    scanValue ? (productId ? 'verified_owner_scan' : 'owner_reported_scan') : 'owner',
+    scanValue,
+    scanValue,
+    scanValue,
+    scanType,
+    scanValue,
+    scanValue,
     new Date().toISOString(),
     itemId,
   );
@@ -154,6 +197,7 @@ export async function DELETE(request: NextRequest) {
 
   ensureWeedoMenuSchema();
   const db = getDatabase();
+  ensureOwnerScanColumns(db);
   const result = db.prepare(`
     UPDATE dispensary_menu_items
        SET active=0,updated_at=?
