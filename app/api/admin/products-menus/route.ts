@@ -30,7 +30,18 @@ function ensure() {
 
 type Db = ReturnType<typeof getDatabase>;
 
-function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean; limit?: number } = {}) {
+const PRODUCT_SORTS: Record<string,string> = {
+  updated_desc: "p.updated_at DESC,p.product_name COLLATE NOCASE ASC",
+  updated_asc: "p.updated_at ASC,p.product_name COLLATE NOCASE ASC",
+  name_asc: "p.product_name COLLATE NOCASE ASC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
+  name_desc: "p.product_name COLLATE NOCASE DESC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
+  brand_asc: "COALESCE(p.brand_name,'') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC",
+  brand_desc: "COALESCE(p.brand_name,'') COLLATE NOCASE DESC,p.product_name COLLATE NOCASE ASC",
+  batches_desc: "batch_count DESC,p.product_name COLLATE NOCASE ASC",
+  menus_desc: "menu_count DESC,p.product_name COLLATE NOCASE ASC",
+};
+
+function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean; limit?: number; offset?: number; sort?: string } = {}) {
   const q = search.trim().toLowerCase();
   const params: string[] = [];
   const where: string[] = [];
@@ -40,6 +51,9 @@ function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean
   }
   if (options.uncategorizedOnly) where.push('p.category_id IS NULL');
   const limit = Math.max(1, Math.min(250, Math.trunc(options.limit || 150)));
+  const offset = Math.max(0, Math.trunc(options.offset || 0));
+  const sort = PRODUCT_SORTS[options.sort || 'updated_desc'] ? (options.sort || 'updated_desc') : 'updated_desc';
+  const orderBy = PRODUCT_SORTS[sort];
   return db.prepare(`
     SELECT p.id,p.brand_name,p.product_name,p.product_type,p.net_contents,p.category_id,p.category_source,c.name AS category_name,c.slug AS category_slug,p.created_at,p.updated_at,
            (SELECT identifier_value FROM cannabis_product_identifiers i WHERE i.product_id=p.id AND i.identifier_type IN ('upc','ean') ORDER BY i.verified DESC,i.created_at LIMIT 1) AS barcode,
@@ -48,9 +62,20 @@ function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean
       FROM cannabis_products p
       LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY p.updated_at DESC,p.product_name COLLATE NOCASE
-     LIMIT ${limit}
+     ORDER BY ${orderBy}
+     LIMIT ${limit} OFFSET ${offset}
   `).all(...params) as any[];
+}
+
+function productCount(db: Db, search = '') {
+  const q = search.trim().toLowerCase();
+  if (!q) return Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0);
+  return Number((db.prepare(`
+    SELECT COUNT(*) AS n
+      FROM cannabis_products p
+      LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
+     WHERE LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?
+  `).get(`%${q}%`) as any)?.n || 0);
 }
 
 function verifiedProductRows(db: Db, productIds: string[]) {
@@ -144,9 +169,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (view === 'products') {
-    const products = productRows(db, search, { limit: 80 });
+    const requestedPage = Math.max(1, Math.floor(Number(request.nextUrl.searchParams.get('page') || 1)) || 1);
+    const requestedPageSize = Math.max(10, Math.min(100, Math.floor(Number(request.nextUrl.searchParams.get('pageSize') || 50)) || 50));
+    const requestedSortRaw = text(request.nextUrl.searchParams.get('sort')) || 'updated_desc';
+    const requestedSort = PRODUCT_SORTS[requestedSortRaw] ? requestedSortRaw : 'updated_desc';
+    const total = productCount(db, search);
+    const pageCount = Math.max(1, Math.ceil(total / requestedPageSize));
+    const page = Math.min(requestedPage, pageCount);
+    const products = productRows(db, search, { limit: requestedPageSize, offset: (page - 1) * requestedPageSize, sort: requestedSort });
     return NextResponse.json({
       stats,
+      catalog: { total, page, pageSize: requestedPageSize, pageCount, sort: requestedSort },
       products,
       verifiedProducts: verifiedProductRows(db, products.map(row => String(row.id))),
     }, { headers: { 'Cache-Control': 'no-store' } });
