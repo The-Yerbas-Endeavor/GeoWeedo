@@ -128,6 +128,11 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     menuItemColumns.has('id') && menuItemColumns.has('menu_id') && menuItemColumns.has('product_id') && menuItemColumns.has('active') &&
     menuColumns.has('id') && menuColumns.has('dispensary_id') && menuColumns.has('active') &&
     dispensaryColumns.has('id') && dispensaryColumns.has('active');
+  const menuMatchVisibility = menuItemColumns.has('match_confidence')
+    ? menuItemColumns.has('match_review_status')
+      ? "AND NOT (mi.match_confidence='possible' AND COALESCE(mi.match_review_status,'pending') <> 'confirmed')"
+      : "AND COALESCE(mi.match_confidence,'') <> 'possible'"
+    : '';
 
   const evidenceSelects: string[] = [];
   if (hasScans) evidenceSelects.push('SELECT product_id FROM cannabis_qr_scans WHERE product_id IS NOT NULL');
@@ -204,7 +209,8 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
         JOIN dispensary_menus m ON m.id=mi.menu_id
         JOIN dispensaries d ON d.id=m.dispensary_id
         JOIN public_product_ids public ON public.product_id=mi.product_id
-        WHERE mi.product_id IS NOT NULL AND mi.active=1 AND m.active=1 AND d.active=1`).get() as any)?.n || 0)
+        WHERE mi.product_id IS NOT NULL AND mi.active=1 AND m.active=1 AND d.active=1
+          ${menuMatchVisibility}`).get() as any)?.n || 0)
     : 0;
 
   const matched = db.prepare(`${publicCte}
@@ -234,7 +240,8 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
          FROM dispensary_menu_items mi
          JOIN dispensary_menus m ON m.id=mi.menu_id
          JOIN dispensaries d ON d.id=m.dispensary_id
-         WHERE mi.product_id=p.id AND mi.active=1 AND m.active=1 AND d.active=1)`
+         WHERE mi.product_id=p.id AND mi.active=1 AND m.active=1 AND d.active=1
+           ${menuMatchVisibility})`
     : '0';
 
   const evidenceDates: string[] = [];
