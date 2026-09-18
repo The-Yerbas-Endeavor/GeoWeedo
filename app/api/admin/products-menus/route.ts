@@ -6,6 +6,7 @@ import { createWeedoFactsProduct, ensureWeedoFactsSchema } from '@/lib/weedoFact
 import { ensureWeedoFactsQrSchema } from '@/lib/weedoFactsQrPersistence';
 import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu, setProductPrimaryImage } from '@/lib/weedoMenus';
 import { assignProductCategory, ensureProductCategorySchema, listProductCategories, resolveProductCategory } from '@/lib/productCategories';
+import { ensureWeedoCoreSchema, reconcileMenuProductMatches, reviewMenuProductMatch } from '@/lib/weedoCore';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,9 +21,7 @@ function validImageUrl(value: string | null) {
 }
 
 function ensure() {
-  ensureWeedoFactsSchema();
-  ensureWeedoFactsQrSchema();
-  ensureWeedoMenuSchema();
+  ensureWeedoCoreSchema();
   const db = getDatabase();
   ensureProductCategorySchema(db);
   return db;
@@ -135,6 +134,74 @@ function dispensaryRows(db: Db, search = '') {
   `).all(`%${q}%`) as any[];
 }
 
+function menuMatchStats(db: Db) {
+  return {
+    linked: Number((db.prepare(`
+      SELECT COUNT(*) AS n
+      FROM dispensary_menu_items mi
+      JOIN dispensary_menus m ON m.id=mi.menu_id
+      JOIN dispensaries d ON d.id=m.dispensary_id
+      WHERE mi.active=1 AND m.active=1 AND d.active=1
+        AND mi.product_id IS NOT NULL
+        AND NOT (mi.match_confidence='possible' AND COALESCE(mi.match_review_status,'pending') <> 'confirmed')
+    `).get() as any)?.n || 0),
+    needsReview: Number((db.prepare(`
+      SELECT COUNT(*) AS n
+      FROM dispensary_menu_items mi
+      JOIN dispensary_menus m ON m.id=mi.menu_id
+      JOIN dispensaries d ON d.id=m.dispensary_id
+      WHERE mi.active=1 AND m.active=1 AND d.active=1
+        AND mi.match_confidence='possible'
+        AND COALESCE(mi.match_review_status,'pending')='pending'
+        AND COALESCE(mi.suggested_product_id,mi.product_id) IS NOT NULL
+    `).get() as any)?.n || 0),
+    unmatched: Number((db.prepare(`
+      SELECT COUNT(*) AS n
+      FROM dispensary_menu_items mi
+      JOIN dispensary_menus m ON m.id=mi.menu_id
+      JOIN dispensaries d ON d.id=m.dispensary_id
+      WHERE mi.active=1 AND m.active=1 AND d.active=1
+        AND mi.product_id IS NULL
+        AND NOT (
+          mi.match_confidence='possible'
+          AND COALESCE(mi.match_review_status,'pending')='pending'
+          AND mi.suggested_product_id IS NOT NULL
+        )
+    `).get() as any)?.n || 0),
+  };
+}
+
+function menuMatchRows(db: Db, search = '') {
+  const q = search.trim().toLowerCase();
+  const where = q ? `AND LOWER(
+    COALESCE(d.name,'') || ' ' || COALESCE(d.city,'') || ' ' || COALESCE(d.region,'') || ' ' ||
+    COALESCE(mi.item_name,'') || ' ' || COALESCE(mi.brand_name,'') || ' ' ||
+    COALESCE(p.product_name,'') || ' ' || COALESCE(p.brand_name,'')
+  ) LIKE ?` : '';
+  const params = q ? [`%${q}%`] : [];
+  return db.prepare(`
+    SELECT mi.id AS item_id,mi.item_name,mi.brand_name AS menu_brand_name,mi.package_size,
+           mi.category,mi.price_cents,mi.currency,mi.inventory_status,mi.source_url,
+           mi.match_confidence,mi.match_score,mi.match_reason,
+           COALESCE(mi.match_review_status,'pending') AS match_review_status,
+           d.id AS dispensary_id,d.name AS dispensary_name,d.city AS dispensary_city,d.region AS dispensary_region,
+           p.id AS suggested_product_id,p.brand_name AS product_brand_name,p.product_name AS product_name,
+           p.product_type,p.net_contents
+      FROM dispensary_menu_items mi
+      JOIN dispensary_menus m ON m.id=mi.menu_id
+      JOIN dispensaries d ON d.id=m.dispensary_id
+      LEFT JOIN cannabis_products p
+        ON p.id=COALESCE(mi.suggested_product_id,CASE WHEN mi.match_confidence='possible' THEN mi.product_id END)
+     WHERE mi.active=1 AND m.active=1 AND d.active=1
+       AND mi.match_confidence='possible'
+       AND COALESCE(mi.match_review_status,'pending')='pending'
+       AND COALESCE(mi.suggested_product_id,mi.product_id) IS NOT NULL
+       ${where}
+     ORDER BY mi.match_score DESC,d.name COLLATE NOCASE,mi.item_name COLLATE NOCASE
+     LIMIT 250
+  `).all(...params) as any[];
+}
+
 function statsRow(db: Db) {
   return {
     products: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0),
@@ -185,6 +252,14 @@ export async function GET(request: NextRequest) {
     }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
+  if (view === 'menu-matches') {
+    return NextResponse.json({
+      stats,
+      menuMatchStats: menuMatchStats(db),
+      menuMatches: menuMatchRows(db, search),
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   if (view === 'scans') {
     return NextResponse.json({
       stats,
@@ -229,11 +304,34 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!getAdminFromRequest(request)) return unauthorized();
+  const admin = getAdminFromRequest(request);
+  if (!admin) return unauthorized();
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== 'object') return invalid('Invalid JSON body.');
   const action = text((body as any).action);
   const db = ensure();
+
+  if (action === 'reconcile-menu-matches') {
+    const limit = Math.max(1,Math.min(1000,Math.floor(Number((body as any).limit || 250)) || 250));
+    try {
+      const result = reconcileMenuProductMatches(limit);
+      return NextResponse.json({ ok: true, ...result, menuMatchStats: menuMatchStats(db) });
+    } catch (error) {
+      return invalid(error instanceof Error ? error.message : 'Could not reconcile menu matches.');
+    }
+  }
+
+  if (action === 'review-menu-match') {
+    const itemId = text((body as any).itemId);
+    const decision = text((body as any).decision);
+    if (!itemId || !['confirm','reject'].includes(decision)) return invalid('Menu item and confirm/reject decision are required.');
+    try {
+      const result = reviewMenuProductMatch({ itemId, decision: decision as 'confirm'|'reject', adminId: admin.id });
+      return NextResponse.json({ ok: true, ...result, menuMatchStats: menuMatchStats(db) });
+    } catch (error) {
+      return invalid(error instanceof Error ? error.message : 'Could not review menu match.');
+    }
+  }
 
   if (action === 'assign-product-category') {
     const productId = text((body as any).productId);
