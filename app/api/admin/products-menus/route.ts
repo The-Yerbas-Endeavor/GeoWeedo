@@ -95,8 +95,19 @@ function qrScanRows(db: Db, search = '', options: { unlinkedOnly?: boolean; limi
   `).all(...params) as any[];
 }
 
-function dispensaryRows(db: Db) {
-  return db.prepare(`SELECT id,name,city,region,country FROM dispensaries WHERE active=1 AND verified=1 ORDER BY region COLLATE NOCASE,city COLLATE NOCASE,name COLLATE NOCASE`).all() as any[];
+function dispensaryRows(db: Db, search = '') {
+  const q = search.trim().toLowerCase();
+  if (!q) {
+    return db.prepare(`SELECT id,name,city,region,country FROM dispensaries WHERE active=1 AND verified=1 ORDER BY name COLLATE NOCASE LIMIT 100`).all() as any[];
+  }
+  return db.prepare(`
+    SELECT id,name,city,region,country
+      FROM dispensaries
+     WHERE active=1 AND verified=1
+       AND LOWER(COALESCE(name,'') || ' ' || COALESCE(city,'') || ' ' || COALESCE(region,'') || ' ' || COALESCE(country,'')) LIKE ?
+     ORDER BY name COLLATE NOCASE
+     LIMIT 100
+  `).all(`%${q}%`) as any[];
 }
 
 function statsRow(db: Db) {
@@ -126,8 +137,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stats }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
+  if (view === 'dispensaries') {
+    return NextResponse.json({
+      dispensaries: dispensaryRows(db, search),
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   if (view === 'products') {
-    const products = productRows(db, search);
+    const products = productRows(db, search, { limit: 80 });
     return NextResponse.json({
       stats,
       products,
@@ -143,10 +160,12 @@ export async function GET(request: NextRequest) {
   }
 
   if (view === 'exceptions') {
+    const qrScans = qrScanRows(db, search, { unlinkedOnly: true, limit: 100 });
     return NextResponse.json({
       stats,
+      qrScans,
       uncategorizedProducts: productRows(db, search, { uncategorizedOnly: true, limit: 50 }),
-      unlinkedQrScans: qrScanRows(db, search, { unlinkedOnly: true, limit: 50 }),
+      unlinkedQrScans: qrScans,
     }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
@@ -241,6 +260,16 @@ export async function POST(request: NextRequest) {
     if (!db.prepare('SELECT id FROM dispensaries WHERE id=? AND active=1 AND verified=1').get(dispensaryId)) return invalid('Dispensary is not active or verified.');
     const product = db.prepare('SELECT id,brand_name,product_name,product_type,category_id FROM cannabis_products WHERE id=?').get(productId) as any;
     if (!product) return invalid('Product was not found.');
+
+    const existing = db.prepare(`
+      SELECT mi.id
+        FROM dispensary_menu_items mi
+        JOIN dispensary_menus m ON m.id=mi.menu_id
+       WHERE m.dispensary_id=? AND m.active=1 AND mi.product_id=? AND mi.active=1
+       LIMIT 1
+    `).get(dispensaryId, productId) as any;
+    if (existing?.id) return NextResponse.json({ ok: true, alreadyLinked: true, itemId: existing.id });
+
     const price = priceRaw ? Number(priceRaw) : null;
     if (price !== null && (!Number.isFinite(price) || price < 0 || price > 100000)) return invalid('Price must be a valid non-negative amount.');
     const verified = Boolean((body as any).verified && sourceUrl);
@@ -256,7 +285,7 @@ export async function POST(request: NextRequest) {
       inventoryStatus: optional((body as any).inventoryStatus) || 'in_stock',sourceType: sourceUrl ? 'menu_source' : 'admin-manual',
       sourceUrl,imageUrl,sourceUpdatedAt: new Date().toISOString(),verified,
     });
-    return NextResponse.json({ itemId, menuItems: listDispensaryMenu(dispensaryId) }, { status: 201 });
+    return NextResponse.json({ ok: true, alreadyLinked: false, itemId, menuItems: listDispensaryMenu(dispensaryId) }, { status: 201 });
   }
 
   return invalid('Unknown action.');
