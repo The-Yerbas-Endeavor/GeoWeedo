@@ -9,6 +9,16 @@ export type LocationIdentityInput = {
   longitude?: number | null;
 };
 
+const REGION_ALIASES: Record<string,string> = {
+  AL:'alabama',AK:'alaska',AZ:'arizona',AR:'arkansas',CA:'california',CO:'colorado',CT:'connecticut',DE:'delaware',FL:'florida',GA:'georgia',
+  HI:'hawaii',ID:'idaho',IL:'illinois',IN:'indiana',IA:'iowa',KS:'kansas',KY:'kentucky',LA:'louisiana',ME:'maine',MD:'maryland',
+  MA:'massachusetts',MI:'michigan',MN:'minnesota',MS:'mississippi',MO:'missouri',MT:'montana',NE:'nebraska',NV:'nevada',NH:'new hampshire',NJ:'new jersey',
+  NM:'new mexico',NY:'new york',NC:'north carolina',ND:'north dakota',OH:'ohio',OK:'oklahoma',OR:'oregon',PA:'pennsylvania',RI:'rhode island',SC:'south carolina',
+  SD:'south dakota',TN:'tennessee',TX:'texas',UT:'utah',VT:'vermont',VA:'virginia',WA:'washington',WV:'west virginia',WI:'wisconsin',WY:'wyoming',DC:'district of columbia',
+  AB:'alberta',BC:'british columbia',MB:'manitoba',NB:'new brunswick',NL:'newfoundland and labrador',NS:'nova scotia',NT:'northwest territories',NU:'nunavut',
+  ON:'ontario',PE:'prince edward island',QC:'quebec',SK:'saskatchewan',YT:'yukon'
+};
+
 function text(value: unknown) {
   return String(value ?? '')
     .normalize('NFKD')
@@ -17,6 +27,20 @@ function text(value: unknown) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function normalizedCountry(value: unknown) {
+  const normalized = text(value);
+  if (['us','usa','united states','united states of america'].includes(normalized)) return 'united states';
+  if (['ca','can','canada'].includes(normalized)) return 'canada';
+  return normalized;
+}
+
+function normalizedRegion(value: unknown) {
+  const raw = String(value ?? '').trim();
+  const upper = raw.toUpperCase();
+  if (REGION_ALIASES[upper]) return REGION_ALIASES[upper];
+  return text(raw).replace(/ state$/, '');
 }
 
 function license(value: unknown) {
@@ -32,12 +56,12 @@ function finite(value: unknown) {
 }
 
 function compatibleJurisdiction(a: LocationIdentityInput, b: LocationIdentityInput) {
-  const countryA = text(a.country);
-  const countryB = text(b.country);
+  const countryA = normalizedCountry(a.country);
+  const countryB = normalizedCountry(b.country);
   if (countryA && countryB && countryA !== countryB) return false;
 
-  const regionA = text(a.region);
-  const regionB = text(b.region);
+  const regionA = normalizedRegion(a.region);
+  const regionB = normalizedRegion(b.region);
   if (regionA && regionB && regionA !== regionB) return false;
 
   return Boolean(countryA || countryB || regionA || regionB);
@@ -86,8 +110,8 @@ export function strongLocationIdentityKeys(input: LocationIdentityInput) {
   const name = text(input.name);
   const street = text(input.streetAddress);
   const city = text(input.city);
-  const region = text(input.region);
-  const country = text(input.country);
+  const region = normalizedRegion(input.region);
+  const country = normalizedCountry(input.country);
   const licenseNumber = license(input.licenseNumber);
 
   if (licenseNumber && region && country) keys.push(`license:${country}:${region}:${licenseNumber}`);
