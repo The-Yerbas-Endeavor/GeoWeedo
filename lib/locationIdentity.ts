@@ -82,8 +82,8 @@ export function strongLocationIdentityMatch(a: LocationIdentityInput, b: Locatio
   const streetB = text(b.streetAddress);
   const cityA = text(a.city);
   const cityB = text(b.city);
-  const regionA = text(a.region);
-  const regionB = text(b.region);
+  const regionA = normalizedRegion(a.region);
+  const regionB = normalizedRegion(b.region);
 
   if (
     streetA && streetB && streetA === streetB &&
@@ -123,7 +123,7 @@ export function strongLocationIdentityKeys(input: LocationIdentityInput) {
   const latitude = finite(input.latitude);
   const longitude = finite(input.longitude);
   if (name && region && latitude !== null && longitude !== null) {
-    keys.push(`coord:${country}:${region}:${name}:${latitude.toFixed(5)}:${longitude.toFixed(5)}`);
+    keys.push(`coord:${country}:${region}:${name}:${latitude.toFixed(4)}:${longitude.toFixed(4)}`);
   }
 
   return keys;
