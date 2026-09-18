@@ -6,7 +6,6 @@ const tabs = [
   { href: '/account', label: 'Account' },
   { href: '/account/shop', label: 'Shop' },
   { href: '/account/products', label: 'Products / Menu' },
-  { href: '/account/scanner', label: 'Scanner / Profile' },
   { href: '/account/yerbas', label: 'Yerbas' },
 ];
 
