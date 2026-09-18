@@ -40,3 +40,44 @@
 .admin-shell .location-editor-modal>.location-modal-footer button{min-width:150px}
 @media(max-width:1180px){.admin-shell .location-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.admin-shell .location-filter-grid{grid-template-columns:1fr}.admin-shell .candidate-gameplay-panel{align-items:stretch;flex-direction:column}.admin-shell .candidate-gameplay-actions{justify-content:stretch}.admin-shell .candidate-gameplay-actions button{flex:1}.admin-shell .location-editor-modal{top:2vh;width:calc(100vw - 20px);max-height:96vh;padding:0 14px 14px!important;grid-template-columns:1fr}.admin-shell .location-editor-modal>.location-modal-head{margin:0 -14px;padding:14px}.admin-shell .location-editor-modal>.field-row{grid-template-columns:1fr}.admin-shell .location-editor-modal>.location-modal-footer{bottom:-14px;margin:8px -14px -14px;padding:12px 14px}.admin-shell .location-editor-modal>.location-modal-footer button{min-width:0;flex:1}}
+
+/* Enabled profile audit: keep the full table readable at normal desktop widths. */
+.admin-shell .enabled-profile-audit{overflow:hidden}
+.admin-shell .profile-audit-stats{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:14px 0}
+.admin-shell .profile-audit-stats .admin-card{min-width:0}
+.admin-shell .profile-audit-filters{display:grid;grid-template-columns:minmax(260px,1.8fr) minmax(170px,.9fr) auto auto;gap:8px;align-items:end}
+.admin-shell .profile-audit-filters>input,.admin-shell .profile-audit-filters>select{width:100%;min-width:0}
+.admin-shell .profile-audit-filters label{display:flex;align-items:center;gap:7px;white-space:nowrap;color:var(--muted);font-size:12px}
+.admin-shell .profile-audit-filters label select{min-width:92px}
+.admin-shell .profile-audit-table-wrap{width:100%;overflow:auto;border:1px solid var(--border);border-radius:12px;background:#0d120f}
+.admin-shell .profile-audit-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:12.5px}
+.admin-shell .profile-audit-table .col-dispensary{width:27%}
+.admin-shell .profile-audit-table .col-complete{width:8%}
+.admin-shell .profile-audit-table .col-confidence{width:9%}
+.admin-shell .profile-audit-table .col-last{width:11%}
+.admin-shell .profile-audit-table .col-reaudit{width:11%}
+.admin-shell .profile-audit-table .col-checks{width:23%}
+.admin-shell .profile-audit-table .col-actions{width:11%}
+.admin-shell .profile-audit-table th{padding:9px 7px;text-align:left;vertical-align:bottom;white-space:nowrap;background:#111714;border-bottom:1px solid var(--border)}
+.admin-shell .profile-audit-table td{padding:9px 7px;vertical-align:top;border-top:1px solid rgba(255,255,255,.055);overflow-wrap:anywhere}
+.admin-shell .profile-audit-table td:first-child strong{display:block;line-height:1.25}
+.admin-shell .profile-audit-table td:first-child small{display:block;margin-top:3px;line-height:1.25;color:var(--muted)}
+.admin-shell .profile-audit-sort{display:inline-flex;align-items:center;gap:4px;padding:0!important;border:0!important;background:transparent!important;color:inherit!important;font:inherit;font-weight:800!important;white-space:nowrap;cursor:pointer}
+.admin-shell .profile-audit-sort span{font-size:9px;opacity:.65}
+.admin-shell .profile-audit-sort.active span{color:#8fe36e;opacity:1}
+.admin-shell .profile-audit-confidence{display:inline-block;min-width:42px;padding:4px 7px;border-radius:999px;text-align:center;background:rgba(255,255,255,.055)}
+.admin-shell .profile-audit-checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.admin-shell .profile-audit-check{display:block;min-width:0;padding:4px 5px;border:1px solid rgba(255,255,255,.09);border-radius:999px;color:var(--muted);font-size:10px;line-height:1.05;white-space:nowrap;text-align:center;overflow:hidden;text-overflow:ellipsis}
+.admin-shell .profile-audit-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;align-items:start}
+.admin-shell .profile-audit-actions>*{width:100%;min-width:0!important;margin:0!important;text-align:center;box-sizing:border-box}
+.admin-shell .profile-audit-actions a{display:flex;align-items:center;justify-content:center;text-decoration:none}
+@media(max-width:1100px){
+ .admin-shell .profile-audit-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-shell .profile-audit-filters label{justify-content:space-between}
+ .admin-shell .profile-audit-table{min-width:980px}
+}
+@media(max-width:760px){
+ .admin-shell .profile-audit-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-shell .profile-audit-filters{grid-template-columns:1fr}
+ .admin-shell .profile-audit-table{min-width:940px}
+}
