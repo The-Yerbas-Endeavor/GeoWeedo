@@ -11,7 +11,7 @@ export const revalidate = 0;
 export default async function HomePage() {
   const approved = await readApprovedDispensaries();
   const initialApprovedDispensaries = approved
-    .filter((item) => item.verified && item.active)
+    .filter((item) => item.active)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const serializable = JSON.parse(JSON.stringify(initialApprovedDispensaries)) as Dispensary[];

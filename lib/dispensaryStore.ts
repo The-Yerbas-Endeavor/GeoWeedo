@@ -35,6 +35,7 @@ export type ApprovedDispensary = {
   priorityWeight?: number;
   sponsoredUntil?: string;
   sponsored?: boolean;
+  gameplayEnabled: boolean;
   verified: true;
   active: boolean;
   createdAt: string;
@@ -104,6 +105,7 @@ function rowToDispensary(row: Record<string, unknown>): ApprovedDispensary {
     imageryUrl: String(row.imagery_url),
     priorityWeight: optionalNumber(row.priority_weight),
     sponsoredUntil: optionalString(row.sponsored_until),
+    gameplayEnabled: row.gameplay_enabled == null ? true : toBoolean(row.gameplay_enabled),
     verified: true,
     active: toBoolean(row.active),
     createdAt: String(row.created_at),
@@ -119,8 +121,8 @@ function upsert(item: ApprovedDispensary) {
       data_source,source_url,source_license,recreational,medical,imagery_provider,
       imagery_photo_id,imagery_sequence_id,imagery_latitude,imagery_longitude,
       imagery_heading,imagery_field_of_view,imagery_projection,imagery_url,
-      priority_weight,sponsored_until,verified,active,created_at,updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      priority_weight,sponsored_until,verified,gameplay_enabled,active,created_at,updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(slug) DO UPDATE SET
       name=excluded.name, street_address=excluded.street_address, city=excluded.city,
       region=excluded.region, country=excluded.country, latitude=excluded.latitude,
@@ -133,14 +135,14 @@ function upsert(item: ApprovedDispensary) {
       imagery_field_of_view=excluded.imagery_field_of_view, imagery_projection=excluded.imagery_projection,
       imagery_url=excluded.imagery_url, priority_weight=excluded.priority_weight,
       sponsored_until=excluded.sponsored_until, verified=excluded.verified,
-      active=excluded.active, updated_at=excluded.updated_at
+      gameplay_enabled=excluded.gameplay_enabled, active=excluded.active, updated_at=excluded.updated_at
   `).run(
     item.id, item.name, item.slug, item.streetAddress ?? null, item.city, item.region, item.country,
     item.latitude, item.longitude, item.website ?? null, item.dataSource ?? null, item.sourceUrl ?? null,
     item.sourceLicense ?? null, item.recreational ? 1 : 0, item.medical ? 1 : 0, item.imageryProvider,
     item.imageryPhotoId, item.imagerySequenceId ?? null, item.imageryLatitude, item.imageryLongitude,
     item.imageryHeading ?? null, item.imageryFieldOfView ?? null, item.imageryProjection ?? null,
-    item.imageryUrl, item.priorityWeight ?? null, item.sponsoredUntil ?? null, 1, item.active ? 1 : 0,
+    item.imageryUrl, item.priorityWeight ?? null, item.sponsoredUntil ?? null, 1, item.gameplayEnabled !== false ? 1 : 0, item.active ? 1 : 0,
     item.createdAt, item.updatedAt,
   );
 }
@@ -175,17 +177,18 @@ export async function readApprovedDispensaries(): Promise<ApprovedDispensary[]> 
   });
 }
 
-export async function saveApprovedDispensary(input: Omit<ApprovedDispensary, 'id' | 'verified' | 'createdAt' | 'updatedAt'>) {
+export async function saveApprovedDispensary(input: Omit<ApprovedDispensary, 'id' | 'verified' | 'createdAt' | 'updatedAt' | 'gameplayEnabled'> & { gameplayEnabled?: boolean }) {
   await migrateLegacyJsonOnce();
   const db = getDatabase();
   const now = new Date().toISOString();
   const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const existing = db.prepare('SELECT id, created_at FROM dispensaries WHERE slug = ?').get(slug) as { id: string; created_at: string } | undefined;
+  const existing = db.prepare('SELECT id, created_at, gameplay_enabled FROM dispensaries WHERE slug = ?').get(slug) as { id: string; created_at: string; gameplay_enabled: number } | undefined;
 
   const next: ApprovedDispensary = {
     ...input,
     slug,
     id: existing?.id ?? `disp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    gameplayEnabled: input.gameplayEnabled ?? (existing ? Number(existing.gameplay_enabled) !== 0 : true),
     verified: true,
     createdAt: existing?.created_at ?? now,
     updatedAt: now,

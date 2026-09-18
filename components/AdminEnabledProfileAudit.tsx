@@ -2,7 +2,7 @@
 import {useEffect,useMemo,useState} from 'react';
 
 type Verification={lastVerifiedAt?:string|null;nextAuditAt?:string|null;verifiedBy?:string|null;verificationSource?:string|null;notes?:string|null};
-type Row={id:string;kind:'dispensary'|'candidate';name:string;street_address?:string;city?:string;region?:string;postal_code?:string;country?:string;latitude?:number|null;longitude?:number|null;website?:string;phone?:string;license_number?:string;data_source?:string;source_url?:string;verified?:number;active?:number;imagery_provider?:string;profile?:{overview?:string;phone?:string;website?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>};profile_verification?:Verification};
+type Row={id:string;kind:'dispensary'|'candidate';name:string;street_address?:string;city?:string;region?:string;postal_code?:string;country?:string;latitude?:number|null;longitude?:number|null;website?:string;phone?:string;license_number?:string;data_source?:string;source_url?:string;verified?:number;gameplay_enabled?:number;active?:number;imagery_provider?:string;profile?:{overview?:string;phone?:string;website?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>};profile_verification?:Verification};
 type Need='all'|'due'|'never'|'website'|'phone'|'hours'|'address'|'license'|'overview'|'amenities'|'social'|'source';
 type SortKey='name'|'complete'|'confidence'|'lastVerified'|'reaudit'|'checks';
 type SortDir='asc'|'desc';
@@ -37,7 +37,7 @@ function badge(ok:boolean,label:string,detail=''){return <span className="profil
 
 export default function AdminEnabledProfileAudit(){
  const[rows,setRows]=useState<Row[]>([]),[need,setNeed]=useState<Need>('due'),[query,setQuery]=useState(''),[days,setDays]=useState(90),[busy,setBusy]=useState<string|null>(null),[message,setMessage]=useState('Loading enabled dispensaries…'),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(25),[sortKey,setSortKey]=useState<SortKey>('reaudit'),[sortDir,setSortDir]=useState<SortDir>('asc');
- async function load(){const r=await fetch('/api/admin/dispensary-records',{cache:'no-store'}),d=await r.json();if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw new Error(d.error);const enabled=(d.records||[]).filter((x:Row)=>x.kind==='dispensary'&&x.active!==0&&x.verified&&hasCoords(x)&&x.imagery_provider);setRows(enabled);setMessage(`${enabled.length.toLocaleString()} gameplay-enabled dispensaries audited.`)}
+ async function load(){const r=await fetch('/api/admin/dispensary-records',{cache:'no-store'}),d=await r.json();if(r.status===401){location.href='/admin/login';return}if(!r.ok)throw new Error(d.error);const enabled=(d.records||[]).filter((x:Row)=>x.kind==='dispensary'&&x.active!==0&&x.gameplay_enabled!==0&&hasCoords(x)&&x.imagery_provider);setRows(enabled);setMessage(`${enabled.length.toLocaleString()} gameplay-enabled dispensaries audited.`)}
  useEffect(()=>{load().catch(e=>setMessage(e.message||'Audit failed.'))},[]);
  useEffect(()=>{setPage(1)},[need,query,pageSize,sortKey,sortDir]);
  async function mark(r:Row){setBusy(r.id);try{const res=await fetch('/api/admin/dispensary-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark-profile-verified',id:r.id,reauditDays:days,source:'admin-audit'})}),d=await res.json();if(!res.ok)throw new Error(d.error);await load();setMessage(`${r.name} verified. Re-audit due in ${days} days.`)}catch(e){setMessage(e instanceof Error?e.message:'Verification failed.')}finally{setBusy(null)}}

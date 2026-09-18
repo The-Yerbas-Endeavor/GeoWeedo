@@ -32,6 +32,7 @@ export type Dispensary = {
   recreational: boolean;
   medical: boolean;
   verified: boolean;
+  gameplayEnabled?: boolean;
   active: boolean;
 };
 

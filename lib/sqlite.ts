@@ -214,6 +214,7 @@ function initializeSchema(db: DatabaseSync) {
       priority_weight INTEGER,
       sponsored_until TEXT,
       verified INTEGER NOT NULL DEFAULT 1,
+      gameplay_enabled INTEGER NOT NULL DEFAULT 1,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -480,14 +481,24 @@ function initializeSchema(db: DatabaseSync) {
     ['dispensaries', 'postal_code', 'TEXT'],
     ['dispensaries', 'phone', 'TEXT'],
     ['dispensaries', 'license_number', 'TEXT'],
+    ['dispensaries', 'gameplay_enabled', 'INTEGER NOT NULL DEFAULT 1'],
     ['dispensary_candidates', 'postal_code', 'TEXT'],
     ['dispensary_candidates', 'phone', 'TEXT'],
     ['dispensary_candidates', 'license_status', 'TEXT'],
     ['dispensary_candidates', 'license_type', 'TEXT'],
   ] as const;
 
+  let addedGameplayEnabled = false;
   for (const [table, column, definition] of additiveColumns) {
-    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`); } catch { /* column already exists */ }
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
+      if (table === 'dispensaries' && column === 'gameplay_enabled') addedGameplayEnabled = true;
+    } catch { /* column already exists */ }
+  }
+
+  // One-time compatibility backfill: the former Admin gameplay toggle wrote verified=0.
+  if (addedGameplayEnabled) {
+    try { db.exec('UPDATE dispensaries SET gameplay_enabled=0 WHERE verified=0;'); } catch {}
   }
 
   db.prepare(`

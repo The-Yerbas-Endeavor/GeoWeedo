@@ -11,7 +11,7 @@ export async function GET() {
   try{claimedRows=db.prepare(`SELECT DISTINCT location_id FROM dispensary_user_owner_assignments WHERE status='verified'`).all() as {location_id:string}[];}catch{}
   const claimed=new Set(claimedRows.map(row=>row.location_id));
   const dispensaries = (await readApprovedDispensaries())
-    .filter((item) => item.verified && item.active)
+    .filter((item) => item.active)
     .map((item) => {
       const sponsorship = sponsorships.get(item.id);
       const isClaimed=claimed.has(item.id);

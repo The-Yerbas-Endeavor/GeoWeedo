@@ -40,7 +40,7 @@ function publicLocation(item: any) {
 export async function GET() {
   const today = dateKey();
   const approved = (await readApprovedDispensaries()).filter((item) =>
-    item.active && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+    item.active && item.gameplayEnabled && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
 
   if (!approved.length) {
     return NextResponse.json({ error: 'No enabled Daily Weedo locations are available.' }, { status: 503 });
