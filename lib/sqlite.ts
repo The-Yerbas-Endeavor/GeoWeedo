@@ -214,6 +214,7 @@ function initializeSchema(db: DatabaseSync) {
       priority_weight INTEGER,
       sponsored_until TEXT,
       verified INTEGER NOT NULL DEFAULT 1,
+      gameplay_enabled INTEGER NOT NULL DEFAULT 1,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -480,6 +481,7 @@ function initializeSchema(db: DatabaseSync) {
     ['dispensaries', 'postal_code', 'TEXT'],
     ['dispensaries', 'phone', 'TEXT'],
     ['dispensaries', 'license_number', 'TEXT'],
+    ['dispensaries', 'gameplay_enabled', 'INTEGER NOT NULL DEFAULT 1'],
     ['dispensary_candidates', 'postal_code', 'TEXT'],
     ['dispensary_candidates', 'phone', 'TEXT'],
     ['dispensary_candidates', 'license_status', 'TEXT'],
