@@ -111,6 +111,10 @@ export function ensureWeedoCoreSchema() {
   ensureColumn(db, 'dispensary_menu_items', 'match_score', 'REAL');
   ensureColumn(db, 'dispensary_menu_items', 'match_reason', 'TEXT');
   ensureColumn(db, 'dispensary_menu_items', 'matched_at', 'TEXT');
+  ensureColumn(db, 'dispensary_menu_items', 'suggested_product_id', 'TEXT');
+  ensureColumn(db, 'dispensary_menu_items', 'match_review_status', 'TEXT');
+  ensureColumn(db, 'dispensary_menu_items', 'match_reviewed_at', 'TEXT');
+  ensureColumn(db, 'dispensary_menu_items', 'match_reviewed_by', 'TEXT');
   ensureColumn(db, 'cannabis_qr_scans', 'payload_kind', 'TEXT');
   ensureColumn(db, 'cannabis_qr_scans', 'resolution_status', 'TEXT');
 
@@ -142,6 +146,8 @@ export function ensureWeedoCoreSchema() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS cannabis_products_brand_idx ON cannabis_products(brand_id);
     CREATE INDEX IF NOT EXISTS dispensary_menu_items_match_idx ON dispensary_menu_items(match_confidence,match_score);
+    CREATE INDEX IF NOT EXISTS dispensary_menu_items_review_idx ON dispensary_menu_items(match_review_status,match_confidence,active);
+    CREATE INDEX IF NOT EXISTS dispensary_menu_items_suggested_product_idx ON dispensary_menu_items(suggested_product_id);
     CREATE INDEX IF NOT EXISTS cannabis_qr_scans_resolution_idx ON cannabis_qr_scans(resolution_status,last_seen_at DESC);
   `);
 
@@ -161,8 +167,8 @@ export function findCanonicalProductMatch(input: {
   size?: string | null;
   identifiers?: Array<{ type: string; value: string }>;
   batchNumber?: string | null;
-}): CanonicalProductMatch {
-  const db = ensureWeedoCoreSchema();
+}, existingDb?: Db): CanonicalProductMatch {
+  const db = existingDb || ensureWeedoCoreSchema();
 
   for (const identifier of input.identifiers || []) {
     const normalized = normalizeProductIdentifier(identifier.type, identifier.value);
@@ -250,10 +256,12 @@ export function ingestCanonicalMenuListing(input: CanonicalMenuListingInput) {
     batchNumber: input.batchNumber,
   });
 
+  const autoLink = Boolean(match.productId && (match.confidence === 'exact' || match.confidence === 'high'));
+  const needsReview = Boolean(match.productId && match.confidence === 'possible');
   const id = addDispensaryMenuItem({
     dispensaryId: input.dispensaryId,
-    productId: match.productId,
-    batchId: match.batchId,
+    productId: autoLink ? match.productId : null,
+    batchId: autoLink ? match.batchId : null,
     externalItemId: input.externalItemId,
     itemName: input.externalProductName,
     brandName: input.brand,
@@ -271,11 +279,101 @@ export function ingestCanonicalMenuListing(input: CanonicalMenuListingInput) {
 
   db.prepare(`
     UPDATE dispensary_menu_items
-    SET match_confidence=?,match_score=?,match_reason=?,matched_at=?
+    SET match_confidence=?,match_score=?,match_reason=?,matched_at=?,
+        suggested_product_id=?,match_review_status=?,match_reviewed_at=NULL,match_reviewed_by=NULL
     WHERE id=?
-  `).run(match.confidence, match.score, match.reasons.join('; '), new Date().toISOString(), id);
+  `).run(
+    match.confidence,
+    match.score,
+    match.reasons.join('; '),
+    new Date().toISOString(),
+    needsReview ? match.productId : null,
+    autoLink ? 'auto' : needsReview ? 'pending' : 'unmatched',
+    id,
+  );
 
-  return { listingId: id, match };
+  return { listingId: id, match: { ...match, productId: autoLink ? match.productId : null }, suggestedProductId: needsReview ? match.productId : null, autoLinked: autoLink, needsReview };
+}
+
+export function reconcileMenuProductMatches(limit = 200) {
+  const db = ensureWeedoCoreSchema();
+  const rows = db.prepare(`
+    SELECT mi.id,mi.item_name,mi.brand_name,mi.package_size
+    FROM dispensary_menu_items mi
+    JOIN dispensary_menus m ON m.id=mi.menu_id
+    JOIN dispensaries d ON d.id=m.dispensary_id
+    WHERE mi.active=1 AND m.active=1 AND d.active=1
+      AND mi.product_id IS NULL
+      AND COALESCE(mi.match_review_status,'') <> 'rejected'
+    ORDER BY COALESCE(mi.source_updated_at,mi.updated_at,mi.created_at) DESC
+    LIMIT ?
+  `).all(Math.max(1,Math.min(1000,Math.floor(limit)))) as any[];
+
+  const now = new Date().toISOString();
+  let autoLinked = 0, needsReview = 0, unmatched = 0;
+  const update = db.prepare(`
+    UPDATE dispensary_menu_items
+    SET product_id=?,batch_id=?,suggested_product_id=?,match_confidence=?,match_score=?,
+        match_reason=?,matched_at=?,match_review_status=?,match_reviewed_at=NULL,match_reviewed_by=NULL
+    WHERE id=?
+  `);
+
+  runTransaction(db, () => {
+    for (const row of rows) {
+      const match = findCanonicalProductMatch({
+        productName: String(row.item_name || ''),
+        brand: row.brand_name || null,
+        size: row.package_size || null,
+      }, db);
+      const auto = Boolean(match.productId && (match.confidence === 'exact' || match.confidence === 'high'));
+      const review = Boolean(match.productId && match.confidence === 'possible');
+      update.run(
+        auto ? match.productId : null,
+        auto ? match.batchId : null,
+        review ? match.productId : null,
+        match.confidence,
+        match.score,
+        match.reasons.join('; '),
+        now,
+        auto ? 'auto' : review ? 'pending' : 'unmatched',
+        row.id,
+      );
+      if (auto) autoLinked += 1;
+      else if (review) needsReview += 1;
+      else unmatched += 1;
+    }
+  });
+
+  return { processed: rows.length, autoLinked, needsReview, unmatched };
+}
+
+export function reviewMenuProductMatch(input: { itemId: string; decision: 'confirm' | 'reject'; adminId: string }) {
+  const db = ensureWeedoCoreSchema();
+  const row = db.prepare(`
+    SELECT id,product_id,suggested_product_id,match_confidence,match_review_status
+    FROM dispensary_menu_items WHERE id=? AND active=1 LIMIT 1
+  `).get(input.itemId) as any;
+  if (!row) throw new Error('Menu item was not found.');
+
+  const suggested = row.suggested_product_id || (row.match_confidence === 'possible' ? row.product_id : null);
+  const now = new Date().toISOString();
+  if (input.decision === 'confirm') {
+    if (!suggested) throw new Error('This menu item has no suggested product to confirm.');
+    db.prepare(`
+      UPDATE dispensary_menu_items
+      SET product_id=?,suggested_product_id=NULL,match_confidence='high',
+          match_review_status='confirmed',match_reviewed_at=?,match_reviewed_by=?,matched_at=?
+      WHERE id=?
+    `).run(suggested, now, input.adminId, now, input.itemId);
+    return { itemId: input.itemId, productId: String(suggested), status: 'confirmed' as const };
+  }
+
+  db.prepare(`
+    UPDATE dispensary_menu_items
+    SET product_id=NULL,match_review_status='rejected',match_reviewed_at=?,match_reviewed_by=?
+    WHERE id=?
+  `).run(now, input.adminId, input.itemId);
+  return { itemId: input.itemId, productId: null, status: 'rejected' as const };
 }
 
 export function availabilityConfidence(input: {
