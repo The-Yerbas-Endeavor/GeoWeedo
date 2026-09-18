@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/sqlite';
 import { getUserFromRequest } from '@/lib/userAuth';
 import { listUserOwnedLocations } from '@/lib/dispensaryCommunity';
+import { sponsorshipSummaryForOwner } from '@/lib/sponsorshipStore';
+import { ensureWeedoMenuSchema } from '@/lib/weedoMenus';
 import { scanYerbasDeposits } from '@/lib/yerbasDepositScanner';
 
 export const runtime = 'nodejs';
@@ -34,7 +36,8 @@ export async function GET(request: NextRequest) {
   `).get(user.id) as { count?: number } | undefined;
   const verifiedOwnerAssignmentCount = Number(verifiedOwnerAssignment?.count || 0);
 
-  const ownedLocations = listUserOwnedLocations(user.id).map(row => ({
+  const ownedLocationRows = listUserOwnedLocations(user.id);
+  const ownedLocations = ownedLocationRows.map(row => ({
     locationId: row.locationId,
     verifiedAt: row.verifiedAt,
     name: row.location?.name || 'Verified dispensary',
@@ -45,6 +48,66 @@ export async function GET(request: NextRequest) {
     verified: Boolean(row.location?.verified),
     menuReady: row.location?.kind === 'dispensary' && Boolean(row.location?.active) && Boolean(row.location?.verified),
   }));
+
+  let ownerDashboard: any = null;
+  const primaryOwned = ownedLocationRows.find(row => row.location?.kind === 'dispensary') || ownedLocationRows[0] || null;
+  if (primaryOwned?.location) {
+    const locationId = primaryOwned.locationId;
+    let sponsorship: any = null;
+    let productStatus = { activeItems: 0, linkedProducts: 0, inStock: 0 };
+    try {
+      sponsorship = sponsorshipSummaryForOwner(user.id, locationId);
+    } catch {}
+    try {
+      ensureWeedoMenuSchema();
+      const menuStats = db.prepare(`
+        SELECT
+          COUNT(*) AS active_items,
+          COUNT(DISTINCT CASE WHEN mi.product_id IS NOT NULL THEN mi.product_id END) AS linked_products,
+          SUM(CASE WHEN mi.inventory_status='in_stock' THEN 1 ELSE 0 END) AS in_stock
+        FROM dispensary_menu_items mi
+        JOIN dispensary_menus m ON m.id=mi.menu_id
+        WHERE m.dispensary_id=? AND m.active=1 AND mi.active=1
+      `).get(locationId) as any;
+      productStatus = {
+        activeItems: Number(menuStats?.active_items || 0),
+        linkedProducts: Number(menuStats?.linked_products || 0),
+        inStock: Number(menuStats?.in_stock || 0),
+      };
+    } catch {}
+
+    const metrics = sponsorship?.metrics || {};
+    ownerDashboard = {
+      locationId,
+      locationName: primaryOwned.location.name || 'Verified dispensary',
+      city: primaryOwned.location.city || '',
+      region: primaryOwned.location.region || '',
+      featured: {
+        active: Boolean(
+          sponsorship?.featured?.status === 'active'
+          && Date.parse(String(sponsorship?.featured?.endsAt || '')) > Date.now()
+        ),
+        status: sponsorship?.featured?.status || 'not_featured',
+        endsAt: sponsorship?.featured?.endsAt || null,
+        metrics30d: {
+          pinImpressions: Number(metrics.pin_impression || 0),
+          listingViews: Number(metrics.listing_view || 0),
+          actions:
+            Number(metrics.pin_click || 0)
+            + Number(metrics.website_click || 0)
+            + Number(metrics.menu_click || 0)
+            + Number(metrics.directions_click || 0),
+        },
+      },
+      products: productStatus,
+      profile: {
+        overview: primaryOwned.profile?.overview || '',
+        phone: primaryOwned.profile?.phone || primaryOwned.location.phone || '',
+        website: primaryOwned.profile?.website || primaryOwned.location.website || '',
+        updatedAt: primaryOwned.profile?.updatedAt || null,
+      },
+    };
+  }
 
   const postedAtomic = Number(posted?.amount || 0);
   const heldDebitAtomic = Number(heldDebits?.amount || 0);
@@ -64,6 +127,7 @@ export async function GET(request: NextRequest) {
       verifiedDispensaryOwner: verifiedOwnerAssignmentCount > 0,
       assignmentCount: verifiedOwnerAssignmentCount,
       locations: ownedLocations,
+      dashboard: ownerDashboard,
     },
     wallet: {
       id: user.walletId,
