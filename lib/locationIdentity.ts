@@ -79,3 +79,27 @@ export function strongLocationIdentityMatch(a: LocationIdentityInput, b: Locatio
 
   return false;
 }
+
+export function strongLocationIdentityKeys(input: LocationIdentityInput) {
+  const keys: string[] = [];
+  const name = text(input.name);
+  const street = text(input.streetAddress);
+  const city = text(input.city);
+  const region = text(input.region);
+  const country = text(input.country);
+  const licenseNumber = license(input.licenseNumber);
+
+  if (licenseNumber && region && country) keys.push(`license:${country}:${region}:${licenseNumber}`);
+
+  if (name && street && city && region) {
+    keys.push(`address:${country}:${region}:${city}:${street}:${name}`);
+  }
+
+  const latitude = finite(input.latitude);
+  const longitude = finite(input.longitude);
+  if (name && region && latitude !== null && longitude !== null) {
+    keys.push(`coord:${country}:${region}:${name}:${latitude.toFixed(5)}:${longitude.toFixed(5)}`);
+  }
+
+  return keys;
+}
