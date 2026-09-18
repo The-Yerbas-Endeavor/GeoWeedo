@@ -30,6 +30,7 @@ function ensure() {
 type Db = ReturnType<typeof getDatabase>;
 
 const PRODUCT_SORTS: Record<string,string> = {
+  scanned_desc: "latest_scan_at DESC,p.product_name COLLATE NOCASE ASC",
   updated_desc: "p.updated_at DESC,p.product_name COLLATE NOCASE ASC",
   updated_asc: "p.updated_at ASC,p.product_name COLLATE NOCASE ASC",
   name_asc: "p.product_name COLLATE NOCASE ASC,COALESCE(p.brand_name,'') COLLATE NOCASE ASC",
@@ -40,7 +41,7 @@ const PRODUCT_SORTS: Record<string,string> = {
   menus_desc: "menu_count DESC,p.product_name COLLATE NOCASE ASC",
 };
 
-function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean; limit?: number; offset?: number; sort?: string } = {}) {
+function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean; limit?: number; offset?: number; sort?: string; scope?: 'scanned'|'reference' } = {}) {
   const q = search.trim().toLowerCase();
   const params: string[] = [];
   const where: string[] = [];
@@ -49,6 +50,7 @@ function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean
     params.push(`%${q}%`);
   }
   if (options.uncategorizedOnly) where.push('p.category_id IS NULL');
+  if (options.scope === 'scanned') where.push('EXISTS (SELECT 1 FROM cannabis_qr_scans sq WHERE sq.product_id=p.id)');
   const limit = Math.max(1, Math.min(250, Math.trunc(options.limit || 150)));
   const offset = Math.max(0, Math.trunc(options.offset || 0));
   const sort = PRODUCT_SORTS[options.sort || 'updated_desc'] ? (options.sort || 'updated_desc') : 'updated_desc';
@@ -57,7 +59,9 @@ function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean
     SELECT p.id,p.brand_name,p.product_name,p.product_type,p.net_contents,p.category_id,p.category_source,c.name AS category_name,c.slug AS category_slug,p.created_at,p.updated_at,
            (SELECT identifier_value FROM cannabis_product_identifiers i WHERE i.product_id=p.id AND i.identifier_type IN ('upc','ean') ORDER BY i.verified DESC,i.created_at LIMIT 1) AS barcode,
            (SELECT COUNT(*) FROM cannabis_batches b WHERE b.product_id=p.id) AS batch_count,
-           (SELECT COUNT(*) FROM dispensary_menu_items mi WHERE mi.product_id=p.id AND mi.active=1) AS menu_count
+           (SELECT COUNT(*) FROM dispensary_menu_items mi WHERE mi.product_id=p.id AND mi.active=1) AS menu_count,
+           (SELECT COALESCE(SUM(sq.scan_count),0) FROM cannabis_qr_scans sq WHERE sq.product_id=p.id) AS scan_count,
+           (SELECT MAX(sq.last_seen_at) FROM cannabis_qr_scans sq WHERE sq.product_id=p.id) AS latest_scan_at
       FROM cannabis_products p
       LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
@@ -66,15 +70,21 @@ function productRows(db: Db, search = '', options: { uncategorizedOnly?: boolean
   `).all(...params) as any[];
 }
 
-function productCount(db: Db, search = '') {
+function productCount(db: Db, search = '', scope: 'scanned'|'reference' = 'reference') {
   const q = search.trim().toLowerCase();
-  if (!q) return Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0);
+  const where: string[] = [];
+  const params: string[] = [];
+  if (scope === 'scanned') where.push('EXISTS (SELECT 1 FROM cannabis_qr_scans sq WHERE sq.product_id=p.id)');
+  if (q) {
+    where.push(`LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?`);
+    params.push(`%${q}%`);
+  }
   return Number((db.prepare(`
     SELECT COUNT(*) AS n
       FROM cannabis_products p
       LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
-     WHERE LOWER(COALESCE(p.brand_name,'') || ' ' || p.product_name || ' ' || COALESCE(p.product_type,'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.net_contents,'')) LIKE ?
-  `).get(`%${q}%`) as any)?.n || 0);
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  `).get(...params) as any)?.n || 0);
 }
 
 function verifiedProductRows(db: Db, productIds: string[]) {
@@ -205,6 +215,7 @@ function menuMatchRows(db: Db, search = '') {
 function statsRow(db: Db) {
   return {
     products: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0),
+    scannedProducts: Number((db.prepare('SELECT COUNT(DISTINCT product_id) AS n FROM cannabis_qr_scans WHERE product_id IS NOT NULL').get() as any)?.n || 0),
     categorizedProducts: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products WHERE category_id IS NOT NULL').get() as any)?.n || 0),
     uncategorizedProducts: Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products WHERE category_id IS NULL').get() as any)?.n || 0),
     verifiedProducts: Number((db.prepare("SELECT COUNT(DISTINCT product_id) AS n FROM cannabis_batches WHERE verified=1 AND LOWER(source_type)='lab'").get() as any)?.n || 0),
@@ -238,15 +249,17 @@ export async function GET(request: NextRequest) {
   if (view === 'products') {
     const requestedPage = Math.max(1, Math.floor(Number(request.nextUrl.searchParams.get('page') || 1)) || 1);
     const requestedPageSize = Math.max(10, Math.min(100, Math.floor(Number(request.nextUrl.searchParams.get('pageSize') || 50)) || 50));
-    const requestedSortRaw = text(request.nextUrl.searchParams.get('sort')) || 'updated_desc';
-    const requestedSort = PRODUCT_SORTS[requestedSortRaw] ? requestedSortRaw : 'updated_desc';
-    const total = productCount(db, search);
+    const scope = text(request.nextUrl.searchParams.get('scope')).toLowerCase() === 'reference' ? 'reference' : 'scanned';
+    const defaultSort = scope === 'scanned' ? 'scanned_desc' : 'updated_desc';
+    const requestedSortRaw = text(request.nextUrl.searchParams.get('sort')) || defaultSort;
+    const requestedSort = PRODUCT_SORTS[requestedSortRaw] ? requestedSortRaw : defaultSort;
+    const total = productCount(db, search, scope);
     const pageCount = Math.max(1, Math.ceil(total / requestedPageSize));
     const page = Math.min(requestedPage, pageCount);
-    const products = productRows(db, search, { limit: requestedPageSize, offset: (page - 1) * requestedPageSize, sort: requestedSort });
+    const products = productRows(db, search, { limit: requestedPageSize, offset: (page - 1) * requestedPageSize, sort: requestedSort, scope });
     return NextResponse.json({
       stats,
-      catalog: { total, page, pageSize: requestedPageSize, pageCount, sort: requestedSort },
+      catalog: { total, page, pageSize: requestedPageSize, pageCount, sort: requestedSort, scope },
       products,
       verifiedProducts: verifiedProductRows(db, products.map(row => String(row.id))),
     }, { headers: { 'Cache-Control': 'no-store' } });
