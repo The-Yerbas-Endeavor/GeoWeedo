@@ -304,7 +304,7 @@ export function reconcileMenuProductMatches(limit = 200) {
     JOIN dispensaries d ON d.id=m.dispensary_id
     WHERE mi.active=1 AND m.active=1 AND d.active=1
       AND mi.product_id IS NULL
-      AND COALESCE(mi.match_review_status,'') <> 'rejected'
+      AND COALESCE(mi.match_review_status,'')=''
     ORDER BY COALESCE(mi.source_updated_at,mi.updated_at,mi.created_at) DESC
     LIMIT ?
   `).all(Math.max(1,Math.min(1000,Math.floor(limit)))) as any[];
