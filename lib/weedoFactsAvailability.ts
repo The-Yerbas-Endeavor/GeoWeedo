@@ -42,7 +42,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
     SELECT mi.id AS menu_item_id, mi.product_id, mi.batch_id, mi.item_name, mi.brand_name,
            mi.category, mi.variant, mi.package_size, mi.price_cents, mi.currency,
            mi.inventory_status, mi.verified AS item_verified, mi.source_url, mi.source_updated_at,
-           mi.match_confidence,
+           mi.match_confidence,mi.match_review_status,
            d.id AS dispensary_id, d.name AS dispensary_name, d.city, d.region, d.country,
            d.latitude, d.longitude,
            b.batch_number, b.uid, b.verified AS batch_verified
@@ -54,6 +54,10 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
        AND mi.active = 1
        AND m.active = 1
        AND d.active = 1
+       AND NOT (
+         mi.match_confidence='possible'
+         AND COALESCE(mi.match_review_status,'pending') <> 'confirmed'
+       )
      ORDER BY CASE WHEN ? IS NOT NULL AND mi.batch_id = ? AND b.verified=1 THEN 0
                    WHEN COALESCE(mi.match_confidence,'high') IN ('exact','high') THEN 1
                    ELSE 2 END,
