@@ -1,11 +1,11 @@
-import AdminProductsMenus from '@/components/AdminProductsMenus';
+import AdminProductsDispensaries from '@/components/AdminProductsDispensaries';
 import AdminProductsAdvancedTools from '@/components/AdminProductsAdvancedTools';
 
 export const dynamic = 'force-dynamic';
 
 export default function ProductsMenusAdminPage(){
   return <>
-    <AdminProductsMenus/>
+    <AdminProductsDispensaries/>
     <AdminProductsAdvancedTools/>
   </>;
 }
