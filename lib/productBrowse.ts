@@ -20,12 +20,19 @@ export type ProductBrowseSummary = {
   categorySlug: string | null;
   netContents: string | null;
   verifiedBatchCount: number;
+  scanCount: number;
+  approvedUploadCount: number;
+  menuListingCount: number;
+  latestEvidenceAt: string | null;
 };
 
 export type ProductBrowseCatalog = {
   products: ProductBrowseSummary[];
   totalProducts: number;
   matchingProducts: number;
+  scannedProducts: number;
+  uploadedProducts: number;
+  menuLinkedProducts: number;
   batchCount: number;
   brandCount: number;
   categoryCount: number;
@@ -41,18 +48,6 @@ type Db = ReturnType<typeof getDatabase>;
 
 function normalizedSearch(value: unknown) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-function productSortSql(value: unknown) {
-  switch (String(value || '').trim()) {
-    case 'name-asc': return 'p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
-    case 'name-desc': return 'p.product_name COLLATE NOCASE DESC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
-    case 'brand-asc': return "COALESCE(NULLIF(TRIM(p.brand_name),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC";
-    case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
-    case 'batches-desc': return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
-    case 'category':
-    default: return 'COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,latest_record DESC';
-  }
 }
 
 function tableColumns(db: Db, table: string) {
@@ -74,6 +69,9 @@ function emptyCatalog(filters: ProductBrowseFilters, pageSize = pageSizeFor(filt
     products: [],
     totalProducts: 0,
     matchingProducts: 0,
+    scannedProducts: 0,
+    uploadedProducts: 0,
+    menuLinkedProducts: 0,
     batchCount: 0,
     brandCount: 0,
     categoryCount: 0,
@@ -91,24 +89,63 @@ function requireColumns(actual: Set<string>, required: string[], table: string) 
   if (missing.length) throw new Error(`${table} is missing columns: ${missing.join(', ')}`);
 }
 
-function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrowseCatalog {
-  // Public catalog requests must remain read-only. Schema creation/backfills belong to
-  // deploy/admin tasks, never a GET request that can contend with an active importer.
+function productSortSql(value: unknown) {
+  switch (String(value || '').trim()) {
+    case 'name-asc': return 'p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
+    case 'name-desc': return 'p.product_name COLLATE NOCASE DESC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
+    case 'brand-asc': return "COALESCE(NULLIF(TRIM(p.brand_name),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC";
+    case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'batches-desc': return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'category':
+    default: return 'COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,latest_record DESC';
+  }
+}
+
+function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrowseCatalog {
+  // The master cannabis_products table is backend reference data. A product becomes
+  // public only after GeoWeedo has actually resolved it from a scan or an approved
+  // COA upload. This read path never creates/backfills schema.
   const db = getDatabase();
   const productColumns = tableColumns(db, 'cannabis_products');
   const batchColumns = tableColumns(db, 'cannabis_batches');
   const categoryColumns = tableColumns(db, 'cannabis_product_categories');
+  const qrColumns = tableColumns(db, 'cannabis_qr_scans');
+  const submissionColumns = tableColumns(db, 'cannabis_product_submissions');
+  const uploadColumns = tableColumns(db, 'cannabis_coa_uploads');
+  const menuItemColumns = tableColumns(db, 'dispensary_menu_items');
+  const menuColumns = tableColumns(db, 'dispensary_menus');
+  const dispensaryColumns = tableColumns(db, 'dispensaries');
 
   requireColumns(productColumns, ['id', 'product_name', 'brand_name', 'product_type', 'canonical_product_type', 'category_id', 'net_contents'], 'cannabis_products');
   requireColumns(batchColumns, ['id', 'product_id', 'verified', 'source_name', 'tested_at', 'updated_at', 'created_at'], 'cannabis_batches');
   requireColumns(categoryColumns, ['id', 'slug', 'name', 'sort_order', 'active'], 'cannabis_product_categories');
 
+  const hasScans = qrColumns.has('product_id') && qrColumns.has('scan_count') && qrColumns.has('last_seen_at');
+  const hasApprovedUploads =
+    submissionColumns.has('id') && submissionColumns.has('product_id') && submissionColumns.has('status') &&
+    uploadColumns.has('submission_id') && uploadColumns.has('status');
+  const hasMenus =
+    menuItemColumns.has('id') && menuItemColumns.has('menu_id') && menuItemColumns.has('product_id') && menuItemColumns.has('active') &&
+    menuColumns.has('id') && menuColumns.has('dispensary_id') && menuColumns.has('active') &&
+    dispensaryColumns.has('id') && dispensaryColumns.has('active');
+
+  const evidenceSelects: string[] = [];
+  if (hasScans) evidenceSelects.push('SELECT product_id FROM cannabis_qr_scans WHERE product_id IS NOT NULL');
+  if (hasApprovedUploads) {
+    evidenceSelects.push(`SELECT s.product_id
+      FROM cannabis_product_submissions s
+      JOIN cannabis_coa_uploads cu ON cu.submission_id=s.id
+      WHERE s.product_id IS NOT NULL AND s.status='approved' AND cu.status='approved'`);
+  }
+  if (!evidenceSelects.length) return emptyCatalog(filters);
+
+  const publicCte = `WITH public_product_ids AS (${evidenceSelects.join(' UNION ')})`;
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
   const type = String(filters.type || '').trim();
   const pageSize = pageSizeFor(filters);
   const orderBy = productSortSql(filters.sort);
-  const conditions = ['b.verified = 1'];
+  const conditions: string[] = [];
   const params: Array<string | number> = [];
 
   if (brand) {
@@ -129,25 +166,53 @@ function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBr
     conditions.push(`${searchExpression} LIKE ?`);
     params.push(`%${token}%`);
   }
-  const where = conditions.join(' AND ');
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const stats = db.prepare(`
+  const stats = db.prepare(`${publicCte}
     SELECT
       COUNT(DISTINCT p.id) AS product_count,
-      COUNT(DISTINCT b.id) AS batch_count,
       COUNT(DISTINCT CASE WHEN p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> '' THEN p.brand_name END) AS brand_count,
-      COUNT(DISTINCT CASE WHEN p.category_id IS NOT NULL THEN p.category_id END) AS category_count,
-      MAX(CASE WHEN b.source_name = 'Cannlytics' THEN 1 ELSE 0 END) AS has_cannlytics
+      COUNT(DISTINCT CASE WHEN p.category_id IS NOT NULL THEN p.category_id END) AS category_count
     FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id AND b.verified=1
+    JOIN public_product_ids public ON public.product_id=p.id
   `).get() as any;
 
-  const matched = db.prepare(`
+  const batchStats = db.prepare(`${publicCte}
+    SELECT
+      COUNT(*) AS batch_count,
+      MAX(CASE WHEN b.source_name='Cannlytics' THEN 1 ELSE 0 END) AS has_cannlytics
+    FROM cannabis_batches b
+    JOIN public_product_ids public ON public.product_id=b.product_id
+    WHERE b.verified=1
+  `).get() as any;
+
+  const scannedProducts = hasScans
+    ? Number((db.prepare(`SELECT COUNT(DISTINCT product_id) AS n FROM cannabis_qr_scans WHERE product_id IS NOT NULL`).get() as any)?.n || 0)
+    : 0;
+
+  const uploadedProducts = hasApprovedUploads
+    ? Number((db.prepare(`SELECT COUNT(DISTINCT s.product_id) AS n
+        FROM cannabis_product_submissions s
+        JOIN cannabis_coa_uploads cu ON cu.submission_id=s.id
+        WHERE s.product_id IS NOT NULL AND s.status='approved' AND cu.status='approved'`).get() as any)?.n || 0)
+    : 0;
+
+  const menuLinkedProducts = hasMenus
+    ? Number((db.prepare(`${publicCte}
+        SELECT COUNT(DISTINCT mi.product_id) AS n
+        FROM dispensary_menu_items mi
+        JOIN dispensary_menus m ON m.id=mi.menu_id
+        JOIN dispensaries d ON d.id=m.dispensary_id
+        JOIN public_product_ids public ON public.product_id=mi.product_id
+        WHERE mi.product_id IS NOT NULL AND mi.active=1 AND m.active=1 AND d.active=1`).get() as any)?.n || 0)
+    : 0;
+
+  const matched = db.prepare(`${publicCte}
     SELECT COUNT(DISTINCT p.id) AS count
     FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id
+    JOIN public_product_ids public ON public.product_id=p.id
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
-    WHERE ${where}
+    ${where}
   `).get(...params) as any;
   const matchingProducts = Number(matched?.count || 0);
   const pageCount = Math.max(1, Math.ceil(matchingProducts / pageSize));
@@ -155,7 +220,39 @@ function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBr
   const page = Math.min(requestedPage, pageCount);
   const offset = (page - 1) * pageSize;
 
-  const rows = db.prepare(`
+  const scanCountSql = hasScans
+    ? '(SELECT COALESCE(SUM(q.scan_count),0) FROM cannabis_qr_scans q WHERE q.product_id=p.id)'
+    : '0';
+  const uploadCountSql = hasApprovedUploads
+    ? `(SELECT COUNT(*)
+         FROM cannabis_product_submissions s
+         JOIN cannabis_coa_uploads cu ON cu.submission_id=s.id
+         WHERE s.product_id=p.id AND s.status='approved' AND cu.status='approved')`
+    : '0';
+  const menuCountSql = hasMenus
+    ? `(SELECT COUNT(DISTINCT mi.id)
+         FROM dispensary_menu_items mi
+         JOIN dispensary_menus m ON m.id=mi.menu_id
+         JOIN dispensaries d ON d.id=m.dispensary_id
+         WHERE mi.product_id=p.id AND mi.active=1 AND m.active=1 AND d.active=1)`
+    : '0';
+
+  const evidenceDates: string[] = [];
+  if (hasScans) evidenceDates.push("COALESCE((SELECT MAX(q.last_seen_at) FROM cannabis_qr_scans q WHERE q.product_id=p.id),'')");
+  if (hasApprovedUploads) {
+    const submissionDate = submissionColumns.has('reviewed_at')
+      ? 'COALESCE(s.reviewed_at,s.updated_at,s.created_at)'
+      : submissionColumns.has('updated_at')
+        ? 'COALESCE(s.updated_at,s.created_at)'
+        : 's.created_at';
+    evidenceDates.push(`COALESCE((SELECT MAX(${submissionDate})
+      FROM cannabis_product_submissions s
+      JOIN cannabis_coa_uploads cu ON cu.submission_id=s.id
+      WHERE s.product_id=p.id AND s.status='approved' AND cu.status='approved'),'')`);
+  }
+  const latestEvidenceSql = evidenceDates.length > 1 ? `MAX(${evidenceDates.join(',')})` : evidenceDates[0] || "''";
+
+  const rows = db.prepare(`${publicCte}
     SELECT
       p.id AS product_id,
       p.brand_name,
@@ -166,37 +263,41 @@ function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBr
       c.name AS category_name,
       c.slug AS category_slug,
       p.net_contents,
-      COUNT(DISTINCT b.id) AS verified_batch_count,
-      MAX(COALESCE(b.tested_at,b.updated_at,b.created_at)) AS latest_record
+      (SELECT COUNT(*) FROM cannabis_batches b WHERE b.product_id=p.id AND b.verified=1) AS verified_batch_count,
+      ${scanCountSql} AS scan_count,
+      ${uploadCountSql} AS approved_upload_count,
+      ${menuCountSql} AS menu_listing_count,
+      ${latestEvidenceSql} AS latest_record
     FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id
+    JOIN public_product_ids public ON public.product_id=p.id
     LEFT JOIN cannabis_product_categories c ON c.id=p.category_id
-    WHERE ${where}
-    GROUP BY p.id,p.brand_name,p.product_name,p.product_type,p.canonical_product_type,p.category_id,c.name,c.slug,p.net_contents
+    ${where}
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `).all(...params, pageSize, offset) as any[];
 
-  const brandRows = db.prepare(`
+  const brandRows = db.prepare(`${publicCte}
     SELECT DISTINCT p.brand_name AS value
     FROM cannabis_products p
+    JOIN public_product_ids public ON public.product_id=p.id
     WHERE p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> ''
-      AND EXISTS (SELECT 1 FROM cannabis_batches b WHERE b.product_id=p.id AND b.verified=1)
     ORDER BY value COLLATE NOCASE
   `).all() as Array<{ value: string }>;
 
-  const categories = db.prepare(`
-    SELECT id,slug,name
-    FROM cannabis_product_categories
-    WHERE active=1
-    ORDER BY sort_order,name COLLATE NOCASE
+  const categories = db.prepare(`${publicCte}
+    SELECT DISTINCT c.id,c.slug,c.name,c.sort_order
+    FROM cannabis_product_categories c
+    JOIN cannabis_products p ON p.category_id=c.id
+    JOIN public_product_ids public ON public.product_id=p.id
+    WHERE c.active=1
+    ORDER BY c.sort_order,c.name COLLATE NOCASE
   `).all() as Array<{ id: string; slug: string; name: string }>;
 
   return {
     products: rows.map(row => ({
-      productId: row.product_id,
+      productId: String(row.product_id),
       brandName: row.brand_name || null,
-      productName: row.product_name,
+      productName: String(row.product_name),
       productType: row.product_type || null,
       canonicalProductType: row.canonical_product_type || null,
       categoryId: row.category_id || null,
@@ -204,13 +305,20 @@ function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBr
       categorySlug: row.category_slug || null,
       netContents: row.net_contents || null,
       verifiedBatchCount: Number(row.verified_batch_count || 0),
+      scanCount: Number(row.scan_count || 0),
+      approvedUploadCount: Number(row.approved_upload_count || 0),
+      menuListingCount: Number(row.menu_listing_count || 0),
+      latestEvidenceAt: row.latest_record || null,
     })),
     totalProducts: Number(stats?.product_count || 0),
     matchingProducts,
-    batchCount: Number(stats?.batch_count || 0),
+    scannedProducts,
+    uploadedProducts,
+    menuLinkedProducts,
+    batchCount: Number(batchStats?.batch_count || 0),
     brandCount: Number(stats?.brand_count || 0),
     categoryCount: Number(stats?.category_count || 0),
-    hasCannlytics: Boolean(stats?.has_cannlytics),
+    hasCannlytics: Boolean(batchStats?.has_cannlytics),
     page,
     pageSize,
     pageCount,
@@ -219,160 +327,11 @@ function canonicalProductBrowseCatalog(filters: ProductBrowseFilters): ProductBr
   };
 }
 
-function legacyProductBrowseCatalog(filters: ProductBrowseFilters, cause: unknown): ProductBrowseCatalog {
-  const db = getDatabase();
-  const pageSize = pageSizeFor(filters);
-  console.error('[productBrowse] canonical catalog unavailable; using read-only legacy fallback', cause);
-
-  const productColumns = tableColumns(db, 'cannabis_products');
-  const batchColumns = tableColumns(db, 'cannabis_batches');
-  if (!productColumns.has('id') || !productColumns.has('product_name') || !batchColumns.has('product_id')) {
-    return emptyCatalog(filters, pageSize);
-  }
-
-  const hasBrand = productColumns.has('brand_name');
-  const hasType = productColumns.has('product_type');
-  const hasNetContents = productColumns.has('net_contents');
-  const hasVerified = batchColumns.has('verified');
-  const hasBatchId = batchColumns.has('id');
-  const hasSourceName = batchColumns.has('source_name');
-  const hasTestedAt = batchColumns.has('tested_at');
-  const hasUpdatedAt = batchColumns.has('updated_at');
-  const hasCreatedAt = batchColumns.has('created_at');
-
-  const conditions: string[] = [];
-  const params: Array<string | number> = [];
-  if (hasVerified) conditions.push('b.verified = 1');
-
-  const brand = String(filters.brand || '').trim();
-  if (brand && hasBrand) {
-    conditions.push('p.brand_name = ?');
-    params.push(brand);
-  }
-  const type = String(filters.type || '').trim();
-  if (type && hasType) {
-    conditions.push('p.product_type = ? COLLATE NOCASE');
-    params.push(type);
-  }
-
-  const searchParts = ["COALESCE(p.product_name,'')"];
-  if (hasBrand) searchParts.push("COALESCE(p.brand_name,'')");
-  if (hasType) searchParts.push("COALESCE(p.product_type,'')");
-  if (hasNetContents) searchParts.push("COALESCE(p.net_contents,'')");
-  const searchExpression = `LOWER(${searchParts.join(" || ' ' || ")})`;
-  const q = normalizedSearch(filters.q);
-  for (const token of q.split(/\s+/).filter(Boolean)) {
-    conditions.push(`${searchExpression} LIKE ?`);
-    params.push(`%${token}%`);
-  }
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const totalWhere = hasVerified ? 'WHERE b.verified = 1' : '';
-
-  const stats = db.prepare(`
-    SELECT
-      COUNT(DISTINCT p.id) AS product_count,
-      ${hasBatchId ? 'COUNT(DISTINCT b.id)' : 'COUNT(*)'} AS batch_count,
-      ${hasBrand ? "COUNT(DISTINCT CASE WHEN p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> '' THEN p.brand_name END)" : '0'} AS brand_count,
-      ${hasSourceName ? "MAX(CASE WHEN b.source_name = 'Cannlytics' THEN 1 ELSE 0 END)" : '0'} AS has_cannlytics
-    FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id
-    ${totalWhere}
-  `).get() as any;
-
-  const matched = db.prepare(`
-    SELECT COUNT(DISTINCT p.id) AS count
-    FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id
-    ${where}
-  `).get(...params) as any;
-  const matchingProducts = Number(matched?.count || 0);
-  const pageCount = Math.max(1, Math.ceil(matchingProducts / pageSize));
-  const requestedPage = Math.max(1, Math.floor(Number(filters.page || 1)) || 1);
-  const page = Math.min(requestedPage, pageCount);
-  const offset = (page - 1) * pageSize;
-
-  const latestRecord = hasTestedAt ? 'MAX(b.tested_at)' : hasUpdatedAt ? 'MAX(b.updated_at)' : hasCreatedAt ? 'MAX(b.created_at)' : "''";
-  const batchCount = hasBatchId ? 'COUNT(DISTINCT b.id)' : 'COUNT(*)';
-  const brandSelect = hasBrand ? 'p.brand_name' : 'NULL AS brand_name';
-  const typeSelect = hasType ? 'p.product_type' : 'NULL AS product_type';
-  const netSelect = hasNetContents ? 'p.net_contents' : 'NULL AS net_contents';
-  const groupBy = [
-    'p.id',
-    'p.product_name',
-    ...(hasBrand ? ['p.brand_name'] : []),
-    ...(hasType ? ['p.product_type'] : []),
-    ...(hasNetContents ? ['p.net_contents'] : []),
-  ].join(',');
-
-  let orderBy = 'p.product_name COLLATE NOCASE ASC,p.id ASC';
-  switch (String(filters.sort || '').trim()) {
-    case 'name-desc': orderBy = 'p.product_name COLLATE NOCASE DESC,p.id ASC'; break;
-    case 'brand-asc': if (hasBrand) orderBy = "COALESCE(NULLIF(TRIM(p.brand_name),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC"; break;
-    case 'recent': orderBy = 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC'; break;
-    case 'batches-desc': orderBy = 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC'; break;
-  }
-
-  const rows = db.prepare(`
-    SELECT
-      p.id AS product_id,
-      ${brandSelect},
-      p.product_name,
-      ${typeSelect},
-      ${netSelect},
-      ${batchCount} AS verified_batch_count,
-      ${latestRecord} AS latest_record
-    FROM cannabis_products p
-    JOIN cannabis_batches b ON b.product_id=p.id
-    ${where}
-    GROUP BY ${groupBy}
-    ORDER BY ${orderBy}
-    LIMIT ? OFFSET ?
-  `).all(...params, pageSize, offset) as any[];
-
-  const brandRows = hasBrand ? db.prepare(`
-    SELECT DISTINCT p.brand_name AS value
-    FROM cannabis_products p
-    WHERE p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> ''
-      ${hasVerified ? 'AND EXISTS (SELECT 1 FROM cannabis_batches b WHERE b.product_id=p.id AND b.verified=1)' : ''}
-    ORDER BY value COLLATE NOCASE
-  `).all() as Array<{ value: string }> : [];
-
-  return {
-    products: rows.map(row => ({
-      productId: row.product_id,
-      brandName: row.brand_name || null,
-      productName: row.product_name,
-      productType: row.product_type || null,
-      canonicalProductType: null,
-      categoryId: null,
-      categoryName: null,
-      categorySlug: null,
-      netContents: row.net_contents || null,
-      verifiedBatchCount: Number(row.verified_batch_count || 0),
-    })),
-    totalProducts: Number(stats?.product_count || 0),
-    matchingProducts,
-    batchCount: Number(stats?.batch_count || 0),
-    brandCount: Number(stats?.brand_count || 0),
-    categoryCount: 0,
-    hasCannlytics: Boolean(stats?.has_cannlytics),
-    page,
-    pageSize,
-    pageCount,
-    brands: brandRows.map(row => String(row.value)),
-    productCategories: [],
-  };
-}
-
 export function getProductBrowseCatalog(filters: ProductBrowseFilters = {}): ProductBrowseCatalog {
   try {
-    return canonicalProductBrowseCatalog(filters);
-  } catch (canonicalError) {
-    try {
-      return legacyProductBrowseCatalog(filters, canonicalError);
-    } catch (fallbackError) {
-      console.error('[productBrowse] legacy fallback also failed; returning empty catalog', fallbackError);
-      return emptyCatalog(filters);
-    }
+    return publicProductBrowseCatalog(filters);
+  } catch (error) {
+    console.error('[productBrowse] public evidence catalog unavailable; returning empty catalog', error);
+    return emptyCatalog(filters);
   }
 }
