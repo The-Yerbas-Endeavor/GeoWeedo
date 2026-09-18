@@ -1,0 +1,163 @@
+'use client';
+
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import styles from './AdminProductsDispensaries.module.css';
+
+type Tab = 'products' | 'scans' | 'exceptions';
+type Stats = { products:number; verifiedProducts:number; verifiedBatches:number; qrCodes:number; unlinkedQrs:number; menuItems:number; storesWithMenus:number };
+type Product = { id:string; brand_name:string|null; product_name:string; product_type:string|null; category_name:string|null; net_contents:string|null; batch_count:number; menu_count:number };
+type Verified = { id:string; verified_batch_count:number; latest_tested_at:string|null };
+type Scan = { id:string; qr_value:string; qr_host:string|null; product_id:string|null; title:string|null; brand_name:string|null; product_name:string|null; canonical_brand_name:string|null; canonical_product_name:string|null; canonical_product_type:string|null; canonical_category_name:string|null; canonical_net_contents:string|null; batch_number:string|null; uid:string|null; coa_number:string|null; overall_status:string|null; canonical_lab_name:string|null; lab_name:string|null; last_seen_at:string; scan_count:number; verified_lab_batch:number };
+type Store = { id:string; name:string; city:string|null; region:string|null; country:string|null };
+
+type LinkProduct = Pick<Product,'id'|'brand_name'|'product_name'|'product_type'|'category_name'|'net_contents'|'menu_count'>;
+
+const emptyStats:Stats={products:0,verifiedProducts:0,verifiedBatches:0,qrCodes:0,unlinkedQrs:0,menuItems:0,storesWithMenus:0};
+const label=(p:LinkProduct)=>`${p.brand_name?`${p.brand_name} · `:''}${p.product_name}`;
+const compact=(value:string|null|undefined,max=58)=>{const v=String(value||'').trim();return v.length>max?`${v.slice(0,max-1)}…`:v||'—';};
+
+export default function AdminProductsDispensaries(){
+ const[tab,setTab]=useState<Tab>('products');
+ const[query,setQuery]=useState('');
+ const[stats,setStats]=useState<Stats>(emptyStats);
+ const[products,setProducts]=useState<Product[]>([]);
+ const[verified,setVerified]=useState<Verified[]>([]);
+ const[scans,setScans]=useState<Scan[]>([]);
+ const[loading,setLoading]=useState(true);
+ const[error,setError]=useState('');
+ const[notice,setNotice]=useState('');
+
+ const[linkProduct,setLinkProduct]=useState<LinkProduct|null>(null);
+ const[stores,setStores]=useState<Store[]>([]);
+ const[storeQuery,setStoreQuery]=useState('');
+ const[storeId,setStoreId]=useState('');
+ const[storeLoading,setStoreLoading]=useState(false);
+ const[price,setPrice]=useState('');
+ const[packageSize,setPackageSize]=useState('');
+ const[linking,setLinking]=useState(false);
+
+ const verifiedById=useMemo(()=>new Map(verified.map(row=>[row.id,row])),[verified]);
+ const selectedStore=useMemo(()=>stores.find(row=>row.id===storeId)||null,[stores,storeId]);
+
+ async function fetchView(view:Tab,q=''){
+  const params=new URLSearchParams({view});
+  if(q.trim())params.set('q',q.trim());
+  const response=await fetch(`/api/admin/products-menus?${params}`,{cache:'no-store'});
+  if(response.status===401){window.location.href='/admin/login';return;}
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(body.error||'Could not load product data.');
+  if(body.stats)setStats({...emptyStats,...body.stats});
+  if(view==='products'){
+   setProducts(Array.isArray(body.products)?body.products:[]);
+   setVerified(Array.isArray(body.verifiedProducts)?body.verifiedProducts:[]);
+  }else{
+   setScans(Array.isArray(body.qrScans)?body.qrScans:[]);
+  }
+ }
+
+ async function load(view:Tab=tab,q=query){
+  setLoading(true);setError('');
+  try{await fetchView(view,q);}catch(err){setError(err instanceof Error?err.message:'Load failed.');}
+  finally{setLoading(false);}
+ }
+
+ useEffect(()=>{load('products','');},[]);
+
+ async function changeTab(next:Tab){setTab(next);setQuery('');await load(next,'');}
+ async function search(event:FormEvent){event.preventDefault();await load(tab,query);}
+ async function clearSearch(){setQuery('');await load(tab,'');}
+
+ async function findStores(event?:FormEvent){
+  event?.preventDefault();
+  setStoreLoading(true);setError('');
+  try{
+   const params=new URLSearchParams({view:'dispensaries'});if(storeQuery.trim())params.set('q',storeQuery.trim());
+   const response=await fetch(`/api/admin/products-menus?${params}`,{cache:'no-store'});
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(body.error||'Could not load dispensaries.');
+   setStores(Array.isArray(body.dispensaries)?body.dispensaries:[]);setStoreId('');
+  }catch(err){setError(err instanceof Error?err.message:'Could not load dispensaries.');}
+  finally{setStoreLoading(false);}
+ }
+
+ function openLink(product:LinkProduct){
+  setLinkProduct(product);setStoreQuery('');setStoreId('');setStores([]);setPrice('');setPackageSize(product.net_contents||'');setNotice('');setError('');
+  setTimeout(()=>{findStores();},0);
+ }
+
+ function openLinkFromScan(row:Scan){
+  if(!row.product_id)return;
+  openLink({id:row.product_id,brand_name:row.canonical_brand_name||row.brand_name||null,product_name:row.canonical_product_name||row.product_name||row.title||'Scanned product',product_type:row.canonical_product_type||null,category_name:row.canonical_category_name||null,net_contents:row.canonical_net_contents||null,menu_count:0});
+ }
+
+ async function addToStore(event:FormEvent){
+  event.preventDefault();if(!linkProduct||!storeId)return;
+  setLinking(true);setError('');
+  try{
+   const response=await fetch('/api/admin/products-menus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add-menu-item',dispensaryId:storeId,productId:linkProduct.id,itemName:linkProduct.product_name,brandName:linkProduct.brand_name,category:linkProduct.product_type,packageSize:packageSize.trim()||linkProduct.net_contents||null,price:price.trim()||null,inventoryStatus:'in_stock'})});
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(body.error||'Could not add product to dispensary.');
+   const storeName=selectedStore?.name||'dispensary';
+   setNotice(body.alreadyLinked?`${label(linkProduct)} is already linked to ${storeName}.`:`Added ${label(linkProduct)} to ${storeName}.`);
+   if(!body.alreadyLinked)setProducts(rows=>rows.map(row=>row.id===linkProduct.id?{...row,menu_count:Number(row.menu_count||0)+1}:row));
+   setStats(current=>body.alreadyLinked?current:{...current,menuItems:current.menuItems+1});
+   setLinkProduct(null);
+  }catch(err){setError(err instanceof Error?err.message:'Could not add product to dispensary.');}
+  finally{setLinking(false);}
+ }
+
+ async function findProduct(row:Scan){
+  const term=String(row.canonical_product_name||row.product_name||row.title||'').trim();
+  if(!term)return;
+  setTab('products');setQuery(term);await load('products',term);
+ }
+
+ return <main className={styles.shell}>
+  <header className={styles.header}><div><span>GEOWEEDO FACTS · PRODUCT LIBRARY</span><h1>Products & dispensaries</h1><p>Search a known product, view its facts, and link it to a dispensary menu. That is the main workflow.</p></div><a href="/admin">← Admin</a></header>
+
+  <section className={styles.stats}>
+   <article><strong>{stats.products.toLocaleString()}</strong><span>Known products</span></article>
+   <article><strong>{stats.verifiedProducts.toLocaleString()}</strong><span>Lab verified</span></article>
+   <article><strong>{stats.menuItems.toLocaleString()}</strong><span>Menu links</span></article>
+   <article><strong>{stats.storesWithMenus.toLocaleString()}</strong><span>Stores with menus</span></article>
+  </section>
+
+  {error?<div className={styles.error}>{error}</div>:null}
+  {notice?<div className={styles.notice}>{notice}</div>:null}
+
+  <section className={styles.workspace}>
+   <div className={styles.toolbar}>
+    <nav>{(['products','scans','exceptions'] as Tab[]).map(id=><button key={id} className={tab===id?styles.active:''} onClick={()=>changeTab(id)}>{id==='products'?'Products':id==='scans'?'Scans':'Needs attention'}</button>)}</nav>
+    <form onSubmit={search}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={tab==='products'?'Search brand or product…':'Search scan, product, UID or COA…'}/><button disabled={loading}>{loading?'Loading…':'Search'}</button>{query?<button type="button" onClick={clearSearch}>Clear</button>:null}</form>
+   </div>
+
+   {linkProduct?<section className={styles.linkBox}>
+    <div className={styles.linkHead}><div><span>ADD TO DISPENSARY</span><h2>{label(linkProduct)}</h2><p>{[linkProduct.category_name||linkProduct.product_type,linkProduct.net_contents].filter(Boolean).join(' · ')||'Known product'}</p></div><button onClick={()=>setLinkProduct(null)}>Close</button></div>
+    <form className={styles.linkForm} onSubmit={addToStore}>
+     <label>Find dispensary<div className={styles.storeSearch}><input value={storeQuery} onChange={e=>setStoreQuery(e.target.value)} placeholder="Name, city or state…"/><button type="button" onClick={()=>findStores()} disabled={storeLoading}>{storeLoading?'Searching…':'Search stores'}</button></div></label>
+     <label>Dispensary<select required value={storeId} onChange={e=>setStoreId(e.target.value)}><option value="">Choose dispensary…</option>{stores.map(store=><option key={store.id} value={store.id}>{store.name}{store.city?` · ${store.city}`:''}{store.region?`, ${store.region}`:''}</option>)}</select><small>{stores.length.toLocaleString()} result{stores.length===1?'':'s'}</small></label>
+     <label>Package size <small>optional</small><input value={packageSize} onChange={e=>setPackageSize(e.target.value)} placeholder="3.5 g, 1 pack…"/></label>
+     <label>Price <small>optional</small><input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)} placeholder="0.00"/></label>
+     <button className={styles.primary} disabled={linking||!storeId}>{linking?'Adding…':'Add product to menu'}</button>
+    </form>
+   </section>:null}
+
+   {tab==='products'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>PRODUCTS</span><h2>{query?`Results for “${query}”`:'Recently updated products'}</h2><p>Up to 80 products load at once. Search for anything else.</p></div><b>{products.length} shown</b></div>
+    {products.length?<div className={styles.tableWrap}><table><thead><tr><th>Product</th><th>Facts</th><th>Availability</th><th></th></tr></thead><tbody>{products.map(product=>{const proof=verifiedById.get(product.id);return <tr key={product.id}><td><a href={`/product/${encodeURIComponent(product.id)}`} target="_blank">{label(product)}</a><small>{[product.category_name||product.product_type,product.net_contents].filter(Boolean).join(' · ')||'—'}</small></td><td>{proof?<><b className={styles.good}>✓ Lab verified</b><small>{proof.verified_batch_count} verified · {product.batch_count} total batches</small></>:<><b>Known product</b><small>{product.batch_count} batch{product.batch_count===1?'':'es'} on file</small></>}</td><td>{product.menu_count>0?<><b className={styles.good}>{product.menu_count} menu link{product.menu_count===1?'':'s'}</b><small><a href={`/?product=${encodeURIComponent(product.id)}`} target="_blank">View availability</a></small></>:<><b>Not linked yet</b><small>Add when you find it on a menu.</small></>}</td><td><div className={styles.actions}><button className={styles.primary} onClick={()=>openLink(product)}>Add to dispensary</button><a href={`/product/${encodeURIComponent(product.id)}`} target="_blank">View facts</a></div></td></tr>;})}</tbody></table></div>:<div className={styles.empty}>{loading?'Loading products…':'No products found.'}</div>}
+   </section>:null}
+
+   {tab==='scans'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>SCANS</span><h2>Recent scans</h2><p>Only this tab loads scan data.</p></div><b>{scans.length} shown</b></div>
+    {scans.length?<div className={styles.tableWrap}><table><thead><tr><th>Scan</th><th>Matched product</th><th>Facts</th><th></th></tr></thead><tbody>{scans.map(row=><tr key={row.id}><td><span>{compact(row.qr_value)}</span><small>{row.qr_host||new Date(row.last_seen_at).toLocaleString()}</small></td><td>{row.product_id?<a href={`/product/${encodeURIComponent(row.product_id)}`} target="_blank">{`${row.canonical_brand_name?`${row.canonical_brand_name} · `:''}${row.canonical_product_name||row.product_name||row.title||'Product'}`}</a>:<b>Not matched yet</b>}<small>{row.uid||row.batch_number||row.coa_number||'—'}</small></td><td>{row.verified_lab_batch?<b className={styles.good}>✓ Verified lab batch</b>:row.product_id?<b>Known product</b>:<b className={styles.warn}>Needs product match</b>}<small>{row.overall_status||row.canonical_lab_name||row.lab_name||'—'}</small></td><td>{row.product_id?<button className={styles.primary} onClick={()=>openLinkFromScan(row)}>Add to dispensary</button>:<button onClick={()=>findProduct(row)}>Find product</button>}</td></tr>)}</tbody></table></div>:<div className={styles.empty}>{loading?'Loading scans…':'No scans found.'}</div>}
+   </section>:null}
+
+   {tab==='exceptions'?<section className={styles.section}>
+    <div className={styles.sectionHead}><div><span>ACTIONABLE ONLY</span><h2>Unmatched scans</h2><p>No owner-review queues or broad cleanup lists—only scans that still need a product match.</p></div><b>{stats.unlinkedQrs.toLocaleString()} total</b></div>
+    {scans.length?<div className={styles.cards}>{scans.map(row=><article key={row.id}><div><strong>{row.product_name||row.title||'Unmatched scan'}</strong><small>{compact(row.qr_value,80)}</small></div><button onClick={()=>findProduct(row)}>Find product</button></article>)}</div>:<div className={styles.empty}>{loading?'Loading…':'No unmatched scans.'}</div>}
+   </section>:null}
+  </section>
+
+  <details className={styles.advanced}><summary>Advanced cleanup tools</summary><div><a href="/admin/product-maintenance">Product maintenance</a><a href="/admin/data">Data imports</a></div></details>
+ </main>;
+}
