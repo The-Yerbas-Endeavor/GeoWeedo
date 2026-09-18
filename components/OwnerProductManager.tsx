@@ -54,7 +54,7 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
   async function save(){
     if(!form.itemName.trim()){setMessage('Product name is required.');return;}setSaving(true);setMessage(null);
     try{const payload={locationId,itemId:editingId||undefined,itemName:form.itemName.trim(),brandName:form.brandName.trim(),categoryId:form.categoryId||null,packageSize:form.packageSize.trim(),variant:form.variant.trim(),priceCents:priceToCents(form.price),inventoryStatus:form.inventoryStatus,productId:form.productId||null,scanValue:scanValue||null,identifierType:scanType||null};
-      const r=await fetch('/api/owner/products',{method:editingId?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not save product.');setMessage(editingId?'Product listing updated.':'Product added to your menu.');reset();await load();
+      const r=await fetch('/api/owner/products',{method:editingId?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not save product.');setMessage(editingId?'Product listing updated.':d.alreadyExists?'That scanned product is already on this shop menu.':'Product added to your menu.');reset();await load();
     }catch(e){setMessage(e instanceof Error?e.message:'Could not save product.');}finally{setSaving(false);}
   }
 
