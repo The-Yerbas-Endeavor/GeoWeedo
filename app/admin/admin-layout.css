@@ -11,3 +11,29 @@
 .admin-shell .location-map-head{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:12px}
 .admin-shell .location-map-panel .admin-coordinate-map{height:320px;width:100%}
 @media(max-width:900px){.admin-shell .location-actions{min-width:0}.admin-shell .unified-location-manager table{min-width:980px}}
+
+.admin-shell .location-filter-grid{display:grid;grid-template-columns:minmax(260px,2fr) repeat(5,minmax(140px,1fr));gap:8px;margin-top:14px}
+.admin-shell .location-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px;background:#0d120f}
+.admin-shell .location-table{width:100%;border-collapse:collapse;font-size:13px}
+.admin-shell .location-table th{position:sticky;top:0;z-index:2;padding:11px 10px;text-align:left;white-space:nowrap;background:#111714;border-bottom:1px solid var(--border)}
+.admin-shell .location-table td{padding:10px;vertical-align:top;border-top:1px solid rgba(255,255,255,.055)}
+.admin-shell .location-table tbody tr{transition:background .12s ease}
+.admin-shell .location-table tbody tr:hover{background:rgba(103,214,110,.045)}
+.admin-shell .location-table th:first-child,.admin-shell .location-table td:first-child{min-width:190px}
+.admin-shell .location-table th:last-child,.admin-shell .location-table td:last-child{min-width:300px}
+.admin-shell .location-editor-modal{position:fixed!important;z-index:1200;top:5vh;left:50%;transform:translateX(-50%);width:min(1120px,calc(100vw - 36px));max-height:90vh;overflow-y:auto;overscroll-behavior:contain;padding:0 22px 22px!important;border:1px solid #3d5144!important;border-radius:18px!important;background:#111714!important;box-shadow:0 0 0 100vmax rgba(0,0,0,.72),0 28px 90px rgba(0,0,0,.48);display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
+.admin-shell .location-editor-modal>.location-modal-head{grid-column:1/-1;position:sticky;top:0;z-index:6;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 -22px;padding:18px 22px 14px;background:#111714;border-bottom:1px solid var(--border)}
+.admin-shell .location-modal-head h3{margin:4px 0 3px;font-size:24px}
+.admin-shell .location-modal-head small{color:var(--muted)}
+.admin-shell .location-editor-modal>.location-editor-actions,.admin-shell .location-editor-modal>.location-modal-status,.admin-shell .location-editor-modal>.location-map-panel,.admin-shell .location-editor-modal>h4,.admin-shell .location-editor-modal>textarea,.admin-shell .location-editor-modal>.check-row,.admin-shell .location-editor-modal>.field-row,.admin-shell .location-editor-modal>.location-modal-footer{grid-column:1/-1}
+.admin-shell .location-editor-modal>.location-editor-actions{margin:4px 0 0;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.admin-shell .location-editor-modal>.location-modal-status{padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:#0b100d;color:var(--muted);font-size:12px}
+.admin-shell .location-editor-modal>h4{margin:12px 0 0;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
+.admin-shell .location-editor-modal>textarea{min-height:88px}
+.admin-shell .location-editor-modal>.field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.admin-shell .location-editor-modal>.location-map-panel{margin:2px 0 6px}
+.admin-shell .location-editor-modal .location-map-panel .admin-coordinate-map{height:390px}
+.admin-shell .location-editor-modal>.location-modal-footer{position:sticky;bottom:-22px;z-index:6;display:flex;justify-content:flex-end;gap:9px;margin:8px -22px -22px;padding:14px 22px;background:#111714;border-top:1px solid var(--border)}
+.admin-shell .location-editor-modal>.location-modal-footer button{min-width:150px}
+@media(max-width:1180px){.admin-shell .location-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.admin-shell .location-filter-grid{grid-template-columns:1fr}.admin-shell .location-editor-modal{top:2vh;width:calc(100vw - 20px);max-height:96vh;padding:0 14px 14px!important;grid-template-columns:1fr}.admin-shell .location-editor-modal>.location-modal-head{margin:0 -14px;padding:14px}.admin-shell .location-editor-modal>.field-row{grid-template-columns:1fr}.admin-shell .location-editor-modal>.location-modal-footer{bottom:-14px;margin:8px -14px -14px;padding:12px 14px}.admin-shell .location-editor-modal>.location-modal-footer button{min-width:0;flex:1}}
