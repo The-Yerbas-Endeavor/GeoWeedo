@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
     }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
-  if (view === 'menu-matches') {
+  if (view === 'menu-matches' || view === 'matches') {
     return NextResponse.json({
       stats,
       menuMatchStats: menuMatchStats(db),
