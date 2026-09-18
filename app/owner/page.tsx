@@ -64,7 +64,7 @@ export default function OwnerPage(){
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>Your ownership claim may still be under review. Open the dispensary profile to check its claim status or submit a claim.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
       {current&&<>
-        <section className="owner-panel">
+        <section className="owner-panel" id="featured-analytics">
           <div className="owner-panel-head"><div><span>SPONSOR DASHBOARD · LAST 30 DAYS</span><h2>{current.sponsorship?.featured?.status==='active'?'★ Featured listing':'Standard listing'}</h2></div><a href="/for-dispensaries#featured">Featured details ↗</a></div>
           {current.sponsorship?.featured?<p>Featured {new Date(current.sponsorship.featured.startsAt).toLocaleDateString()} → {new Date(current.sponsorship.featured.endsAt).toLocaleDateString()} · billed/managed in USD.</p>:<p>Claiming and maintaining your business profile is free. GeoWeedo Featured adds enhanced map/discovery visibility and analytics without changing gameplay selection odds.</p>}
           {metrics&&<>
@@ -74,7 +74,7 @@ export default function OwnerPage(){
           {current.sponsorship?.plan&&<small style={{display:'block',marginTop:14}}>{current.sponsorship.plan.name}: ${(current.sponsorship.plan.monthlyPriceCents/100).toFixed(0)}/month or ${(current.sponsorship.plan.annualPriceCents/100).toFixed(0)}/year. Sponsorship payments are USD-only.</small>}
         </section>
         <OwnerProductManager locationId={current.locationId}/>
-        <section className="owner-panel owner-form">
+        <section className="owner-panel owner-form" id="public-profile">
           <div className="owner-panel-head"><div><span>PUBLIC PROFILE</span><h2>{current.location.name}</h2></div><a href={`/dispensary/${encodeURIComponent(current.locationId)}`} target="_blank" rel="noreferrer">View public profile ↗</a></div>
           <DispensaryLogoUploader locationId={current.locationId}/>
           <label>Overview<textarea value={overview} onChange={e=>setOverview(e.target.value)} maxLength={5000} placeholder="Tell visitors about the shop, specialties, atmosphere, services, and what makes it useful."/></label>
