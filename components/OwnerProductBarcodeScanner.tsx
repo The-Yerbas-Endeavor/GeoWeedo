@@ -208,8 +208,8 @@ export default function OwnerProductBarcodeScanner({ disabled=false, onCode, onE
 
   return <div style={{display:'grid',gap:8}}>
     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-      <button type="button" className="owner-primary" style={{width:'auto'}} onClick={()=>void start()} disabled={disabled||pending}>
-        {pending&&!open?'Opening camera…':'📷 Scan barcode / QR'}
+      <button type="button" className="owner-primary" style={{width:'auto'}} onClick={()=>void start()} disabled={disabled||pending||open}>
+        {open?'Scanning…':pending?'Opening camera…':'📷 Scan barcode / QR'}
       </button>
       <PhotoBarcodeScanButton
         onScan={deliver}
