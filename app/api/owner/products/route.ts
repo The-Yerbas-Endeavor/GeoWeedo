@@ -89,6 +89,20 @@ export async function POST(request: NextRequest) {
     const productId = cleanText(body?.productId, 180) || null;
     const scanValue = cleanText(body?.scanValue, 512);
     const scanType = scanValue ? normalizedScanType(body?.identifierType, scanValue) : null;
+    if (scanValue) {
+      const duplicate = db.prepare(`
+        SELECT mi.id
+        FROM dispensary_menu_items mi
+        JOIN dispensary_menus m ON m.id=mi.menu_id
+        WHERE m.dispensary_id=? AND m.active=1 AND mi.active=1
+          AND mi.owner_scan_type=? AND mi.owner_scan_value=?
+        LIMIT 1
+      `).get(locationId, scanType, scanValue) as any;
+      if (duplicate?.id) {
+        const item = listDispensaryMenu(locationId).find(row => row.id === duplicate.id) || null;
+        return NextResponse.json({ ok: true, alreadyExists: true, item });
+      }
+    }
     const id = addDispensaryMenuItem({
       dispensaryId: locationId,
       productId,
