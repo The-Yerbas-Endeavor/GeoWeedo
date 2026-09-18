@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Cannabis Products · GeoWeedo',
-  description: 'Browse cannabis products by name, brand, or category. Open a product for GeoWeedo Facts, lab results, batches, COAs, and source details.',
+  description: 'Browse cannabis products GeoWeedo has actually matched from scans and approved COA uploads, with lab facts and dispensary availability.',
 };
 
 type Props = {
@@ -110,22 +110,22 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
           <h1>Products</h1>
           <p className="weedoFactsLead">
-            Browse by product, brand, or category. Open a product when you want lab results, batches, COAs, availability, and source-backed details.
+            Products GeoWeedo has actually seen. Every item below comes from a resolved scan or an approved COA upload, then links into GeoWeedo Facts and current dispensary availability when we have it.
           </p>
-          <div className="productChemistryStats" aria-label="Product catalog totals">
-            <div><strong>{catalog.totalProducts.toLocaleString()}</strong><span>Products</span></div>
-            <div><strong>{catalog.categoryCount.toLocaleString()}</strong><span>Categories</span></div>
-            <div><strong>{catalog.brandCount.toLocaleString()}</strong><span>Brands</span></div>
-            <div><strong>{catalog.batchCount.toLocaleString()}</strong><span>Lab records</span></div>
+          <div className="productChemistryStats" aria-label="GeoWeedo product evidence totals">
+            <div><strong>{catalog.totalProducts.toLocaleString()}</strong><span>Products found</span></div>
+            <div><strong>{catalog.scannedProducts.toLocaleString()}</strong><span>Scanned</span></div>
+            <div><strong>{catalog.uploadedProducts.toLocaleString()}</strong><span>COA uploads</span></div>
+            <div><strong>{catalog.menuLinkedProducts.toLocaleString()}</strong><span>At dispensaries</span></div>
           </div>
         </section>
 
         <section className="nutritionalFactsIndex productBrowseIndex" aria-labelledby="product-listings-heading">
           <div className="nutritionalFactsIndexHead">
             <div>
-              <span className="weedoFactsEyebrow">PRODUCT CATALOG</span>
-              <h2 id="product-listings-heading">Browse products</h2>
-              <p>Start simple. Choose a product to open its GeoWeedo Facts and deeper product data.</p>
+              <span className="weedoFactsEyebrow">SEEN BY GEOWEEDO</span>
+              <h2 id="product-listings-heading">Scanned &amp; uploaded products</h2>
+              <p>The full reference catalog stays behind the scenes. This list contains only products GeoWeedo has matched from real scans or approved COA uploads.</p>
             </div>
             <span className="nutritionalFactsCount">
               {catalog.matchingProducts ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingProducts.toLocaleString()}` : '0'} {catalog.matchingProducts === 1 ? 'product' : 'products'}
@@ -181,14 +181,22 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                     <strong className="productBrowseName">{product.productName}</strong>
                     <span className="productBrowseBrand">{product.brandName || 'Brand not reported'}</span>
                     {secondary ? <span className="productBrowseSecondary">{secondary}</span> : null}
-                    <span className="productBrowseOpen">View product →</span>
+                    <div className="productBrowseEvidence">
+                      {product.scanCount > 0 ? <span>✓ Scanned{product.scanCount > 1 ? ` ${product.scanCount.toLocaleString()} times` : ''}</span> : null}
+                      {product.approvedUploadCount > 0 ? <span>✓ Approved COA upload</span> : null}
+                      {product.verifiedBatchCount > 0 ? <span>✓ {product.verifiedBatchCount.toLocaleString()} verified {product.verifiedBatchCount === 1 ? 'batch' : 'batches'}</span> : null}
+                      {product.menuListingCount > 0
+                        ? <span className="productBrowseAvailable">Found at {product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'dispensary listing' : 'dispensary listings'}</span>
+                        : <span className="productBrowseUnavailable">No current menu match</span>}
+                    </div>
+                    <span className="productBrowseOpen">View Weedo Facts →</span>
                   </a>
                 );
               })}
             </div>
           ) : (
             <div className="nutritionalFactsEmptyIndex">
-              {filtersActive ? 'No products match these filters.' : 'No products are available yet.'}
+              {filtersActive ? 'No scanned or uploaded products match these filters.' : 'No scanned or approved-upload products are available yet.'}
             </div>
           )}
 
@@ -199,7 +207,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           </nav> : null}
 
           {catalog.hasCannlytics ? <div className="productChemistryAttribution">
-            <strong>Data attribution.</strong> Some product records are normalized from the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Detailed source and COA information is shown only after opening a product.
+            <strong>Reference-data attribution.</strong> GeoWeedo may use the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>, to help resolve and enrich scanned/uploaded products. Importing a reference record alone does not make it appear on this public page.
           </div> : null}
         </section>
       </div>
