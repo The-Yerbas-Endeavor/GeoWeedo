@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import DispensaryLogoUploader from '@/components/DispensaryLogoUploader';
+import OwnerProductManager from '@/components/OwnerProductManager';
 
 type SponsorMetrics={pin_impression:number;pin_click:number;listing_view:number;website_click:number;menu_click:number;directions_click:number;game_impression:number;game_completed:number};
 type DailyTrend={date:string;total:number}&SponsorMetrics;
@@ -58,7 +59,7 @@ export default function OwnerPage(){
   const trend=current?.sponsorship?.dailyTrend||[];
 
   return <main className="owner-shell">
-    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>Keep your public listing accurate, see GeoWeedo activity, and manage Featured visibility from one workspace.</p></div><div className="owner-header-actions"><a href="/account">Account</a><a href="/for-dispensaries#featured">Featured</a><a href="/">View map</a></div></header>
+    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>Keep your public listing accurate, add or remove products, manage menu availability, see GeoWeedo activity, and manage Featured visibility from one workspace.</p></div><div className="owner-header-actions"><a href="#products">Products</a><a href="/account">Account</a><a href="/for-dispensaries#featured">Featured</a><a href="/">View map</a></div></header>
     {message&&<div className="owner-message">{message}</div>}
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>Your ownership claim may still be under review. Open the dispensary profile to check its claim status or submit a claim.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
@@ -72,6 +73,7 @@ export default function OwnerPage(){
           </>}
           {current.sponsorship?.plan&&<small style={{display:'block',marginTop:14}}>{current.sponsorship.plan.name}: ${(current.sponsorship.plan.monthlyPriceCents/100).toFixed(0)}/month or ${(current.sponsorship.plan.annualPriceCents/100).toFixed(0)}/year. Sponsorship payments are USD-only.</small>}
         </section>
+        <OwnerProductManager locationId={current.locationId}/>
         <section className="owner-panel owner-form">
           <div className="owner-panel-head"><div><span>PUBLIC PROFILE</span><h2>{current.location.name}</h2></div><a href={`/dispensary/${encodeURIComponent(current.locationId)}`} target="_blank" rel="noreferrer">View public profile ↗</a></div>
           <DispensaryLogoUploader locationId={current.locationId}/>
