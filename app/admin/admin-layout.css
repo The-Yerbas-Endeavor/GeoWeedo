@@ -116,3 +116,6 @@
  .admin-shell .state-registry-hero-actions button{width:100%}
  .admin-shell .state-registry-actions{display:grid;grid-template-columns:1fr 1fr}
 }
+.admin-shell .profile-audit-stats-five{grid-template-columns:repeat(5,minmax(110px,1fr))}
+@media(max-width:980px){.admin-shell .profile-audit-stats-five{grid-template-columns:repeat(3,minmax(110px,1fr))}}
+@media(max-width:650px){.admin-shell .profile-audit-stats-five{grid-template-columns:repeat(2,minmax(0,1fr))}}
