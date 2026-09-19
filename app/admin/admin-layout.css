@@ -81,3 +81,38 @@
  .admin-shell .profile-audit-filters{grid-template-columns:1fr}
  .admin-shell .profile-audit-table{min-width:940px}
 }
+
+/* State dispensary registry updater */
+.admin-shell .state-registry-hero{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:14px;padding:18px}
+.admin-shell .state-registry-hero>div:first-child{max-width:820px}
+.admin-shell .state-registry-hero h2{margin:5px 0 7px}
+.admin-shell .state-registry-hero-actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
+.admin-shell .state-registry-hero-actions button{min-width:150px}
+.admin-shell .state-registry-results{display:grid;gap:8px}
+.admin-shell .state-registry-result{display:grid;grid-template-columns:minmax(220px,.9fr) minmax(0,1.8fr);gap:16px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#0d120f}
+.admin-shell .state-registry-result>div{display:grid;gap:3px}
+.admin-shell .state-registry-result small{color:var(--muted)}
+.admin-shell .state-registry-result>span{font-size:12px;color:var(--muted);text-align:right;line-height:1.4}
+.admin-shell .state-registry-error{color:#ffaaa6!important}
+.admin-shell .state-registry-panel,.admin-shell .state-registry-manual{grid-column:1/-1}
+.admin-shell .state-registry-panel{display:grid;gap:8px}
+.admin-shell .state-registry-panel>h2,.admin-shell .state-registry-panel>h3,.admin-shell .state-registry-panel>.admin-help{margin-bottom:2px}
+.admin-shell .state-registry-row{display:grid;grid-template-columns:minmax(170px,.55fr) minmax(0,1.7fr) auto;gap:14px;align-items:center;padding:11px 12px!important}
+.admin-shell .state-registry-row>strong{align-self:start}
+.admin-shell .state-registry-row>span{line-height:1.4}
+.admin-shell .state-registry-actions{display:flex;gap:7px;justify-content:flex-end}
+.admin-shell .state-registry-actions button{min-width:78px}
+.admin-shell .state-registry-manual{margin-top:4px}
+@media(max-width:900px){
+ .admin-shell .state-registry-hero{align-items:stretch;flex-direction:column}
+ .admin-shell .state-registry-hero-actions{justify-content:flex-start}
+ .admin-shell .state-registry-result{grid-template-columns:1fr}
+ .admin-shell .state-registry-result>span{text-align:left}
+ .admin-shell .state-registry-row{grid-template-columns:1fr}
+ .admin-shell .state-registry-actions{justify-content:flex-start}
+}
+@media(max-width:560px){
+ .admin-shell .state-registry-hero-actions{display:grid;grid-template-columns:1fr}
+ .admin-shell .state-registry-hero-actions button{width:100%}
+ .admin-shell .state-registry-actions{display:grid;grid-template-columns:1fr 1fr}
+}
