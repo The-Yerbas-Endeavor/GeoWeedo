@@ -1,5 +1,6 @@
 .map-browser-tools .map-unified-search{
   min-width:0!important;
+  order:-100!important;
 }
 
 .map-browser-tools .map-unified-search-shell{
