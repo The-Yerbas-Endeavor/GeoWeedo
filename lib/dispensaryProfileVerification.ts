@@ -47,3 +47,12 @@ export function markProfileVerified(locationId:string,actor:string,source='manua
  db.prepare(`INSERT INTO dispensary_profile_verifications(location_id,last_verified_at,next_audit_at,verified_by,verification_source,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(location_id) DO UPDATE SET last_verified_at=excluded.last_verified_at,next_audit_at=excluded.next_audit_at,verified_by=excluded.verified_by,verification_source=excluded.verification_source,notes=excluded.notes,updated_at=excluded.updated_at`).run(locationId,created,next.toISOString(),actor,source,notes||null,created,created);
  return getProfileVerification(locationId);
 }
+
+export function markProfileReauditDue(locationId:string,actor:string,source='bulk-audit',notes=''){
+ ensureProfileVerificationSchema();const db=getDatabase(),now=new Date().toISOString();
+ db.prepare(`INSERT INTO dispensary_profile_verifications(location_id,last_verified_at,next_audit_at,verified_by,verification_source,notes,created_at,updated_at)
+ VALUES(?,NULL,?,?,?,?,?,?)
+ ON CONFLICT(location_id) DO UPDATE SET next_audit_at=excluded.next_audit_at,verified_by=excluded.verified_by,verification_source=excluded.verification_source,notes=excluded.notes,updated_at=excluded.updated_at`)
+ .run(locationId,now,actor,source,notes||null,now,now);
+ return getProfileVerification(locationId);
+}
