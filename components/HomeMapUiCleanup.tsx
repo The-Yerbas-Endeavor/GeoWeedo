@@ -4,6 +4,7 @@ import { useLayoutEffect } from 'react';
 
 const SEARCH_ACTIVE_CLASS='geoweedo-map-search-active';
 const FINDO_ACTIVE_CLASS='geoweedo-findo-active';
+const BROWSE_OPEN_CLASS='geoweedo-browse-panel-open';
 
 function clamp(value:number,min:number,max:number){return Math.max(min,Math.min(max,value));}
 
@@ -82,6 +83,11 @@ function minimizeSearchPanels(active:boolean){
 
 function internalMapSearch(){return document.querySelector<HTMLInputElement>('.map-first-home .map-browser-tools input:not(.map-unified-search-input)');}
 
+function syncBrowseOpenState(){
+  const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
+  document.body.classList.toggle(BROWSE_OPEN_CLASS,Boolean(panel));
+}
+
 function syncSearchPanels(){
   const input=internalMapSearch();
   const active=Boolean(input?.value.trim())||document.body.classList.contains(SEARCH_ACTIVE_CLASS);
@@ -135,14 +141,14 @@ export default function HomeMapUiCleanup(){
       }
     };
     const initializePromo=()=>{if(promoInitialized)return;const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();};
-    const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=internalMapSearch();if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
+    const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();syncBrowseOpenState();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=internalMapSearch();if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
     const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo Weedo on the dispensary map"]'))window.setTimeout(activateFindo,0);const browseButton=target?.closest<HTMLButtonElement>('.map-first-home .map-browser-tools button');if(browseButton&&/^(Browse list|List)\b/i.test(browseButton.textContent?.trim()||'')){minimizeGameplayCard();centerBrowsePanel();}const head=target?.closest<HTMLElement>('.map-first-home .map-browser-panel-head');if(head&&!target?.closest('.map-browser-panel-head>button')){const panel=head.closest<HTMLElement>('.map-browser-panel');if(panel){panel.dataset.userExpanded='1';panel.classList.remove('map-browser-panel-search-minimized');panel.setAttribute('aria-label','Browse dispensaries');}}};
     const onChange=(event:Event)=>{const target=event.target;if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]')&&target.value!=='all')minimizeGameplayCard();};
     const onFocusIn=(event:FocusEvent)=>{const target=event.target;if(!isMobileHome()||!(target instanceof HTMLInputElement)||!target.matches('.map-first-home .map-unified-search-input'))return;minimizeGameplayCard();};
     document.addEventListener('click',onClick);document.addEventListener('change',onChange);document.addEventListener('focusin',onFocusIn);
     bind();const observer=new MutationObserver(bind);observer.observe(document.body,{subtree:true,childList:true});
     const fallback=window.setTimeout(()=>document.body.classList.add('geoweedo-home-browse-ready'),600);
-    return()=>{document.removeEventListener('click',onClick);document.removeEventListener('change',onChange);document.removeEventListener('focusin',onFocusIn);observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS,FINDO_ACTIVE_CLASS);};
+    return()=>{document.removeEventListener('click',onClick);document.removeEventListener('change',onChange);document.removeEventListener('focusin',onFocusIn);observer.disconnect();window.clearTimeout(fallback);document.body.classList.remove('geoweedo-home-browse-ready',SEARCH_ACTIVE_CLASS,FINDO_ACTIVE_CLASS,BROWSE_OPEN_CLASS);};
   },[]);
   return null;
 }
