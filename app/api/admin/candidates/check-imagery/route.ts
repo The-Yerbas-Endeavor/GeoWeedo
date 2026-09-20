@@ -61,7 +61,7 @@ function enrichmentApprovedIds() {
 
 export async function POST(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  const body = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({});
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
   const requestedPhotoId = String(body?.selectedPhotoId || '').trim();
   const source = body?.source === 'enrichment_approved' ? 'enrichment_approved' : 'coordinate_ready';
@@ -140,12 +140,12 @@ export async function POST(request: NextRequest) {
             : adminConfirmed
               ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
               : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
-      }));
+      });
     } catch (error) {
       return await updateCandidate(item.id, {
         imageryStatus: 'error', imageryCount: 0, imageryCheckedAt: checkedAt,
         imageryMessage: error instanceof Error ? error.message : 'Street View quality lookup failed.',
-      }));
+      });
     }
 
     return null;
