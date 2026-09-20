@@ -19,6 +19,7 @@ export type StreetViewLookupResult = {
   photos: StreetViewPhoto[];
   initialIndex?: number;
   selectedPhotoId?: string | null;
+  recoveredFromStalePano?: boolean;
   quality: {
     playable: boolean;
     grade?: string;
