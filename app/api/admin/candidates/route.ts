@@ -4,6 +4,7 @@ import { auditCandidatePipeline, assessCandidatePipeline, listCandidates, update
 import { saveApprovedDispensary } from '@/lib/dispensaryStore';
 import { getDatabase } from '@/lib/sqlite';
 import { lookupGameplayStreetView } from '@/lib/streetViewLookupClient';
+import { reverseGeocodeCoordinates } from '@/lib/reverseGeocode';
 
 function automatedEnrichmentApprovedIds(){
  try{
@@ -51,7 +52,25 @@ function selectedProviderFromMessage(message?:string){
  return null;
 }
 
-async function promoteCandidate(item:DispensaryCandidate){
+async function fillCandidateLocality(item:DispensaryCandidate){
+ if(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))return item;
+ if(item.city?.trim()&&item.postalCode?.trim())return item;
+ try{
+  const location=await reverseGeocodeCoordinates(item.latitude as number,item.longitude as number);
+  if(!location)return item;
+  const patch:Partial<DispensaryCandidate>={};
+  if(!item.city?.trim()&&location.city)patch.city=location.city;
+  if(!item.postalCode?.trim()&&location.postalCode)patch.postalCode=location.postalCode;
+  if(!item.region?.trim()&&location.region)patch.region=location.region;
+  if(!item.country?.trim()&&location.country)patch.country=location.country;
+  if(!Object.keys(patch).length)return item;
+  return await updateCandidate(item.id,patch)||item;
+ }catch{return item;}
+}
+
+async function promoteCandidate(original:DispensaryCandidate){
+ let item=original;
+ if(Number.isFinite(item.latitude)&&Number.isFinite(item.longitude))item=await fillCandidateLocality(item);
  const pipeline=assessCandidatePipeline(item);
  if(!pipeline.eligible)return{ok:false,reason:`pipeline_${String(pipeline.reason||'ineligible').replace(/\W+/g,'_')}`};
  if(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))return{ok:false,reason:'missing_coordinates'};
@@ -63,9 +82,14 @@ async function promoteCandidate(item:DispensaryCandidate){
   const adminSelected=String(item.imageryMessage||'').startsWith('ADMIN_SELECTED_STREET_VIEW');
   const adminConfirmed=/^ADMIN_(?:CONFIRMED|SELECTED)_STREET_VIEW/.test(String(item.imageryMessage||''));
 
+  const savePostalCode=(dispensaryId:string)=>{
+   if(item.postalCode?.trim())getDatabase().prepare('UPDATE dispensaries SET postal_code=? WHERE id=?').run(item.postalCode.trim(),dispensaryId);
+  };
+
   if(adminSelected&&selectedProvider==='google'&&requestedPhotoId){
    const photo={id:requestedPhotoId,sequenceId:requestedPhotoId,lat:item.latitude as number,lng:item.longitude as number,heading:0,fieldOfView:360,projection:'GOOGLE_PANORAMA',imageUrl:`/api/street-imagery/google-image?pano=${encodeURIComponent(requestedPhotoId)}&heading=0`};
    const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:'google' as any,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
+   savePostalCode(saved.id);
    await updateCandidate(item.id,{status:'approved',imageryMessage:`Promoted to gameplay with admin-selected Street View · google. Starting view ${photo.id}.`});
    return{ok:true,dispensaryId:saved.id};
   }
@@ -77,6 +101,7 @@ async function promoteCandidate(item:DispensaryCandidate){
   if((!inspection.quality?.playable&&!adminConfirmed)||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
   if(requestedPhotoId&&String(photo.id)!==requestedPhotoId)return{ok:false,reason:'selected_imagery_no_longer_available'};
   const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:inspection.provider,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId||undefined,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
+  savePostalCode(saved.id);
   await updateCandidate(item.id,{status:'approved',imageryMessage:adminConfirmed?`Promoted to gameplay with admin-confirmed Street View · ${inspection.provider}. Starting view ${photo.id}.`:`Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`});
   return{ok:true,dispensaryId:saved.id};
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
@@ -125,5 +150,5 @@ export async function DELETE(request:NextRequest){
 export async function PATCH(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);
  if(body?.action==='pipeline-audit'||body?.action==='pipeline-cleanup'){return NextResponse.json(await auditCandidatePipeline({apply:body.action==='pipeline-cleanup'}));}
  if(Array.isArray(body?.ids)){const ids=Array.from(new Set<string>(body.ids.map((v:unknown)=>String(v)).filter(Boolean))).slice(0,5000),action=String(body.action||'');if(!ids.length)return NextResponse.json({error:'At least one candidate id is required.'},{status:400});if(!['approve','reject'].includes(action))return NextResponse.json({error:'Bulk action must be approve or reject.'},{status:400});const all=await listCandidates(),selected=all.filter(i=>ids.includes(i.id));let updated=0,skipped=0,promoted=0;const skippedReasons:Record<string,number>={};const outcomes=await mapWithConcurrency(selected,5,async item=>{if(action==='approve')return await promoteCandidate(item);const candidate=await updateCandidate(item.id,{status:'rejected'});return candidate?{ok:true,dispensaryId:''}:{ok:false,reason:'update_failed'};});for(const result of outcomes){if(result.ok){updated++;if(action==='approve')promoted++;continue;}skipped++;const reason=result.reason||'not_eligible';skippedReasons[reason]=(skippedReasons[reason]||0)+1;}return NextResponse.json({action,requested:ids.length,matched:selected.length,updated,promoted,skipped,skippedReasons});}
- if(!body?.id)return NextResponse.json({error:'Candidate id is required.'},{status:400});const id=String(body.id),all=await listCandidates(),current=all.find(i=>i.id===id);if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});if(body.status==='approved'){const result=await promoteCandidate(current);if(!result.ok)return NextResponse.json({error:`Candidate cannot enter gameplay: ${result.reason}.`},{status:400});return NextResponse.json({candidate:(await listCandidates()).find(i=>i.id===id),promoted:true});}const patch:Partial<DispensaryCandidate>={};if(['candidate','reviewing','rejected'].includes(body.status))patch.status=body.status as DispensaryCandidate['status'];if(body.name!==undefined)patch.name=String(body.name).trim();if(body.streetAddress!==undefined)patch.streetAddress=String(body.streetAddress).trim()||undefined;if(body.city!==undefined)patch.city=String(body.city).trim()||undefined;if(body.region!==undefined)patch.region=String(body.region).trim()||undefined;if(body.country!==undefined)patch.country=String(body.country).trim()||undefined;if(body.website!==undefined)patch.website=String(body.website).trim()||undefined;if(body.licenseNumber!==undefined)patch.licenseNumber=String(body.licenseNumber).trim()||undefined;if(body.sourceUrl!==undefined)patch.sourceUrl=String(body.sourceUrl).trim()||undefined;if(body.sourceLicense!==undefined)patch.sourceLicense=String(body.sourceLicense).trim()||undefined;if(body.latitude!==undefined&&Number.isFinite(Number(body.latitude)))patch.latitude=Number(body.latitude);if(body.longitude!==undefined&&Number.isFinite(Number(body.longitude)))patch.longitude=Number(body.longitude);return NextResponse.json({candidate:await updateCandidate(id,patch)});
+ if(!body?.id)return NextResponse.json({error:'Candidate id is required.'},{status:400});const id=String(body.id),all=await listCandidates(),current=all.find(i=>i.id===id);if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});if(body.status==='approved'){const result=await promoteCandidate(current);if(!result.ok)return NextResponse.json({error:`Candidate cannot enter gameplay: ${result.reason}.`},{status:400});return NextResponse.json({candidate:(await listCandidates()).find(i=>i.id===id),promoted:true});}const patch:Partial<DispensaryCandidate>={};if(['candidate','reviewing','rejected'].includes(body.status))patch.status=body.status as DispensaryCandidate['status'];if(body.name!==undefined)patch.name=String(body.name).trim();if(body.streetAddress!==undefined)patch.streetAddress=String(body.streetAddress).trim()||undefined;if(body.city!==undefined)patch.city=String(body.city).trim()||undefined;if(body.region!==undefined)patch.region=String(body.region).trim()||undefined;if(body.postalCode!==undefined)patch.postalCode=String(body.postalCode).trim()||undefined;if(body.country!==undefined)patch.country=String(body.country).trim()||undefined;if(body.website!==undefined)patch.website=String(body.website).trim()||undefined;if(body.licenseNumber!==undefined)patch.licenseNumber=String(body.licenseNumber).trim()||undefined;if(body.sourceUrl!==undefined)patch.sourceUrl=String(body.sourceUrl).trim()||undefined;if(body.sourceLicense!==undefined)patch.sourceLicense=String(body.sourceLicense).trim()||undefined;if(body.latitude!==undefined&&Number.isFinite(Number(body.latitude)))patch.latitude=Number(body.latitude);if(body.longitude!==undefined&&Number.isFinite(Number(body.longitude)))patch.longitude=Number(body.longitude);return NextResponse.json({candidate:await updateCandidate(id,patch)});
 }
