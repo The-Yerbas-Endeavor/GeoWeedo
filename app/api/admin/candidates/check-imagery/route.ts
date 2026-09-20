@@ -59,7 +59,7 @@ function enrichmentApprovedIds() {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
@@ -194,4 +194,18 @@ export async function POST(request: NextRequest) {
       missingCoordinates,
     },
   }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+}
+
+
+export async function POST(request: NextRequest) {
+  try {
+    return await handlePost(request);
+  } catch (error) {
+    console.error('[check-imagery] fatal pipeline error', error);
+    return NextResponse.json({
+      error: error instanceof Error ? `Gameplay imagery pipeline failed: ${error.message}` : 'Gameplay imagery pipeline failed unexpectedly.',
+      checked: 0,
+      results: [],
+    }, { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } });
+  }
 }
