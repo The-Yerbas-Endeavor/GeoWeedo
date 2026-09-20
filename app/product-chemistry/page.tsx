@@ -26,6 +26,7 @@ type Props = {
     type?: string | string[];
     sort?: string | string[];
     page?: string | string[];
+    view?: string | string[];
   }>;
 };
 
@@ -85,8 +86,9 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
   const productCategory = one(query.type)?.trim() || '';
   const requestedSort = one(query.sort)?.trim() || 'category';
   const sort = PRODUCT_SORTS.has(requestedSort) ? requestedSort : 'category';
+  const view = one(query.view)?.trim() === 'all' ? 'all' : 'evidence';
   const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
-  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, sort, page: requestedPage, pageSize: 36 });
+  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, sort, page: requestedPage, pageSize: 36, scope: view });
   const filtersActive = Boolean(q || brand || productCategory);
   const resultStart = catalog.matchingProducts ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
   const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingProducts);
@@ -97,6 +99,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     if (brand) params.set('brand', brand);
     if (productCategory) params.set('type', productCategory);
     if (sort !== 'category') params.set('sort', sort);
+    if (view === 'all') params.set('view', 'all');
     if (nextPage > 1) params.set('page', String(nextPage));
     const queryString = params.toString();
     return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
@@ -110,30 +113,37 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
           <h1>Products</h1>
           <p className="weedoFactsLead">
-            Products GeoWeedo has actually seen. Every item below comes from a resolved scan or an approved COA upload, then links into GeoWeedo Facts and current dispensary availability when we have it.
+            Scanned and approved-uploaded products are shown by default. You can also switch to All products to browse GeoWeedo's complete public reference catalog.
           </p>
           <div className="productChemistryStats" aria-label="GeoWeedo product evidence totals">
-            <div><strong>{catalog.totalProducts.toLocaleString()}</strong><span>Products found</span></div>
             <div><strong>{catalog.scannedProducts.toLocaleString()}</strong><span>Scanned</span></div>
             <div><strong>{catalog.uploadedProducts.toLocaleString()}</strong><span>COA uploads</span></div>
+            <div><strong>{catalog.allProducts.toLocaleString()}</strong><span>All products</span></div>
             <div><strong>{catalog.menuLinkedProducts.toLocaleString()}</strong><span>At dispensaries</span></div>
           </div>
         </section>
 
         <section className="nutritionalFactsIndex productBrowseIndex" aria-labelledby="product-listings-heading">
+          <div className="productBrowseModeSwitch" aria-label="Product catalog view">
+            <a className={view==='evidence'?'active':''} href="/product-chemistry">Scanned &amp; uploaded</a>
+            <a className={view==='all'?'active':''} href="/product-chemistry?view=all">All products</a>
+          </div>
           <div className="nutritionalFactsIndexHead">
             <div>
-              <span className="weedoFactsEyebrow">SEEN BY GEOWEEDO</span>
-              <h2 id="product-listings-heading">Scanned &amp; uploaded products</h2>
-              <p>The full reference catalog stays behind the scenes. This list contains only products GeoWeedo has matched from real scans or approved COA uploads.</p>
+              <span className="weedoFactsEyebrow">{view==='all'?'ALL PRODUCTS':'SEEN BY GEOWEEDO'}</span>
+              <h2 id="product-listings-heading">{view==='all'?'Complete product catalog':'Scanned & uploaded products'}</h2>
+              <p>{view==='all'
+                ? 'Browse the complete public GeoWeedo product library, including COA, state-imported, Cannlytics, and other reference records.'
+                : 'Default view: products GeoWeedo has matched from real scans or approved COA uploads.'}</p>
             </div>
             <span className="nutritionalFactsCount">
               {catalog.matchingProducts ? `${resultStart.toLocaleString()}–${resultEnd.toLocaleString()} of ${catalog.matchingProducts.toLocaleString()}` : '0'} {catalog.matchingProducts === 1 ? 'product' : 'products'}
-              {filtersActive && catalog.matchingProducts !== catalog.totalProducts ? ` · ${catalog.totalProducts.toLocaleString()} total` : ''}
+              {filtersActive && catalog.matchingProducts !== catalog.totalProducts ? ` · ${catalog.totalProducts.toLocaleString()} in this view` : ''}
             </span>
           </div>
 
           <form className="productChemistryFilters productBrowseFilters" method="get" action="/product-chemistry">
+            {view==='all'?<input type="hidden" name="view" value="all"/>:null}
             <label className="productChemistrySearch">
               <span>Search products</span>
               <input name="q" defaultValue={q} placeholder="Product or brand…" />
@@ -165,7 +175,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             </label>
             <div className="productChemistryFilterActions">
               <button type="submit">Apply</button>
-              {filtersActive || sort !== 'category' ? <a href="/product-chemistry">Clear</a> : null}
+              {filtersActive || sort !== 'category' ? <a href={view==='all'?'/product-chemistry?view=all':'/product-chemistry'}>Clear</a> : null}
             </div>
           </form>
 
@@ -184,6 +194,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                     <div className="productBrowseEvidence">
                       {product.scanCount > 0 ? <span>✓ Scanned{product.scanCount > 1 ? ` ${product.scanCount.toLocaleString()} times` : ''}</span> : null}
                       {product.approvedUploadCount > 0 ? <span>✓ Approved COA upload</span> : null}
+                      {view==='all' && product.scanCount===0 && product.approvedUploadCount===0 ? <span>Reference library product</span> : null}
                       {product.verifiedBatchCount > 0 ? <span>✓ {product.verifiedBatchCount.toLocaleString()} verified {product.verifiedBatchCount === 1 ? 'batch' : 'batches'}</span> : null}
                       {product.menuListingCount > 0
                         ? <span className="productBrowseAvailable">Found at {product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'dispensary listing' : 'dispensary listings'}</span>
@@ -196,7 +207,9 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
             </div>
           ) : (
             <div className="nutritionalFactsEmptyIndex">
-              {filtersActive ? 'No scanned or uploaded products match these filters.' : 'No scanned or approved-upload products are available yet.'}
+              {filtersActive
+                ? `No ${view==='all'?'products':'scanned or uploaded products'} match these filters.`
+                : view==='all'?'No products are available yet.':'No scanned or approved-upload products are available yet.'}
             </div>
           )}
 
@@ -207,7 +220,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           </nav> : null}
 
           {catalog.hasCannlytics ? <div className="productChemistryAttribution">
-            <strong>Reference-data attribution.</strong> GeoWeedo may use the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>, to help resolve and enrich scanned/uploaded products. Importing a reference record alone does not make it appear on this public page.
+            <strong>Reference-data attribution.</strong> GeoWeedo may use the <a href="https://huggingface.co/datasets/cannlytics/cannabis_results" target="_blank" rel="noreferrer">Cannlytics Cannabis Results Dataset</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>, to help resolve and enrich products. Reference-only records appear when the public <strong>All products</strong> view is selected; the default view remains scanned and approved-uploaded products.
           </div> : null}
         </section>
       </div>
