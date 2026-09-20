@@ -259,6 +259,24 @@
   font-size:11px;
   text-align:center;
 }
+.map-first-home .map-browser-radius-clear{
+  min-height:30px;
+  padding:0 10px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:9px;
+  background:rgba(255,255,255,.06);
+  color:#eef5ef;
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+.map-first-home .map-browser-radius-clear:hover{
+  background:rgba(255,255,255,.12);
+}
+.map-first-home .map-browser-tools .map-near-me-active{
+  border-color:#7ed957!important;
+  box-shadow:0 0 0 1px rgba(126,217,87,.24) inset!important;
+}
 
 @media (max-width:650px){
   .map-first-home .map-browser-radius-control{
@@ -279,10 +297,15 @@
     height:32px;
   }
   .map-first-home .map-browser-radius-control label{
-    grid-column:1/-1;
+    grid-column:1/2;
     display:grid;
     grid-template-columns:auto 58px auto;
-    justify-content:end;
+    justify-content:start;
+  }
+  .map-first-home .map-browser-radius-clear{
+    grid-column:2/3;
+    justify-self:end;
+    min-height:31px;
   }
   .map-first-home .map-browser-radius-control label>span{display:inline}
   .map-first-home .map-browser-radius-control input{
