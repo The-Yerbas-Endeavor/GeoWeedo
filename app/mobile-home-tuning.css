@@ -50,3 +50,146 @@
   .map-first-home .map-browser-panel,
   .map-first-home .map-browser-panel.map-browser-panel-draggable{width:94vw!important;max-width:94vw!important}
 }
+
+
+/* Mobile dispensary browser: treat the list as a real bottom sheet, not a shrunken desktop card. */
+@media (max-width:650px){
+  body.geoweedo-browse-panel-open .map-first-home button[aria-label="Explore GeoWeedo"],
+  body.geoweedo-browse-panel-open .map-first-home button[aria-label="Choose a GeoWeedo game"],
+  body.geoweedo-browse-panel-open .map-first-home button[aria-label="Show game intro"]{
+    display:none!important;
+  }
+
+  .map-first-home .map-browser-panel:not(.map-browser-panel-minimized):not(.map-browser-panel-search-minimized),
+  .map-first-home .map-browser-panel.map-browser-panel-draggable:not(.map-browser-panel-minimized):not(.map-browser-panel-search-minimized){
+    left:8px!important;
+    right:8px!important;
+    bottom:max(8px,env(safe-area-inset-bottom))!important;
+    top:auto!important;
+    width:auto!important;
+    max-width:none!important;
+    height:min(56vh,620px)!important;
+    height:min(56dvh,620px)!important;
+    max-height:min(56vh,620px)!important;
+    max-height:min(56dvh,620px)!important;
+    transform:none!important;
+    z-index:60!important;
+    border-radius:18px!important;
+    background:rgba(8,14,10,.97)!important;
+    border-color:rgba(126,217,87,.34)!important;
+    box-shadow:0 16px 46px rgba(0,0,0,.5)!important;
+    backdrop-filter:blur(12px)!important;
+    -webkit-backdrop-filter:blur(12px)!important;
+  }
+
+  .map-first-home .map-browser-panel .map-browser-panel-head{
+    padding:11px 12px 10px!important;
+    gap:8px!important;
+    flex:0 0 auto!important;
+    background:rgba(16,27,20,.98)!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-head>div:first-child{
+    gap:2px!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-head span{
+    font-size:9px!important;
+    letter-spacing:.12em!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-head strong{
+    font-size:15px!important;
+    line-height:1.2!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-hint{
+    display:none!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-controls{
+    flex-direction:row!important;
+    align-self:flex-start!important;
+    gap:5px!important;
+  }
+  .map-first-home .map-browser-panel .map-browser-panel-controls button{
+    width:36px!important;
+    height:36px!important;
+    min-width:36px!important;
+    min-height:36px!important;
+    font-size:19px!important;
+  }
+
+  .map-first-home .map-browser-panel .map-browser-list{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch;
+    background:rgba(7,12,9,.94)!important;
+  }
+
+  .map-first-home .map-browser-country-heading{
+    display:flex!important;
+    align-items:center!important;
+    gap:8px!important;
+    padding:8px 12px!important;
+    min-height:38px!important;
+  }
+  .map-first-home .map-browser-country-heading small{
+    display:inline!important;
+    margin:0!important;
+    font-size:10px!important;
+  }
+
+  .map-first-home .map-browser-state-head{
+    padding:10px 12px!important;
+    min-height:52px!important;
+  }
+  .map-first-home .map-browser-state-head>span{
+    gap:1px!important;
+  }
+  .map-first-home .map-browser-state-head strong{
+    font-size:14px!important;
+  }
+  .map-first-home .map-browser-state-head small{
+    font-size:10px!important;
+  }
+  .map-first-home .map-browser-state-head b{
+    width:30px!important;
+    height:30px!important;
+    font-size:18px!important;
+  }
+
+  .map-first-home .map-browser-state-list .map-browser-row{
+    grid-template-columns:30px minmax(0,1fr) auto!important;
+    gap:8px!important;
+    padding:9px 11px!important;
+    min-height:54px!important;
+  }
+  .map-first-home .map-browser-row-map{
+    width:30px!important;
+    height:30px!important;
+    min-width:30px!important;
+  }
+  .map-first-home .map-browser-row-copy strong{
+    font-size:13px!important;
+  }
+  .map-first-home .map-browser-row-copy small{
+    font-size:10px!important;
+  }
+  .map-first-home .map-browser-row-end{
+    min-width:62px!important;
+  }
+  .map-first-home .map-browser-row-page{
+    font-size:10px!important;
+  }
+}
+
+@media (max-width:430px){
+  .map-first-home .map-browser-panel:not(.map-browser-panel-minimized):not(.map-browser-panel-search-minimized),
+  .map-first-home .map-browser-panel.map-browser-panel-draggable:not(.map-browser-panel-minimized):not(.map-browser-panel-search-minimized){
+    left:6px!important;
+    right:6px!important;
+    height:min(58vh,600px)!important;
+    height:min(58dvh,600px)!important;
+    max-height:min(58vh,600px)!important;
+    max-height:min(58dvh,600px)!important;
+    border-radius:16px!important;
+  }
+}
