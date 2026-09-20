@@ -92,7 +92,7 @@ async function getOfficialText(url:string,accept:string){
 }
 
 async function postOfficialExport(url:string){
- const body=JSON.stringify({orderingSpecifier:'discard'});
+ const body=JSON.stringify({query:'SELECT *',orderingSpecifier:'discard'});
  try{
   const response=await fetch(url,{
    method:'POST',
@@ -127,7 +127,7 @@ async function fetchOregon():Promise<CandidateRow[]>{
   const result=await postOfficialExport(exportUrl);
   if(result.status>=200&&result.status<300){
    rawRecords=csvRecords(result.text);
-   if(!rawRecords.length)failures.push(`POST /api/v3/views/q32u-cmam/export.csv: zero parsed rows; content-type ${result.contentType||'unknown'}; ${result.text.length} bytes`);
+   if(!rawRecords.length)failures.push(`POST /api/v3/views/q32u-cmam/export.csv: zero parsed rows; content-type ${result.contentType||'unknown'}; ${result.text.length} bytes; first line: ${result.text.split(/\r?\n/,1)[0]?.slice(0,220)||'(empty)'}`);
   }else failures.push(`POST /api/v3/views/q32u-cmam/export.csv: HTTP ${result.status}`);
  }catch(error){
   failures.push(`POST /api/v3/views/q32u-cmam/export.csv: ${error instanceof Error?error.message:String(error)}`);
