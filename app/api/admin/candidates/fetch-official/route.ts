@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import https from 'node:https';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { getDatabase } from '@/lib/sqlite';
@@ -56,8 +57,84 @@ function csvRecords(text:string){const rows=parseCsv(text.replace(/^\uFEFF/,''))
 function browserHeaders(){return{Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36','Accept-Language':'en-US,en;q=0.9'};}
 async function getJson(url:string){let response:Response;try{response=await fetch(url,{headers:{Accept:'application/json','User-Agent':'GeoWeedo/0.7 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(30000)});}catch(error){throw new Error(`Could not connect to official data source: ${error instanceof Error?error.message:String(error)}`);}if(!response.ok)throw new Error(`Official data source ${new URL(url).host} returned ${response.status}`);return response.json();}
 async function getHtml(url:string,label:string){const response=await fetch(url,{headers:browserHeaders(),cache:'no-store',signal:AbortSignal.timeout(30000)});if(!response.ok)throw new Error(`${label} returned ${response.status}`);return response.text();}
+
+function getTextIpv4(url:string,accept:string,redirects=0):Promise<{status:number;text:string;contentType:string;url:string}>{
+ return new Promise((resolve,reject)=>{
+  let parsed:URL;try{parsed=new URL(url);}catch(error){reject(error);return;}
+  const request=https.request({
+   protocol:parsed.protocol,hostname:parsed.hostname,port:parsed.port||443,path:parsed.pathname+parsed.search,
+   method:'GET',family:4,headers:{Accept:accept,'User-Agent':'GeoWeedo/0.9 (https://geoweedo.com)'}
+  },response=>{
+   const status=Number(response.statusCode||0),location=response.headers.location;
+   if(status>=300&&status<400&&location&&redirects<5){
+    response.resume();
+    let next:string;try{next=new URL(location,url).toString();}catch(error){reject(error);return;}
+    getTextIpv4(next,accept,redirects+1).then(resolve,reject);return;
+   }
+   const chunks:Buffer[]=[];
+   response.on('data',chunk=>chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk)));
+   response.on('end',()=>resolve({status,text:Buffer.concat(chunks).toString('utf8'),contentType:String(response.headers['content-type']||''),url}));
+  });
+  request.setTimeout(45000,()=>request.destroy(new Error('request timed out')));
+  request.on('error',reject);
+  request.end();
+ });
+}
+async function getOfficialText(url:string,accept:string){
+ try{
+  const response=await fetch(url,{headers:{Accept:accept,'User-Agent':'GeoWeedo/0.9 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(45000)});
+  if(response.ok)return{status:response.status,text:await response.text(),contentType:String(response.headers.get('content-type')||''),url:response.url||url,transport:'fetch'};
+  return{status:response.status,text:await response.text(),contentType:String(response.headers.get('content-type')||''),url:response.url||url,transport:'fetch'};
+ }catch(firstError){
+  try{return{...(await getTextIpv4(url,accept)),transport:'ipv4'};}
+  catch(secondError){throw new Error(`fetch failed (${firstError instanceof Error?firstError.message:String(firstError)}); IPv4 fallback failed (${secondError instanceof Error?secondError.message:String(secondError)})`);}
+ }
+}
 async function fetchCalifornia():Promise<CandidateRow[]>{const sourceUrl='https://search.cannabis.ca.gov/';const api='https://as-dcc-pub-cann-w-p-002.azurewebsites.net/licenses/filteredsearch';const all:any[]=[];let page=1,hasNext=true;while(hasNext&&page<=100){const body:any=await getJson(`${api}?pageSize=500&pageNumber=${page}&searchQuery=`);const data=Array.isArray(body?.data)?body.data:[];all.push(...data);hasNext=Boolean(body?.metadata?.hasNext);page++;}if(hasNext)throw new Error('California DCC sync stopped after 100 pages; refusing a partial import.');return all.map(raw=>normalizeObject(raw)).filter(r=>{const lic=pick(r,['licensenumber','license']),type=pick(r,['licensetype','type']),status=pick(r,['licensestatus','status']);return(/^c10-/i.test(lic)||(/retailer/i.test(type)&&!/nonstorefront|non-storefront|delivery/i.test(type)))&&(/^active\b/i.test(status)||/about to expire/i.test(status));}).map(r=>{const geo=point(r.georeference??r.location??r.geolocation??r.point),latitude=coord(r.premiselatitude??r.latitude)??geo.latitude,longitude=coord(r.premiselongitude??r.longitude)??geo.longitude;return{name:pick(r,['businessdbaname','dbaname','businesslegalname','legalbusinessname','businessname','name']),streetAddress:pick(r,['premisestreetaddress','streetaddress','premiseaddress','address'])||undefined,city:pick(r,['premisecity','city'])||undefined,region:'California',country:'USA',latitude,longitude,website:pick(r,['businesswebsite','website','url'])||undefined,licenseNumber:pick(r,['licensenumber','license'])||undefined,dataSource:'California DCC Unified License Search',sourceUrl,sourceLicense:'Official California Department of Cannabis Control public license-search data; active storefront retailers only.',imageryStatus:readiness(latitude,longitude)};}).filter(r=>r.name);}
-async function fetchOregon():Promise<CandidateRow[]>{const sourceUrl='https://data.oregon.gov/d/q32u-cmam',download='https://data.oregon.gov/api/v3/views/q32u-cmam/export.csv?accessType=DOWNLOAD';let response:Response;try{response=await fetch(download,{headers:{Accept:'text/csv,*/*','User-Agent':'GeoWeedo/0.9 (https://geoweedo.com)'},cache:'no-store',signal:AbortSignal.timeout(45000)});}catch(error){throw new Error(`Could not connect to Oregon OLCC official data: ${error instanceof Error?error.message:String(error)}`);}if(!response.ok)throw new Error(`Oregon OLCC official CSV returned ${response.status}`);const records=csvRecords(await response.text()),rows:CandidateRow[]=[];for(const raw of records){const r=normalizeObject(raw),type=pick(r,['licensetype','type']),status=pick(r,['status','licensestatus']),expired=pick(r,['licenseexpired','expired']);if(!/retail/i.test(type))continue;if(status&&!/active|current|issued/i.test(status))continue;if(/yes|true|expired|inactive|revoked|surrendered/i.test(expired))continue;const name=pick(r,['businessname','tradename','businesslicenses','licenseename','name']),licenseNumber=pick(r,['licensenumber','license','licenseid']),addressRaw=pick(r,['physicaladdress','premiseaddress','address']),city=pick(r,['city','physicalcity','premisecity']);const latitude=coord(r.latitude),longitude=coord(r.longitude);if(!name)continue;rows.push({name,streetAddress:addressRaw||undefined,city:city||undefined,region:'Oregon',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Oregon OLCC Open Data',sourceUrl,sourceLicense:'Official Oregon Open Data cannabis business licenses and endorsements; active retail licenses only.',imageryStatus:readiness(latitude,longitude)});}if(!rows.length)throw new Error('Oregon OLCC v3 export returned zero active retail records; refusing an unverified import.');return rows;}
+async function fetchOregon():Promise<CandidateRow[]>{
+ const sourceUrl='https://data.oregon.gov/d/q32u-cmam';
+ const endpoints=[
+  {url:'https://data.oregon.gov/api/v3/views/q32u-cmam/export.csv?accessType=DOWNLOAD',kind:'csv' as const},
+  {url:'https://data.oregon.gov/api/views/q32u-cmam/rows.csv?accessType=DOWNLOAD',kind:'csv' as const},
+  {url:'https://data.oregon.gov/resource/q32u-cmam.json?$limit=5000',kind:'json' as const},
+ ];
+ const failures:string[]=[];
+ let rawRecords:Record<string,any>[]=[];
+ for(const endpoint of endpoints){
+  try{
+   const result=await getOfficialText(endpoint.url,endpoint.kind==='csv'?'text/csv,*/*':'application/json,*/*');
+   if(result.status<200||result.status>=300){failures.push(`${new URL(endpoint.url).pathname}: HTTP ${result.status}`);continue;}
+   if(endpoint.kind==='csv'){
+    rawRecords=csvRecords(result.text);
+   }else{
+    const parsed=JSON.parse(result.text);
+    rawRecords=Array.isArray(parsed)?parsed:[];
+   }
+   if(rawRecords.length)break;
+   failures.push(`${new URL(endpoint.url).pathname}: zero rows via ${result.transport}`);
+  }catch(error){
+   failures.push(`${new URL(endpoint.url).pathname}: ${error instanceof Error?error.message:String(error)}`);
+  }
+ }
+ if(!rawRecords.length)throw new Error(`Could not connect to Oregon OLCC official data after ${endpoints.length} official endpoints. ${failures.join(' | ')}`);
+
+ const rows:CandidateRow[]=[];
+ for(const raw of rawRecords){
+  const r=normalizeObject(raw),type=pick(r,['licensetype','type']),status=pick(r,['status','licensestatus']),expired=pick(r,['licenseexpired','expired']);
+  if(!/retail/i.test(type))continue;
+  if(status&&!/active|current|issued/i.test(status))continue;
+  if(/yes|true|expired|inactive|revoked|surrendered/i.test(expired))continue;
+  const name=pick(r,['businessname','tradename','businesslicenses','licenseename','name']),
+        licenseNumber=pick(r,['licensenumber','license','licenseid']),
+        addressRaw=pick(r,['physicaladdress','premiseaddress','address']),
+        city=pick(r,['city','physicalcity','premisecity']);
+  const latitude=coord(r.latitude),longitude=coord(r.longitude);
+  if(!name)continue;
+  rows.push({name,streetAddress:addressRaw||undefined,city:city||undefined,region:'Oregon',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Oregon OLCC Open Data',sourceUrl,sourceLicense:'Official Oregon Open Data cannabis business licenses and endorsements; active retail licenses only.',imageryStatus:readiness(latitude,longitude)});
+ }
+ if(!rows.length)throw new Error(`Oregon OLCC official data returned ${rawRecords.length} rows but zero active retail records; refusing an unverified import.`);
+ return rows;
+}
 async function fetchMassachusetts():Promise<CandidateRow[]>{const sourceUrl='https://masscannabiscontrol.com/open-data/data-catalog/';const data:any=await getJson('https://masscannabiscontrol.com/resource/l_licenses_commence_ops.json');return(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).filter(r=>/marijuana retailer/i.test(pick(r,['licensetype']))).map(r=>{const latitude=coord(r.latitude??r.establishmentlatitude),longitude=coord(r.longitude??r.establishmentlongitude);return{name:pick(r,['dbaname','businessname','establishmentname']),streetAddress:pick(r,['establishmentaddress1','businessaddress1'])||undefined,city:pick(r,['establishmentcity','businesscity'])||undefined,region:'Massachusetts',country:'USA',latitude,longitude,licenseNumber:pick(r,['licensenumber','licensenumberbase'])||undefined,dataSource:'Massachusetts CCC Commence Operations',sourceUrl,sourceLicense:'Official Massachusetts Cannabis Control Commission open data; adult-use Marijuana Retailer licenses.',imageryStatus:readiness(latitude,longitude)};}).filter(r=>r.name);}
 async function fetchNevada():Promise<CandidateRow[]>{const sourceUrl='https://ccb.nv.gov/list-of-licensees/',html=await getHtml(sourceUrl,'Nevada CCB'),plain=html.replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s+/g,' '),rows:CandidateRow[]=[];const re=/([A-Z0-9][A-Z0-9 '&.!/()-]{2,80})\s*[–-]\s*([^|]{5,120}?)\s*[–-]\s*(Adult Use|Medical Only)\s*\|?\s*(\d{15,25})/gi;let m:RegExpExecArray|null;while((m=re.exec(plain))!==null)rows.push({name:m[1].trim(),streetAddress:m[2].trim(),region:'Nevada',country:'USA',licenseNumber:m[4],dataSource:'Nevada CCB Licensed Retail Locations',sourceUrl,sourceLicense:'Official Nevada Cannabis Compliance Board public retail-location list.',imageryStatus:'missing_coordinates'});return rows;}
 async function fetchWashington():Promise<CandidateRow[]>{const sourceUrl='https://data.wa.gov/d/brpd-b6zd',data:any=await getJson('https://data.wa.gov/resource/brpd-b6zd.json?$limit=50000');return(Array.isArray(data)?data:[]).map((raw:any)=>normalizeObject(raw)).map(r=>{const geo=point(r.location??r.geolocation??r.point??r.geocodedcolumn),latitude=coord(r.latitude??r.lat)??geo.latitude,longitude=coord(r.longitude??r.lng??r.lon)??geo.longitude,licenseNumber=pick(r,['licensenumber','license','licenseid','licenseidentifier','ubi']);return{name:pick(r,['tradename','businessname','businesslegalname','companyname','licenseename','name'])||`Washington Cannabis Renewal ${licenseNumber}`,streetAddress:pick(r,['streetaddress','address','premiseaddress','locationaddress','physicaladdress'])||undefined,city:pick(r,['city','premisecity','locationcity'])||undefined,region:'Washington',country:'USA',latitude,longitude,licenseNumber:licenseNumber||undefined,dataSource:'Washington LCB Cannabis Renewal Open Data',sourceUrl,sourceLicense:'Official Washington State Liquor and Cannabis Board Cannabis Renewal dataset.',imageryStatus:readiness(latitude,longitude)};}).filter(r=>r.name);}
