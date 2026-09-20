@@ -6,13 +6,14 @@ type OpenNowEventDetail={enabled:boolean;openIds:string[]};
 
 export default function MapOpenNowFilter(){
  useEffect(()=>{
-  let disposed=false,enabled=false,loading=false,openIds:string[]=[],frame=0;
+  let disposed=false,enabled=false,loading=false,openIds:string[]=[],frame=0,selectedRegion='all',selectedRegionCount:number|null=null;
 
   const broadcast=()=>window.dispatchEvent(new CustomEvent<OpenNowEventDetail>('geoweedo:open-now',{detail:{enabled,openIds}}));
   const updateButton=()=>{
    const button=document.querySelector<HTMLButtonElement>('[data-geoweedo-open-now]');
    if(!button)return;
-   const nextText=loading?'Open now…':enabled?`✓ Open now (${openIds.length})`:'Open now';
+   const activeCount=selectedRegionCount==null?openIds.length:selectedRegionCount;
+   const nextText=loading?'Open now…':enabled?`✓ Open now (${activeCount})`:'Open now';
    if(button.textContent!==nextText)button.textContent=nextText;
    button.setAttribute('aria-pressed',String(enabled));
    button.disabled=loading;
@@ -62,6 +63,14 @@ export default function MapOpenNowFilter(){
    updateButton();
   };
 
+  const onRegionCounts=(event:Event)=>{
+   const detail=(event as CustomEvent<{region?:string;enabledCount?:number}>).detail;
+   selectedRegion=String(detail?.region||'all');
+   selectedRegionCount=Number.isFinite(Number(detail?.enabledCount))?Number(detail.enabledCount):null;
+   updateButton();
+  };
+  window.addEventListener('geoweedo:map-region-counts',onRegionCounts as EventListener);
+
   const schedule=()=>{
    if(disposed||frame)return;
    frame=window.requestAnimationFrame(()=>{frame=0;ensureButton();});
@@ -70,7 +79,7 @@ export default function MapOpenNowFilter(){
   observer.observe(document.body,{childList:true,subtree:true});
   schedule();
   return()=>{
-   disposed=true;observer.disconnect();if(frame)window.cancelAnimationFrame(frame);
+   disposed=true;observer.disconnect();window.removeEventListener('geoweedo:map-region-counts',onRegionCounts as EventListener);if(frame)window.cancelAnimationFrame(frame);
    enabled=false;openIds=[];broadcast();
    document.querySelector('[data-geoweedo-open-now]')?.remove();
   };
