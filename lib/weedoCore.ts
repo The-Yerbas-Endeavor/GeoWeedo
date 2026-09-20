@@ -224,7 +224,7 @@ export function findCanonicalProductMatch(input: {
     const candidateReasons: string[] = [];
 
     if (candidateProduct === product) { score += 60; candidateReasons.push('exact normalized product name'); }
-    else if (candidateProduct.includes(product) || product.includes(candidateProduct)) { score += 38; candidateReasons.push('close product name'); }
+    else if (candidateProduct.includes(product) || product.includes(candidateProduct)) { score += brand && candidateBrand === brand ? 55 : 38; candidateReasons.push('close product name'); }
 
     if (brand && candidateBrand === brand) { score += 25; candidateReasons.push('exact normalized brand'); }
     else if (brand && candidateBrand && (candidateBrand.includes(brand) || brand.includes(candidateBrand))) { score += 12; candidateReasons.push('close brand'); }
@@ -304,7 +304,7 @@ export function reconcileMenuProductMatches(limit = 200) {
     JOIN dispensaries d ON d.id=m.dispensary_id
     WHERE mi.active=1 AND m.active=1 AND d.active=1
       AND mi.product_id IS NULL
-      AND COALESCE(mi.match_review_status,'')=''
+      AND COALESCE(mi.match_review_status,'') IN ('','unmatched')
     ORDER BY COALESCE(mi.source_updated_at,mi.updated_at,mi.created_at) DESC
     LIMIT ?
   `).all(Math.max(1,Math.min(1000,Math.floor(limit)))) as any[];
