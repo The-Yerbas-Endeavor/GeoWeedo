@@ -20,14 +20,25 @@ const STYLE:StyleSpecification={
 };
 
 function brandedPin(){
- const el=document.createElement('img');
- el.src='/assets/geoweedo/geoweedo-map-marker.png';
- el.alt='';
- el.draggable=false;
- el.style.width='48px';
- el.style.height='48px';
- el.style.objectFit='contain';
- el.style.filter='drop-shadow(0 4px 6px rgba(0,0,0,.55))';
+ const el=document.createElement('div');
+ el.setAttribute('aria-hidden','true');
+ el.style.width='42px';
+ el.style.height='52px';
+ el.style.display='grid';
+ el.style.placeItems='center';
+ el.style.borderRadius='50% 50% 50% 0';
+ el.style.transform='rotate(-45deg)';
+ el.style.background='#2f9d78';
+ el.style.border='2px solid rgba(255,255,255,.9)';
+ el.style.boxShadow='0 5px 14px rgba(0,0,0,.45)';
+ const leaf=document.createElement('span');
+ leaf.textContent='✦';
+ leaf.style.transform='rotate(45deg)';
+ leaf.style.color='#fff';
+ leaf.style.fontSize='19px';
+ leaf.style.fontWeight='900';
+ leaf.style.lineHeight='1';
+ el.appendChild(leaf);
  return el;
 }
 
