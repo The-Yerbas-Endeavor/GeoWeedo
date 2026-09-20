@@ -99,13 +99,9 @@ export async function POST(request: NextRequest) {
     }, { status: 409, headers: { 'Cache-Control': 'no-store, max-age=0' } });
   }
 
-  const results = await mapWithConcurrency(selected, 5, async (item) => {
+  const lookupResults = await mapWithConcurrency(selected, 3, async (item) => {
     const checkedAt = new Date().toISOString();
 
-    // The State location manager performs a final readiness call immediately
-    // before promotion. If an admin already selected/confirmed Street View,
-    // that call must be idempotent: do not replace the confirmed panorama with
-    // a fresh nearby lookup that may resolve a different image.
     const alreadyAdminConfirmed =
       explicitAdminConfirmation &&
       !requestedPhotoId &&
@@ -113,7 +109,7 @@ export async function POST(request: NextRequest) {
       /^ADMIN_(?:SELECTED|CONFIRMED)_STREET_VIEW/.test(String(item.imageryMessage || ''));
 
     if (alreadyAdminConfirmed) {
-      return item;
+      return { item, patch: null as null | Partial<typeof item> };
     }
 
     try {
@@ -129,27 +125,53 @@ export async function POST(request: NextRequest) {
       const adminSelected = Boolean(explicitAdminConfirmation && requestedPhotoId && hasUsablePhoto);
       const adminConfirmed = Boolean(explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
       const playable = automaticPlayable || adminConfirmed || adminSelected;
-      return await updateCandidate(item.id, {
-        imageryStatus: playable ? 'coverage' : 'no_coverage',
-        imageryCount: photos.length,
-        imageryCheckedAt: checkedAt,
-        imageryMessage: adminSelected
-          ? `ADMIN_SELECTED_STREET_VIEW · ${result.provider} · Admin selected and confirmed Street View image ${selectedPhoto?.id} for gameplay. Starting view ${selectedPhoto?.id}.`
-          : automaticPlayable
-            ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
-            : adminConfirmed
-              ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
-              : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
-      });
+      return {
+        item,
+        patch: {
+          imageryStatus: playable ? 'coverage' as const : 'no_coverage' as const,
+          imageryCount: photos.length,
+          imageryCheckedAt: checkedAt,
+          imageryMessage: adminSelected
+            ? `ADMIN_SELECTED_STREET_VIEW · ${result.provider} · Admin selected and confirmed Street View image ${selectedPhoto?.id} for gameplay. Starting view ${selectedPhoto?.id}.`
+            : automaticPlayable
+              ? `Street View · ${result.provider} · Grade ${result.quality?.grade || 'A'}: ${result.quality?.reason || 'Gameplay-ready imagery.'}${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+              : adminConfirmed
+                ? `ADMIN_CONFIRMED_STREET_VIEW · ${result.provider} · Admin confirmed Street View readiness from State location manager.${selectedPhoto?.id ? ` Starting view ${selectedPhoto.id}.` : ''}`
+                : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
+        },
+      };
     } catch (error) {
-      return await updateCandidate(item.id, {
-        imageryStatus: 'error', imageryCount: 0, imageryCheckedAt: checkedAt,
-        imageryMessage: error instanceof Error ? error.message : 'Street View quality lookup failed.',
-      });
+      return {
+        item,
+        patch: {
+          imageryStatus: 'error' as const,
+          imageryCount: 0,
+          imageryCheckedAt: checkedAt,
+          imageryMessage: error instanceof Error ? error.message : 'Street View quality lookup failed.',
+        },
+      };
     }
+  });
 
-    return null;
-  }).then(items=>items.filter(Boolean));
+  const results = [];
+  for (const outcome of lookupResults) {
+    if (!outcome.patch) {
+      results.push(outcome.item);
+      continue;
+    }
+    try {
+      const updated = await updateCandidate(outcome.item.id, outcome.patch);
+      if (updated) results.push(updated);
+    } catch (error) {
+      const fallback = await updateCandidate(outcome.item.id, {
+        imageryStatus: 'error',
+        imageryCount: 0,
+        imageryCheckedAt: new Date().toISOString(),
+        imageryMessage: error instanceof Error ? `Candidate update failed: ${error.message}` : 'Candidate update failed.',
+      }).catch(() => null);
+      if (fallback) results.push(fallback);
+    }
+  }
 
   const refreshed = await listCandidates();
   const approvedAfter = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
