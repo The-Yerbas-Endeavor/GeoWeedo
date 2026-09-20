@@ -30,6 +30,7 @@ export default function HomeClient({initialApprovedDispensaries}:Props){
 
  useEffect(()=>{fetch('/api/map-candidates',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(d=>{setMapCandidates(Array.isArray(d.candidates)?d.candidates:[]);setMapStats(d.stats&&typeof d.stats==='object'?d.stats:null);}).catch(()=>{setMapCandidates([]);setMapStats(null);});fetch('/api/rewards/policy',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(d=>setRewardPolicy({...DEFAULT_REWARD_POLICY,...d})).catch(()=>setRewardPolicy(DEFAULT_REWARD_POLICY));},[]);
  useEffect(()=>{const onOpenNow=(event:Event)=>{const detail=(event as CustomEvent<OpenNowEventDetail>).detail;if(detail?.enabled)setOpenNowIds(new Set((detail.openIds||[]).map(value=>String(value))));else setOpenNowIds(null);};window.addEventListener('geoweedo:open-now',onOpenNow as EventListener);return()=>window.removeEventListener('geoweedo:open-now',onOpenNow as EventListener);},[]);
+ useEffect(()=>{const onBrowseListOpen=()=>setHomeCardOpen(false);window.addEventListener('geoweedo:browse-list-open',onBrowseListOpen);return()=>window.removeEventListener('geoweedo:browse-list-open',onBrowseListOpen);},[]);
 
  const playableLocations=useMemo(()=>approvedDispensaries.filter(item=>item.active&&item.gameplayEnabled!==false&&item.verified&&item.imageryPhotoId),[approvedDispensaries]);
  const rounds=started?gameRounds:playableLocations;
