@@ -19,6 +19,20 @@ function needsImageryCheck(item: { imageryStatus?: string }) {
   return !item.imageryStatus || item.imageryStatus === 'unchecked' || item.imageryStatus === 'error' || item.imageryStatus === 'missing_coordinates';
 }
 
+async function mapWithConcurrency<T,R>(items:T[],concurrency:number,worker:(item:T,index:number)=>Promise<R>){
+  const results=new Array<R>(items.length);
+  let next=0;
+  async function run(){
+    while(true){
+      const index=next++;
+      if(index>=items.length)return;
+      results[index]=await worker(items[index],index);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(Math.max(1,concurrency),items.length)},()=>run()));
+  return results;
+}
+
 function enrichmentApprovedIds() {
   const db = getDatabase();
   try {
@@ -85,9 +99,7 @@ export async function POST(request: NextRequest) {
     }, { status: 409, headers: { 'Cache-Control': 'no-store, max-age=0' } });
   }
 
-  const results = [];
-
-  for (const item of selected) {
+  const results = await mapWithConcurrency(selected, 5, async (item) => {
     const checkedAt = new Date().toISOString();
 
     // The State location manager performs a final readiness call immediately
@@ -101,8 +113,7 @@ export async function POST(request: NextRequest) {
       /^ADMIN_(?:SELECTED|CONFIRMED)_STREET_VIEW/.test(String(item.imageryMessage || ''));
 
     if (alreadyAdminConfirmed) {
-      results.push(item);
-      continue;
+      return item;
     }
 
     try {
@@ -118,7 +129,7 @@ export async function POST(request: NextRequest) {
       const adminSelected = Boolean(explicitAdminConfirmation && requestedPhotoId && hasUsablePhoto);
       const adminConfirmed = Boolean(explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
       const playable = automaticPlayable || adminConfirmed || adminSelected;
-      results.push(await updateCandidate(item.id, {
+      return await updateCandidate(item.id, {
         imageryStatus: playable ? 'coverage' : 'no_coverage',
         imageryCount: photos.length,
         imageryCheckedAt: checkedAt,
@@ -131,12 +142,14 @@ export async function POST(request: NextRequest) {
               : `Not gameplay quality: ${result.quality?.reason || result.message || 'No playable Street View imagery found.'}`,
       }));
     } catch (error) {
-      results.push(await updateCandidate(item.id, {
+      return await updateCandidate(item.id, {
         imageryStatus: 'error', imageryCount: 0, imageryCheckedAt: checkedAt,
         imageryMessage: error instanceof Error ? error.message : 'Street View quality lookup failed.',
       }));
     }
-  }
+
+    return null;
+  }).then(items=>items.filter(Boolean));
 
   const refreshed = await listCandidates();
   const approvedAfter = source === 'enrichment_approved' ? enrichmentApprovedIds() : null;
