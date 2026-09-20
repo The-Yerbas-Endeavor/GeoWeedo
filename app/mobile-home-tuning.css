@@ -193,3 +193,100 @@
     border-radius:16px!important;
   }
 }
+
+
+.map-first-home .map-browser-radius-control{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 12px;
+  flex:0 0 auto;
+  border-bottom:1px solid rgba(255,255,255,.1);
+  background:rgba(12,22,16,.98);
+}
+.map-first-home .map-browser-radius-control>div:first-child{
+  display:grid;
+  gap:1px;
+  min-width:90px;
+}
+.map-first-home .map-browser-radius-control>div:first-child strong{
+  font-size:11px;
+  color:var(--text);
+}
+.map-first-home .map-browser-radius-control>div:first-child span{
+  font-size:10px;
+  color:var(--muted);
+}
+.map-first-home .map-browser-radius-presets{
+  display:flex;
+  gap:4px;
+  margin-left:auto;
+}
+.map-first-home .map-browser-radius-presets button{
+  min-width:34px;
+  height:30px;
+  padding:0 7px;
+  border:1px solid rgba(126,217,87,.2);
+  border-radius:9px;
+  background:rgba(126,217,87,.06);
+  color:var(--text);
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+.map-first-home .map-browser-radius-presets button.active{
+  background:#7ed957;
+  color:#071007;
+  border-color:#7ed957;
+}
+.map-first-home .map-browser-radius-control label{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  color:var(--muted);
+  font-size:10px;
+}
+.map-first-home .map-browser-radius-control label>span{display:none}
+.map-first-home .map-browser-radius-control input{
+  width:54px;
+  height:30px;
+  padding:0 5px;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:9px;
+  background:rgba(0,0,0,.28);
+  color:var(--text);
+  font:inherit;
+  font-size:11px;
+  text-align:center;
+}
+
+@media (max-width:650px){
+  .map-first-home .map-browser-radius-control{
+    display:grid;
+    grid-template-columns:minmax(82px,1fr) auto;
+    gap:7px 9px;
+    padding:8px 10px!important;
+  }
+  .map-first-home .map-browser-radius-control>div:first-child{
+    min-width:0;
+  }
+  .map-first-home .map-browser-radius-presets{
+    margin-left:0;
+    justify-content:flex-end;
+  }
+  .map-first-home .map-browser-radius-presets button{
+    min-width:34px;
+    height:32px;
+  }
+  .map-first-home .map-browser-radius-control label{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:auto 58px auto;
+    justify-content:end;
+  }
+  .map-first-home .map-browser-radius-control label>span{display:inline}
+  .map-first-home .map-browser-radius-control input{
+    width:58px;
+    height:31px;
+  }
+}
