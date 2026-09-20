@@ -62,8 +62,9 @@ export default function BrowseCountryPartition(){
           const detail=`${country} · ${count.toLocaleString()} ${scope==='enabled'?'enabled':'mapped'}`;
           list.appendChild(heading(continent,detail));for(const item of items)list.appendChild(item);
         }
-        const panelHead=document.querySelector('.map-browser-panel-head strong');
-        if(panelHead){
+        const panel=document.querySelector<HTMLElement>('.map-browser-panel');
+        const panelHead=panel?.querySelector('.map-browser-panel-head strong');
+        if(panelHead&&panel?.dataset.nearbyActive!=='1'){
           if(regionFiltered){
             panelHead.textContent=`${scopedTotal.toLocaleString()} ${scope==='enabled'?'enabled dispensar':'mapped location'}${scopedTotal===1?(scope==='enabled'?'y':''):(scope==='enabled'?'ies':'s')} · ${selectedRegion}`;
           }else{
