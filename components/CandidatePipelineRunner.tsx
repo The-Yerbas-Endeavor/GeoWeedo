@@ -6,6 +6,16 @@ type Candidate = { id: string; imageryStatus?: string; imageryMessage?: string }
 type CandidateSource = 'coordinate_ready' | 'enrichment_approved';
 type CleanupStatus = { legacyKartaview: number; totalApproved: number };
 
+async function readApiJson(response:Response,label:string){
+  const text=await response.text();
+  if(!text.trim())throw new Error(`${label} returned HTTP ${response.status} with an empty response. The server or proxy may have timed out; retry the batch.`);
+  try{return JSON.parse(text);}
+  catch{
+    const preview=text.replace(/\s+/g,' ').trim().slice(0,180);
+    throw new Error(`${label} returned HTTP ${response.status} with a non-JSON response${preview?`: ${preview}`:''}.`);
+  }
+}
+
 export default function CandidatePipelineRunner() {
   const [busy, setBusy] = useState(false);
   const [cleanupBusy, setCleanupBusy] = useState(false);
@@ -18,7 +28,7 @@ export default function CandidatePipelineRunner() {
   async function refreshPlayable() {
     try {
       const response = await fetch('/api/dispensaries', { cache: 'no-store' });
-      const data = await response.json();
+      const data = await readApiJson(response,'Playable-location refresh');
       const count = response.ok && Array.isArray(data.dispensaries) ? data.dispensaries.length : 0;
       setPlayable(count);
       return count;
@@ -31,7 +41,7 @@ export default function CandidatePipelineRunner() {
     try {
       const response = await fetch('/api/admin/dispensaries/street-view-cleanup', { cache: 'no-store' });
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
-      const data = await response.json();
+      const data = await readApiJson(response,'Street View cleanup status');
       if (response.ok) setCleanupStatus({ legacyKartaview: Number(data.legacyKartaview || 0), totalApproved: Number(data.totalApproved || 0) });
     } catch {}
   }
@@ -48,7 +58,7 @@ export default function CandidatePipelineRunner() {
         body: JSON.stringify({ limit: 10 }),
       });
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
-      const data = await response.json();
+      const data = await readApiJson(response,'Street View cleanup');
       if (!response.ok) throw new Error(data.error || 'Street View cleanup failed.');
       setCleanupMessage(`Checked ${Number(data.checked || 0)}: ${Number(data.upgraded || 0)} upgraded to Google, ${Number(data.kept || 0)} kept on fallback, ${Number(data.failed || 0)} failed. ${Number(data.remaining || 0)} legacy gameplay record${Number(data.remaining || 0) === 1 ? '' : 's'} remain.`);
       await refreshCleanupStatus();
@@ -79,7 +89,7 @@ export default function CandidatePipelineRunner() {
           body: JSON.stringify({ limit: 10, source }),
         });
         if (checkResponse.status === 401) { window.location.href = '/admin/login'; return; }
-        const checked = await checkResponse.json();
+        const checked = await readApiJson(checkResponse,`Imagery batch ${batch}`);
         if (!checkResponse.ok) throw new Error(checked.error || 'Imagery check failed.');
 
         const results = (Array.isArray(checked.results) ? checked.results : []).filter(Boolean) as Candidate[];
@@ -103,7 +113,7 @@ export default function CandidatePipelineRunner() {
             body: JSON.stringify({ ids: eligibleIds, action: 'approve' }),
           });
           if (approveResponse.status === 401) { window.location.href = '/admin/login'; return; }
-          const approved = await approveResponse.json();
+          const approved = await readApiJson(approveResponse,`Promotion batch ${batch}`);
           if (!approveResponse.ok) throw new Error(approved.error || 'Gameplay promotion failed.');
           totalPromoted += Number(approved.promoted || 0);
           totalSkipped += Number(approved.skipped || 0);
