@@ -18,3 +18,22 @@ body:not(.geoweedo-home-browse-ready) .map-first-home .map-browser-panel{visibil
   .map-first-home .home-play-card.home-play-card-promo .game-selector-card{min-height:70px;padding:9px 10px}
   .map-first-home .home-play-card.home-play-card-promo .home-promo-stat{min-height:68px}
 }
+
+@media(min-width:651px){
+  .map-first-home .map-browser-panel.map-browser-panel-centered{
+    left:50%!important;
+    right:auto!important;
+    top:50%!important;
+    bottom:auto!important;
+    transform:translate(-50%,-50%)!important;
+    width:min(700px,calc(100vw - 64px))!important;
+    max-height:min(72vh,720px)!important;
+    overflow:hidden!important;
+    border-radius:24px!important;
+  }
+  .map-first-home .map-browser-panel.map-browser-panel-centered .map-browser-list{
+    display:block!important;
+    overflow-y:auto!important;
+    min-height:0;
+  }
+}
