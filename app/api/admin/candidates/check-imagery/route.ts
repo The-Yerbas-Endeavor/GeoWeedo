@@ -61,7 +61,7 @@ function enrichmentApprovedIds() {
 
 export async function POST(request: NextRequest) {
   if (!getAdminFromRequest(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  const body = await request.json().catch(() => ({});
+  const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
   const requestedPhotoId = String(body?.selectedPhotoId || '').trim();
   const source = body?.source === 'enrichment_approved' ? 'enrichment_approved' : 'coordinate_ready';
