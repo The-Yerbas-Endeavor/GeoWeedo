@@ -58,6 +58,7 @@ function centerBrowsePanel(){
       return;
     }
     panel.dataset.userExpanded='1';
+    panel.classList.add('map-browser-panel-centered');
     panel.classList.remove('map-browser-panel-search-minimized','map-browser-panel-dragging');
     panel.setAttribute('aria-label','Browse dispensaries');
     if(window.innerWidth>650){
