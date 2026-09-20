@@ -37,3 +37,17 @@ body:not(.geoweedo-home-browse-ready) .map-first-home .map-browser-panel{visibil
     min-height:0;
   }
 }
+
+.map-first-home .map-browser-panel .map-browser-panel-controls{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.map-first-home .map-browser-panel .map-browser-panel-controls button{display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.07);color:#f4f7f4;font-size:18px;line-height:1;cursor:pointer}
+.map-first-home .map-browser-panel .map-browser-panel-controls button:hover,.map-first-home .map-browser-panel .map-browser-panel-controls button:focus-visible{background:rgba(103,214,110,.16);outline:1px solid rgba(103,214,110,.45)}
+.map-first-home .map-browser-panel.map-browser-panel-minimized{width:min(440px,calc(100vw - 36px))!important;max-height:86px!important;overflow:hidden!important}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-list{display:none!important}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-head{padding:12px 14px!important;border-bottom:0!important}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-hint{display:block}
+.map-first-home .map-browser-panel.map-browser-panel-user-positioned .map-browser-panel-head{cursor:grab}
+.map-first-home .map-browser-panel.map-browser-panel-dragging .map-browser-panel-head{cursor:grabbing!important}
+@media(max-width:650px){
+  .map-first-home .map-browser-panel.map-browser-panel-minimized{left:12px!important;right:12px!important;top:auto!important;bottom:12px!important;width:auto!important;transform:none!important;max-height:82px!important}
+  .map-first-home .map-browser-panel .map-browser-panel-controls{gap:4px}
+}
