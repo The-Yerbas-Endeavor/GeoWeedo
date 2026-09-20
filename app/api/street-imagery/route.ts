@@ -101,14 +101,22 @@ async function lookupKartaview(lat: number, lng: number, approvedPhotoId: string
     if (!photos.length) photos = nearby;
   }
 
+  // A specifically requested KartaView photo may live outside page 1 of a
+  // long sequence. Keep the directly fetched target in the working set so
+  // validation/promotion never mistakes an existing selected image for a
+  // missing one just because it was outside the sequence page/window.
+  if (target && !photos.some((photo) => photo.id === target!.id)) photos.push(target);
+
   photos.sort((a, b) => a.sequenceIndex - b.sequenceIndex);
   let targetIndex = target ? photos.findIndex((photo) => photo.id === target!.id) : -1;
   if (targetIndex < 0) targetIndex = photos.reduce((best, photo, index) => distanceKm(origin, photo) < distanceKm(origin, photos[best]) ? index : best, 0);
   const quality = gradeImagery(photos[targetIndex], photos);
   const start = Math.max(0, targetIndex - 12);
   const end = Math.min(photos.length, targetIndex + 13);
-  const windowed = photos.slice(start, end);
-  return { provider: 'kartaview' as const, photos: windowed, initialIndex: Math.max(0, targetIndex - start), selectedPhotoId: approvedPhotoId || target?.id || null, attribution: 'KartaView contributors', quality };
+  let windowed = photos.slice(start, end);
+  if (target && !windowed.some((photo) => photo.id === target!.id)) windowed = [target, ...windowed].slice(0, 25);
+  const selectedIndex = target ? windowed.findIndex((photo) => photo.id === target!.id) : -1;
+  return { provider: 'kartaview' as const, photos: windowed, initialIndex: selectedIndex >= 0 ? selectedIndex : Math.max(0, targetIndex - start), selectedPhotoId: approvedPhotoId || target?.id || null, attribution: 'KartaView contributors', quality };
 }
 
 async function getGoogleMetadata(apiKey: string, params: { pano?: string; lat?: number; lng?: number }) {
