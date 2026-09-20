@@ -45,13 +45,6 @@ function selectedStartingPhotoId(message?:string){
  const match=String(message||'').match(/Starting view\s+([^\s.]+)\./i);
  return match?.[1]||'';
 }
-function selectedProviderFromMessage(message?:string){
- const text=String(message||'').toLowerCase();
- if(text.includes('· google ·')||text.includes('google street view'))return'google' as const;
- if(text.includes('· kartaview ·')||text.includes('kartaview'))return'kartaview' as const;
- return null;
-}
-
 async function fillCandidateLocality(item:DispensaryCandidate){
  if(!Number.isFinite(item.latitude)||!Number.isFinite(item.longitude))return item;
  if(item.city?.trim()&&item.postalCode?.trim())return item;
@@ -68,6 +61,13 @@ async function fillCandidateLocality(item:DispensaryCandidate){
  }catch{return item;}
 }
 
+function distanceMeters(a:{lat:number;lng:number},b:{lat:number;lng:number}){
+ const radius=6371008.8,toRad=(value:number)=>value*Math.PI/180;
+ const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng),lat1=toRad(a.lat),lat2=toRad(b.lat);
+ const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+ return radius*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+
 async function promoteCandidate(original:DispensaryCandidate){
  let item=original;
  if(Number.isFinite(item.latitude)&&Number.isFinite(item.longitude))item=await fillCandidateLocality(item);
@@ -78,7 +78,6 @@ async function promoteCandidate(original:DispensaryCandidate){
  if(item.imageryStatus!=='coverage')return{ok:false,reason:'imagery_not_playable'};
  try{
   const requestedPhotoId=selectedStartingPhotoId(item.imageryMessage);
-  const selectedProvider=selectedProviderFromMessage(item.imageryMessage);
   const adminSelected=String(item.imageryMessage||'').startsWith('ADMIN_SELECTED_STREET_VIEW');
   const adminConfirmed=/^ADMIN_(?:CONFIRMED|SELECTED)_STREET_VIEW/.test(String(item.imageryMessage||''));
 
@@ -86,23 +85,45 @@ async function promoteCandidate(original:DispensaryCandidate){
    if(item.postalCode?.trim())getDatabase().prepare('UPDATE dispensaries SET postal_code=? WHERE id=?').run(item.postalCode.trim(),dispensaryId);
   };
 
-  if(adminSelected&&selectedProvider==='google'&&requestedPhotoId){
-   const photo={id:requestedPhotoId,sequenceId:requestedPhotoId,lat:item.latitude as number,lng:item.longitude as number,heading:0,fieldOfView:360,projection:'GOOGLE_PANORAMA',imageUrl:`/api/street-imagery/google-image?pano=${encodeURIComponent(requestedPhotoId)}&heading=0`};
-   const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:'google' as any,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
-   savePostalCode(saved.id);
-   await updateCandidate(item.id,{status:'approved',imageryMessage:`Promoted to gameplay with admin-selected Street View · google. Starting view ${photo.id}.`});
-   return{ok:true,dispensaryId:saved.id};
-  }
-
   const inspection=await lookupGameplayStreetView(item.latitude as number,item.longitude as number,requestedPhotoId||undefined);
   const photos=Array.isArray(inspection.photos)?inspection.photos:[];
   const defaultPhoto=photos[Math.max(0,Number(inspection.initialIndex||0))]||photos[0];
-  const photo=requestedPhotoId?photos.find(candidate=>String(candidate.id)===requestedPhotoId)||defaultPhoto:defaultPhoto;
-  if((!inspection.quality?.playable&&!adminConfirmed)||!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
-  if(requestedPhotoId&&String(photo.id)!==requestedPhotoId)return{ok:false,reason:'selected_imagery_no_longer_available'};
+  const exactPhoto=requestedPhotoId?photos.find(candidate=>String(candidate.id)===requestedPhotoId):undefined;
+  const photo=exactPhoto||defaultPhoto;
+  if(!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
+
+  const replacedGooglePano=Boolean(
+   requestedPhotoId &&
+   String(photo.id)!==requestedPhotoId &&
+   inspection.provider==='google' &&
+   inspection.recoveredFromStalePano
+  );
+  const replacementDistanceMeters=replacedGooglePano
+   ? distanceMeters({lat:item.latitude as number,lng:item.longitude as number},{lat:Number(photo.lat),lng:Number(photo.lng)})
+   : 0;
+
+  if(requestedPhotoId&&String(photo.id)!==requestedPhotoId&&!replacedGooglePano){
+   return{ok:false,reason:'selected_imagery_no_longer_available'};
+  }
+  if(replacedGooglePano&&replacementDistanceMeters>100){
+   return{ok:false,reason:'stale_google_panorama_replacement_too_far'};
+  }
+  if(replacedGooglePano&&!inspection.quality?.playable){
+   return{ok:false,reason:'stale_google_panorama_replacement_not_playable'};
+  }
+  if(!replacedGooglePano&&!inspection.quality?.playable&&!adminConfirmed){
+   return{ok:false,reason:'imagery_revalidation_failed'};
+  }
   const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:inspection.provider,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId||undefined,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
   savePostalCode(saved.id);
-  await updateCandidate(item.id,{status:'approved',imageryMessage:adminConfirmed?`Promoted to gameplay with admin-confirmed Street View · ${inspection.provider}. Starting view ${photo.id}.`:`Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`});
+  const promotionMessage=replacedGooglePano
+   ? `Promoted to gameplay with refreshed Google Street View · stale panorama ${requestedPhotoId} replaced by ${photo.id} · ${Math.round(replacementDistanceMeters)} m from location. Starting view ${photo.id}.`
+   : adminSelected
+     ? `Promoted to gameplay with admin-selected Street View · ${inspection.provider}. Starting view ${photo.id}.`
+     : adminConfirmed
+       ? `Promoted to gameplay with admin-confirmed Street View · ${inspection.provider}. Starting view ${photo.id}.`
+       : `Promoted to gameplay with Street View · ${inspection.provider} · Grade ${inspection.quality?.grade||'A'}: ${inspection.quality?.reason||'Gameplay-ready imagery.'} Starting view ${photo.id}.`;
+  await updateCandidate(item.id,{status:'approved',imageryMessage:promotionMessage});
   return{ok:true,dispensaryId:saved.id};
  }catch{return{ok:false,reason:'imagery_revalidation_error'};}
 }
