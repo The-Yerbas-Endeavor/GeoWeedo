@@ -15,6 +15,20 @@ function automatedEnrichmentApprovedIds(){
  }catch{return new Set<string>();}
 }
 
+async function mapWithConcurrency<T,R>(items:T[],concurrency:number,worker:(item:T,index:number)=>Promise<R>){
+ const results=new Array<R>(items.length);
+ let next=0;
+ async function run(){
+  while(true){
+   const index=next++;
+   if(index>=items.length)return;
+   results[index]=await worker(items[index],index);
+  }
+ }
+ await Promise.all(Array.from({length:Math.min(Math.max(1,concurrency),items.length)},()=>run()));
+ return results;
+}
+
 export async function GET(request:NextRequest){
  if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});
  if(request.nextUrl.searchParams.get('summary')==='1'){
@@ -110,6 +124,6 @@ export async function DELETE(request:NextRequest){
 
 export async function PATCH(request:NextRequest){if(!getAdminFromRequest(request))return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);
  if(body?.action==='pipeline-audit'||body?.action==='pipeline-cleanup'){return NextResponse.json(await auditCandidatePipeline({apply:body.action==='pipeline-cleanup'}));}
- if(Array.isArray(body?.ids)){const ids=Array.from(new Set<string>(body.ids.map((v:unknown)=>String(v)).filter(Boolean))).slice(0,5000),action=String(body.action||'');if(!ids.length)return NextResponse.json({error:'At least one candidate id is required.'},{status:400});if(!['approve','reject'].includes(action))return NextResponse.json({error:'Bulk action must be approve or reject.'},{status:400});const all=await listCandidates(),selected=all.filter(i=>ids.includes(i.id));let updated=0,skipped=0,promoted=0;const skippedReasons:Record<string,number>={};for(const item of selected){if(action==='approve'){const result=await promoteCandidate(item);if(result.ok){updated++;promoted++;continue;}skipped++;const reason=result.reason||'not_eligible';skippedReasons[reason]=(skippedReasons[reason]||0)+1;continue;}if(await updateCandidate(item.id,{status:'rejected'}))updated++;}return NextResponse.json({action,requested:ids.length,matched:selected.length,updated,promoted,skipped,skippedReasons});}
+ if(Array.isArray(body?.ids)){const ids=Array.from(new Set<string>(body.ids.map((v:unknown)=>String(v)).filter(Boolean))).slice(0,5000),action=String(body.action||'');if(!ids.length)return NextResponse.json({error:'At least one candidate id is required.'},{status:400});if(!['approve','reject'].includes(action))return NextResponse.json({error:'Bulk action must be approve or reject.'},{status:400});const all=await listCandidates(),selected=all.filter(i=>ids.includes(i.id));let updated=0,skipped=0,promoted=0;const skippedReasons:Record<string,number>={};const outcomes=await mapWithConcurrency(selected,5,async item=>{if(action==='approve')return await promoteCandidate(item);const candidate=await updateCandidate(item.id,{status:'rejected'});return candidate?{ok:true,dispensaryId:''}:{ok:false,reason:'update_failed'};});for(const result of outcomes){if(result.ok){updated++;if(action==='approve')promoted++;continue;}skipped++;const reason=result.reason||'not_eligible';skippedReasons[reason]=(skippedReasons[reason]||0)+1;}return NextResponse.json({action,requested:ids.length,matched:selected.length,updated,promoted,skipped,skippedReasons});}
  if(!body?.id)return NextResponse.json({error:'Candidate id is required.'},{status:400});const id=String(body.id),all=await listCandidates(),current=all.find(i=>i.id===id);if(!current)return NextResponse.json({error:'Candidate not found.'},{status:404});if(body.status==='approved'){const result=await promoteCandidate(current);if(!result.ok)return NextResponse.json({error:`Candidate cannot enter gameplay: ${result.reason}.`},{status:400});return NextResponse.json({candidate:(await listCandidates()).find(i=>i.id===id),promoted:true});}const patch:Partial<DispensaryCandidate>={};if(['candidate','reviewing','rejected'].includes(body.status))patch.status=body.status as DispensaryCandidate['status'];if(body.name!==undefined)patch.name=String(body.name).trim();if(body.streetAddress!==undefined)patch.streetAddress=String(body.streetAddress).trim()||undefined;if(body.city!==undefined)patch.city=String(body.city).trim()||undefined;if(body.region!==undefined)patch.region=String(body.region).trim()||undefined;if(body.country!==undefined)patch.country=String(body.country).trim()||undefined;if(body.website!==undefined)patch.website=String(body.website).trim()||undefined;if(body.licenseNumber!==undefined)patch.licenseNumber=String(body.licenseNumber).trim()||undefined;if(body.sourceUrl!==undefined)patch.sourceUrl=String(body.sourceUrl).trim()||undefined;if(body.sourceLicense!==undefined)patch.sourceLicense=String(body.sourceLicense).trim()||undefined;if(body.latitude!==undefined&&Number.isFinite(Number(body.latitude)))patch.latitude=Number(body.latitude);if(body.longitude!==undefined&&Number.isFinite(Number(body.longitude)))patch.longitude=Number(body.longitude);return NextResponse.json({candidate:await updateCandidate(id,patch)});
 }
