@@ -7,6 +7,7 @@ export type ProductBrowseFilters = {
   sort?: string | null;
   page?: number | null;
   pageSize?: number | null;
+  scope?: 'evidence' | 'all' | null;
 };
 
 export type ProductBrowseSummary = {
@@ -29,7 +30,9 @@ export type ProductBrowseSummary = {
 export type ProductBrowseCatalog = {
   products: ProductBrowseSummary[];
   totalProducts: number;
+  allProducts: number;
   matchingProducts: number;
+  scope: 'evidence' | 'all';
   scannedProducts: number;
   uploadedProducts: number;
   menuLinkedProducts: number;
@@ -68,7 +71,9 @@ function emptyCatalog(filters: ProductBrowseFilters, pageSize = pageSizeFor(filt
   return {
     products: [],
     totalProducts: 0,
+    allProducts: 0,
     matchingProducts: 0,
+    scope: filters.scope === 'all' ? 'all' : 'evidence',
     scannedProducts: 0,
     uploadedProducts: 0,
     menuLinkedProducts: 0,
@@ -102,9 +107,9 @@ function productSortSql(value: unknown) {
 }
 
 function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrowseCatalog {
-  // The master cannabis_products table is backend reference data. A product becomes
-  // public only after GeoWeedo has actually resolved it from a scan or an approved
-  // COA upload. This read path never creates/backfills schema.
+  // Default public browsing is evidence-driven (resolved scans + approved COA uploads).
+  // The full reference catalog is also publicly browseable when the caller explicitly
+  // selects scope='all'. This read path never creates/backfills schema.
   const db = getDatabase();
   const productColumns = tableColumns(db, 'cannabis_products');
   const batchColumns = tableColumns(db, 'cannabis_batches');
@@ -134,6 +139,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
       : "AND COALESCE(mi.match_confidence,'') <> 'possible'"
     : '';
 
+  const scope: 'evidence' | 'all' = filters.scope === 'all' ? 'all' : 'evidence';
   const evidenceSelects: string[] = [];
   if (hasScans) evidenceSelects.push('SELECT product_id FROM cannabis_qr_scans WHERE product_id IS NOT NULL');
   if (hasApprovedUploads) {
@@ -142,9 +148,11 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
       JOIN cannabis_coa_uploads cu ON cu.submission_id=s.id
       WHERE s.product_id IS NOT NULL AND s.status='approved' AND cu.status='approved'`);
   }
-  if (!evidenceSelects.length) return emptyCatalog(filters);
+  if (scope === 'evidence' && !evidenceSelects.length) return emptyCatalog(filters);
 
-  const publicCte = `WITH public_product_ids AS (${evidenceSelects.join(' UNION ')})`;
+  const publicCte = scope === 'all'
+    ? 'WITH public_product_ids AS (SELECT id AS product_id FROM cannabis_products)'
+    : `WITH public_product_ids AS (${evidenceSelects.join(' UNION ')})`;
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
   const type = String(filters.type || '').trim();
@@ -190,6 +198,8 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     JOIN public_product_ids public ON public.product_id=b.product_id
     WHERE b.verified=1
   `).get() as any;
+
+  const allProducts = Number((db.prepare('SELECT COUNT(*) AS n FROM cannabis_products').get() as any)?.n || 0);
 
   const scannedProducts = hasScans
     ? Number((db.prepare(`SELECT COUNT(DISTINCT product_id) AS n FROM cannabis_qr_scans WHERE product_id IS NOT NULL`).get() as any)?.n || 0)
@@ -318,7 +328,9 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
       latestEvidenceAt: row.latest_record || null,
     })),
     totalProducts: Number(stats?.product_count || 0),
+    allProducts,
     matchingProducts,
+    scope,
     scannedProducts,
     uploadedProducts,
     menuLinkedProducts,
