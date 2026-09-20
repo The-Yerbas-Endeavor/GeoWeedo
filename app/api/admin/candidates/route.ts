@@ -92,32 +92,34 @@ async function promoteCandidate(original:DispensaryCandidate){
   const photo=exactPhoto||defaultPhoto;
   if(!photo?.id||!photo.imageUrl)return{ok:false,reason:'imagery_revalidation_failed'};
 
-  const replacedGooglePano=Boolean(
-   requestedPhotoId &&
-   String(photo.id)!==requestedPhotoId &&
-   inspection.provider==='google' &&
-   inspection.recoveredFromStalePano
-  );
-  const replacementDistanceMeters=replacedGooglePano
+  const selectedImageChanged=Boolean(requestedPhotoId&&String(photo.id)!==requestedPhotoId);
+  const replacementDistanceMeters=selectedImageChanged
    ? distanceMeters({lat:item.latitude as number,lng:item.longitude as number},{lat:Number(photo.lat),lng:Number(photo.lng)})
    : 0;
+  const safeReplacement=Boolean(
+   selectedImageChanged &&
+   Number.isFinite(replacementDistanceMeters) &&
+   replacementDistanceMeters<=100 &&
+   inspection.quality?.playable
+  );
 
-  if(requestedPhotoId&&String(photo.id)!==requestedPhotoId&&!replacedGooglePano){
-   return{ok:false,reason:'selected_imagery_no_longer_available'};
+  // Stored Street View IDs are hints, not permanent identities. Prefer the
+  // exact saved image when it still exists, but do not strand a good location
+  // when the provider rotates a pano/sequence or the lookup returns a newer
+  // nearby image. A replacement must still pass normal gameplay quality and
+  // remain within 100 m of the dispensary coordinates.
+  if(selectedImageChanged&&!safeReplacement){
+   if(replacementDistanceMeters>100)return{ok:false,reason:'replacement_imagery_too_far'};
+   if(!inspection.quality?.playable)return{ok:false,reason:'replacement_imagery_not_playable'};
+   return{ok:false,reason:'replacement_imagery_not_safe'};
   }
-  if(replacedGooglePano&&replacementDistanceMeters>100){
-   return{ok:false,reason:'stale_google_panorama_replacement_too_far'};
-  }
-  if(replacedGooglePano&&!inspection.quality?.playable){
-   return{ok:false,reason:'stale_google_panorama_replacement_not_playable'};
-  }
-  if(!replacedGooglePano&&!inspection.quality?.playable&&!adminConfirmed){
+  if(!selectedImageChanged&&!inspection.quality?.playable&&!adminConfirmed){
    return{ok:false,reason:'imagery_revalidation_failed'};
   }
   const saved=await saveApprovedDispensary({name:item.name,slug:`${item.name}-${item.city}-${item.id.slice(-8)}`,streetAddress:item.streetAddress,city:item.city,region:item.region,country:item.country||'USA',latitude:item.latitude as number,longitude:item.longitude as number,website:item.website,dataSource:item.dataSource,sourceUrl:item.sourceUrl,sourceLicense:item.sourceLicense,recreational:false,medical:false,imageryProvider:inspection.provider,imageryPhotoId:photo.id,imagerySequenceId:photo.sequenceId||undefined,imageryLatitude:photo.lat,imageryLongitude:photo.lng,imageryHeading:photo.heading,imageryFieldOfView:photo.fieldOfView,imageryProjection:photo.projection,imageryUrl:photo.imageUrl,active:true});
   savePostalCode(saved.id);
-  const promotionMessage=replacedGooglePano
-   ? `Promoted to gameplay with refreshed Google Street View · stale panorama ${requestedPhotoId} replaced by ${photo.id} · ${Math.round(replacementDistanceMeters)} m from location. Starting view ${photo.id}.`
+  const promotionMessage=safeReplacement
+   ? `Promoted to gameplay with refreshed Street View · ${inspection.provider} · previous image ${requestedPhotoId} replaced by ${photo.id} · ${Math.round(replacementDistanceMeters)} m from location. Starting view ${photo.id}.`
    : adminSelected
      ? `Promoted to gameplay with admin-selected Street View · ${inspection.provider}. Starting view ${photo.id}.`
      : adminConfirmed
