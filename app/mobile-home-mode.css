@@ -9,10 +9,14 @@
   body[data-mobile-home-mode="choose"] .map-first-home .map-location-card,
   body[data-mobile-home-mode="choose"] .map-first-home .map-streetview-panel,
   body[data-mobile-home-mode="choose"] .map-first-home .map-layers-panel,
-  body[data-mobile-home-mode="choose"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"]{display:none!important}
+  body[data-mobile-home-mode="choose"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"],
+  body[data-mobile-home-mode="choose"] .map-first-home > .home-map-stage > button[aria-label="Explore GeoWeedo"],
+  body[data-mobile-home-mode="choose"] .map-first-home > .home-map-stage > button[aria-label="Choose a GeoWeedo game"]{display:none!important}
 
   body[data-mobile-home-mode="search"] .map-first-home .home-play-card,
-  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"]{display:none!important}
+  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"],
+  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Explore GeoWeedo"],
+  body[data-mobile-home-mode="search"] .map-first-home > .home-map-stage > button[aria-label="Choose a GeoWeedo game"]{display:none!important}
 
   body[data-mobile-home-mode="play"] .map-first-home .map-browser-tools,
   body[data-mobile-home-mode="play"] .map-first-home .map-browser-panel,
@@ -36,7 +40,9 @@
 
   .mobile-selected-dispensary-info{position:fixed;z-index:75;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));display:block;max-width:min(55vw,310px);min-height:42px;padding:11px 14px;border:1px solid rgba(103,214,110,.42);border-radius:999px;background:rgba(11,14,12,.94);color:var(--text);font-size:12px;font-weight:900;line-height:20px;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 8px 25px rgba(0,0,0,.38);backdrop-filter:blur(10px)}
 
-  body[data-mobile-home-mode="play"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"]{display:block!important;position:fixed!important;z-index:74!important;left:auto!important;right:max(10px,env(safe-area-inset-right))!important;bottom:max(10px,env(safe-area-inset-bottom))!important;margin:0!important}
+  body[data-mobile-home-mode="play"] .map-first-home > .home-map-stage > button[aria-label="Show game intro"],
+  body[data-mobile-home-mode="play"] .map-first-home > .home-map-stage > button[aria-label="Explore GeoWeedo"],
+  body[data-mobile-home-mode="play"] .map-first-home > .home-map-stage > button[aria-label="Choose a GeoWeedo game"]{display:block!important;position:fixed!important;z-index:74!important;left:auto!important;right:max(10px,env(safe-area-inset-right))!important;bottom:max(10px,env(safe-area-inset-bottom))!important;margin:0!important}
 
   body:not(:has(.map-first-home)) .mobile-home-mode-ui{display:none}
 }
