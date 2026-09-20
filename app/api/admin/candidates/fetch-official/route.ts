@@ -90,33 +90,74 @@ async function getOfficialText(url:string,accept:string){
   catch(secondError){throw new Error(`fetch failed (${firstError instanceof Error?firstError.message:String(firstError)}); IPv4 fallback failed (${secondError instanceof Error?secondError.message:String(secondError)})`);}
  }
 }
+
+async function postOfficialExport(url:string){
+ const body=JSON.stringify({orderingSpecifier:'discard'});
+ try{
+  const response=await fetch(url,{
+   method:'POST',
+   headers:{
+    Accept:'text/csv,*/*',
+    'Content-Type':'application/json',
+    'User-Agent':'GeoWeedo/0.9 (https://geoweedo.com)'
+   },
+   body,
+   cache:'no-store',
+   signal:AbortSignal.timeout(60000)
+  });
+  return{
+   status:response.status,
+   text:await response.text(),
+   contentType:String(response.headers.get('content-type')||''),
+   url:response.url||url,
+   transport:'post-export'
+  };
+ }catch(error){
+  throw new Error(`POST export failed: ${error instanceof Error?error.message:String(error)}`);
+ }
+}
 async function fetchCalifornia():Promise<CandidateRow[]>{const sourceUrl='https://search.cannabis.ca.gov/';const api='https://as-dcc-pub-cann-w-p-002.azurewebsites.net/licenses/filteredsearch';const all:any[]=[];let page=1,hasNext=true;while(hasNext&&page<=100){const body:any=await getJson(`${api}?pageSize=500&pageNumber=${page}&searchQuery=`);const data=Array.isArray(body?.data)?body.data:[];all.push(...data);hasNext=Boolean(body?.metadata?.hasNext);page++;}if(hasNext)throw new Error('California DCC sync stopped after 100 pages; refusing a partial import.');return all.map(raw=>normalizeObject(raw)).filter(r=>{const lic=pick(r,['licensenumber','license']),type=pick(r,['licensetype','type']),status=pick(r,['licensestatus','status']);return(/^c10-/i.test(lic)||(/retailer/i.test(type)&&!/nonstorefront|non-storefront|delivery/i.test(type)))&&(/^active\b/i.test(status)||/about to expire/i.test(status));}).map(r=>{const geo=point(r.georeference??r.location??r.geolocation??r.point),latitude=coord(r.premiselatitude??r.latitude)??geo.latitude,longitude=coord(r.premiselongitude??r.longitude)??geo.longitude;return{name:pick(r,['businessdbaname','dbaname','businesslegalname','legalbusinessname','businessname','name']),streetAddress:pick(r,['premisestreetaddress','streetaddress','premiseaddress','address'])||undefined,city:pick(r,['premisecity','city'])||undefined,region:'California',country:'USA',latitude,longitude,website:pick(r,['businesswebsite','website','url'])||undefined,licenseNumber:pick(r,['licensenumber','license'])||undefined,dataSource:'California DCC Unified License Search',sourceUrl,sourceLicense:'Official California Department of Cannabis Control public license-search data; active storefront retailers only.',imageryStatus:readiness(latitude,longitude)};}).filter(r=>r.name);}
 async function fetchOregon():Promise<CandidateRow[]>{
  const sourceUrl='https://data.oregon.gov/d/q32u-cmam';
- const endpoints=[
-  {url:'https://data.oregon.gov/api/v3/views/q32u-cmam/export.csv?accessType=DOWNLOAD',kind:'csv' as const},
-  {url:'https://data.oregon.gov/api/views/q32u-cmam/rows.csv?accessType=DOWNLOAD',kind:'csv' as const},
-  {url:'https://data.oregon.gov/resource/q32u-cmam.json?$limit=5000',kind:'json' as const},
- ];
+ const exportUrl='https://data.oregon.gov/api/v3/views/q32u-cmam/export.csv';
  const failures:string[]=[];
  let rawRecords:Record<string,any>[]=[];
- for(const endpoint of endpoints){
-  try{
-   const result=await getOfficialText(endpoint.url,endpoint.kind==='csv'?'text/csv,*/*':'application/json,*/*');
-   if(result.status<200||result.status>=300){failures.push(`${new URL(endpoint.url).pathname}: HTTP ${result.status}`);continue;}
-   if(endpoint.kind==='csv'){
-    rawRecords=csvRecords(result.text);
-   }else{
-    const parsed=JSON.parse(result.text);
-    rawRecords=Array.isArray(parsed)?parsed:[];
+
+ try{
+  const result=await postOfficialExport(exportUrl);
+  if(result.status>=200&&result.status<300){
+   rawRecords=csvRecords(result.text);
+   if(!rawRecords.length)failures.push(`POST /api/v3/views/q32u-cmam/export.csv: zero parsed rows; content-type ${result.contentType||'unknown'}; ${result.text.length} bytes`);
+  }else failures.push(`POST /api/v3/views/q32u-cmam/export.csv: HTTP ${result.status}`);
+ }catch(error){
+  failures.push(`POST /api/v3/views/q32u-cmam/export.csv: ${error instanceof Error?error.message:String(error)}`);
+ }
+
+ if(!rawRecords.length){
+  const endpoints=[
+   {url:'https://data.oregon.gov/api/v3/views/q32u-cmam/export.csv?accessType=DOWNLOAD',kind:'csv' as const},
+   {url:'https://data.oregon.gov/api/views/q32u-cmam/rows.csv?accessType=DOWNLOAD',kind:'csv' as const},
+   {url:'https://data.oregon.gov/resource/q32u-cmam.json?$limit=5000',kind:'json' as const},
+  ];
+  for(const endpoint of endpoints){
+   try{
+    const result=await getOfficialText(endpoint.url,endpoint.kind==='csv'?'text/csv,*/*':'application/json,*/*');
+    if(result.status<200||result.status>=300){failures.push(`${new URL(endpoint.url).pathname}: HTTP ${result.status}`);continue;}
+    if(endpoint.kind==='csv'){
+     rawRecords=csvRecords(result.text);
+    }else{
+     const parsed=JSON.parse(result.text);
+     rawRecords=Array.isArray(parsed)?parsed:[];
+    }
+    if(rawRecords.length)break;
+    failures.push(`${new URL(endpoint.url).pathname}: zero rows via ${result.transport}; content-type ${result.contentType||'unknown'}; ${result.text.length} bytes`);
+   }catch(error){
+    failures.push(`${new URL(endpoint.url).pathname}: ${error instanceof Error?error.message:String(error)}`);
    }
-   if(rawRecords.length)break;
-   failures.push(`${new URL(endpoint.url).pathname}: zero rows via ${result.transport}`);
-  }catch(error){
-   failures.push(`${new URL(endpoint.url).pathname}: ${error instanceof Error?error.message:String(error)}`);
   }
  }
- if(!rawRecords.length)throw new Error(`Could not connect to Oregon OLCC official data after ${endpoints.length} official endpoints. ${failures.join(' | ')}`);
+
+ if(!rawRecords.length)throw new Error(`Could not read Oregon OLCC official data. ${failures.join(' | ')}`);
 
  const rows:CandidateRow[]=[];
  for(const raw of rawRecords){
