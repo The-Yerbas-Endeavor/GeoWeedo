@@ -6,7 +6,7 @@ type OpenNowEventDetail={enabled:boolean;openIds:string[]};
 
 export default function MapOpenNowFilter(){
  useEffect(()=>{
-  let disposed=false,enabled=false,loading=false,openIds:string[]=[],frame=0,selectedRegion='all',selectedRegionCount:number|null=null;
+  let disposed=false,enabled=false,loading=false,openIds:string[]=[],frame=0,selectedRegionCount:number|null=null;
 
   const broadcast=()=>window.dispatchEvent(new CustomEvent<OpenNowEventDetail>('geoweedo:open-now',{detail:{enabled,openIds}}));
   const updateButton=()=>{
@@ -65,7 +65,6 @@ export default function MapOpenNowFilter(){
 
   const onRegionCounts=(event:Event)=>{
    const detail=(event as CustomEvent<{region?:string;enabledCount?:number}>).detail;
-   selectedRegion=String(detail?.region||'all');
    selectedRegionCount=Number.isFinite(Number(detail?.enabledCount))?Number(detail.enabledCount):null;
    updateButton();
   };
