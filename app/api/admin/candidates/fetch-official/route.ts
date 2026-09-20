@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import https from 'node:https';
+import * as https from 'node:https';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { importCandidates } from '@/lib/candidateStore';
 import { getDatabase } from '@/lib/sqlite';
