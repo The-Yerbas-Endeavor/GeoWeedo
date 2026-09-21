@@ -73,7 +73,7 @@ function ProductAwareMap(props:Props){
  },[activeTextQuery,exactProductId,props.locations,results,unifiedFilterActive]);
  const productCountries=useMemo(()=>new Set(combinedLocations.map(item=>item.country).filter(Boolean)).size,[combinedLocations]);
  const selectedMatch=resultMap.get(selectedLocationId);
- const inputValue=exactProductId?(exactProductLabel||'Selected Weedo Facts product'):query;
+ const inputValue=exactProductId?(exactProductLabel||'Selected GeoWeedo Facts product'):query;
  const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
  const searchControl=toolbar?createPortal(<div className="map-unified-search" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
    <div className="map-unified-search-shell" style={{position:'relative',display:'flex',alignItems:'center',width:'100%',minWidth:0}}>
