@@ -71,7 +71,9 @@ export default function AdminSponsorshipManager(){
    const game=request.gameType||'classic';
    setEditorTab('game');
    setEditingCampaignId(null);
-   setCampaignForm({gameType:game,title:'',geographyType:request.geographyType||'all',geographyValue:request.geographyValue||'',radiusKm:request.radiusKm==null?'25':String(request.radiusKm),source:'manual_invoice',status:'active',startsAt:start,endsAt:addDuration(start,request.durationCode||'week'),amountUsd:''});
+   const requestedProduct=products[game]||DEFAULT_PRODUCTS[game];
+   const requestedCents=request.durationCode==='day'?requestedProduct.dayPriceCents:request.durationCode==='week'?requestedProduct.weekPriceCents:request.durationCode==='month'?requestedProduct.monthPriceCents:undefined;
+   setCampaignForm({gameType:game,title:'',geographyType:request.geographyType||'all',geographyValue:request.geographyValue||'',radiusKm:request.radiusKm==null?'25':String(request.radiusKm),source:'manual_invoice',status:'active',startsAt:start,endsAt:addDuration(start,request.durationCode||'week'),amountUsd:requestedCents==null?'':String(requestedCents/100)});
    setStatus('Loaded '+gameLabel(game)+' sponsorship request. Review details, then save to approve it.');
   }
   window.scrollTo({top:0,behavior:'smooth'});
