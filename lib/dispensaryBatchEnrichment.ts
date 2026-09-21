@@ -48,13 +48,13 @@ function resolveReviewLocationId(row:any,payload:any){
  return null;
 }
 
-export function getBatchScopeOptions(){ensureSchema();const db=getDatabase();const rows=[...(db.prepare(`SELECT country,region FROM dispensaries WHERE active=1`).all() as any[]),...(db.prepare(`SELECT country,region FROM dispensary_candidates WHERE status<>'rejected'`).all() as any[])];const countries=Array.from(new Set(rows.map(r=>String(r.country||'').trim()).filter(Boolean))).sort();const regions=Array.from(new Set(rows.map(r=>String(r.region||'').trim()).filter(Boolean))).sort();return{countries,regions};}
+export function getBatchScopeOptions(){ensureSchema();const db=getDatabase();const rows=[...(db.prepare(`SELECT country,region FROM dispensaries WHERE active=1`).all() as any[]),...(db.prepare(`SELECT country,region FROM dispensary_candidates WHERE status NOT IN ('rejected','approved')`).all() as any[])];const countries=Array.from(new Set(rows.map(r=>String(r.country||'').trim()).filter(Boolean))).sort();const regions=Array.from(new Set(rows.map(r=>String(r.region||'').trim()).filter(Boolean))).sort();return{countries,regions};}
 
 export function createBatchJob(actorId:string,scope:Scope,autoApply=true){
  ensureSchema();
  const db=getDatabase(),id=`batch-${crypto.randomUUID()}`,stamp=now(),canUsePlaces=googlePlacesConfigured();
  const approved=db.prepare(`SELECT id,name,'dispensary' record_type,country,region,website,phone,verified FROM dispensaries WHERE active=1`).all() as any[];
- const candidates=db.prepare(`SELECT id,name,'candidate' record_type,country,region,website,phone,0 verified FROM dispensary_candidates WHERE status<>'rejected'`).all() as any[];
+ const candidates=db.prepare(`SELECT id,name,'candidate' record_type,country,region,website,phone,0 verified FROM dispensary_candidates WHERE status NOT IN ('rejected','approved')`).all() as any[];
  const records=[...approved,...candidates].filter(r=>(!scope.locationId||String(r.id)===String(scope.locationId))&&(!scope.country||String(r.country||'')===scope.country)&&(!scope.region||String(r.region||'')===scope.region)&&(!scope.recordType||scope.recordType==='all'||(scope.recordType==='gameplay'?r.record_type==='dispensary'&&Number(r.verified)===1:r.record_type===scope.recordType))&&(scope.locationId?true:profileMissing(String(r.id),scope.missing||'any',r)));
  db.exec('BEGIN IMMEDIATE');
  try{
