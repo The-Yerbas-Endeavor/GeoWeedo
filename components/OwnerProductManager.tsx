@@ -110,33 +110,33 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
     <p style={{marginTop:0}}>Add products sold at this dispensary, link them to GeoWeedo Products when possible, and keep retail price, package and availability current.</p>
     {message&&<div className="owner-message" style={{margin:'12px 0'}}>{message}</div>}
 
-    <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(320px,.9fr)',gap:18,alignItems:'start'}}>
-      <div style={{display:'grid',gap:10}}>
-        <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'baseline'}}><strong>Current menu ({items.length})</strong><button type="button" className="owner-primary" style={{width:'auto',padding:'8px 12px'}} onClick={reset}>+ Add product</button></div>
-        {loading?<small>Loading products…</small>:items.length===0?<div style={{border:'1px dashed var(--border)',borderRadius:12,padding:16,color:'var(--muted)'}}>No products yet. Add the first product for this shop.</div>:items.map(item=><div key={item.id} style={{border:'1px solid var(--border)',borderRadius:12,padding:12,display:'grid',gridTemplateColumns:'1fr auto',gap:12,alignItems:'start',background:editingId===item.id?'rgba(103,214,110,.06)':'rgba(255,255,255,.015)'}}>
-          <div><strong style={{display:'block'}}>{item.item_name}</strong><small>{[item.brand_name,item.canonical_category_name,item.package_size,item.variant].filter(Boolean).join(' · ')||'Owner-reported product'}</small><div style={{marginTop:6,fontSize:13}}><strong>{money(item.price_cents)}</strong> · {(item.inventory_status||'unknown').replaceAll('_',' ')} {item.product_id&&<span style={{marginLeft:8,color:'#67d66e'}}>GeoWeedo Product linked</span>}</div></div>
-          <div style={{display:'flex',gap:7}}><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item)}>Remove</button></div>
+    <div className="owner-product-layout">
+      <div className="owner-product-menu-column">
+        <div className="owner-product-menu-head"><strong>Current menu ({items.length})</strong><button type="button" className="owner-primary owner-product-add-button" onClick={reset}>+ Add product</button></div>
+        {loading?<small>Loading products…</small>:items.length===0?<div style={{border:'1px dashed var(--border)',borderRadius:12,padding:16,color:'var(--muted)'}}>No products yet. Add the first product for this shop.</div>:items.map(item=><div key={item.id} className={`owner-product-card${editingId===item.id?' is-editing':''}`}>
+          <div className="owner-product-card-copy"><strong>{item.item_name}</strong><small>{[item.brand_name,item.canonical_category_name,item.package_size,item.variant].filter(Boolean).join(' · ')||'Owner-reported product'}</small><div className="owner-product-card-meta"><strong>{money(item.price_cents)}</strong> · {(item.inventory_status||'unknown').replaceAll('_',' ')} {item.product_id&&<span>GeoWeedo Product linked</span>}</div></div>
+          <div className="owner-product-card-actions"><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item)}>Remove</button></div>
         </div>)}
       </div>
 
-      <div style={{border:'1px solid var(--border)',borderRadius:14,padding:14,background:'rgba(255,255,255,.015)'}}>
+      <div className="owner-product-editor">
         <strong style={{display:'block',fontSize:'1.08rem',marginBottom:4}}>{editingId?'Edit product listing':'Add product'}</strong>
         <small style={{display:'block',marginBottom:12}}>Scan the package first for the fastest match, or search GeoWeedo manually. Unknown codes can still be added as owner-reported inventory.</small>
-        <div style={{marginBottom:12}}>
+        <div className="owner-product-scanner">
           <OwnerProductBarcodeScanner disabled={saving||searching} onCode={handleScannedCode} onError={message=>message&&setMessage(message)}/>
           {scanValue?<div style={{marginTop:8,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:10,background:'rgba(103,214,110,.06)',fontSize:12,wordBreak:'break-all'}}><strong>{scanType.toUpperCase()} scanned:</strong> {scanValue}</div>:null}
         </div>
-        <label style={{display:'block'}}>Find existing GeoWeedo Product<div style={{display:'flex',gap:7}}><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void findProducts();}}} placeholder="Product or brand"/><button type="button" onClick={()=>void findProducts()} disabled={searching}>{searching?'Searching…':'Search'}</button></div></label>
+        <label className="owner-product-search-label">Find existing GeoWeedo Product<div className="owner-product-search-row"><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();void findProducts();}}} placeholder="Product or brand"/><button type="button" onClick={()=>void findProducts()} disabled={searching}>{searching?'Searching…':'Search'}</button></div></label>
         {hits.length>0&&<div style={{display:'grid',gap:6,maxHeight:190,overflow:'auto',margin:'8px 0 12px'}}>{hits.map(hit=><button key={hit.id} type="button" onClick={()=>chooseProduct(hit)} style={{textAlign:'left',padding:9,borderRadius:10,border:'1px solid var(--border)',background:form.productId===hit.id?'rgba(103,214,110,.1)':'transparent',color:'inherit'}}><strong>{hit.productName}</strong><br/><small>{[hit.brandName,hit.categoryName].filter(Boolean).join(' · ')}</small></button>)}</div>}
         {form.productId&&<div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center',margin:'8px 0 12px',padding:'8px 10px',borderRadius:10,background:'rgba(103,214,110,.08)'}}><small><strong>Linked:</strong> {linked?.productName||form.itemName}</small><button type="button" onClick={()=>setForm(v=>({...v,productId:''}))}>Unlink</button></div>}
 
-        <div style={{display:'grid',gap:10}}>
+        <div className="owner-product-form">
           <label>Product / listing name<input value={form.itemName} onChange={e=>setForm(v=>({...v,itemName:e.target.value}))} maxLength={240}/></label>
           <label>Brand<input value={form.brandName} onChange={e=>setForm(v=>({...v,brandName:e.target.value}))} maxLength={180}/></label>
           <label>Category<select value={form.categoryId} onChange={e=>setForm(v=>({...v,categoryId:e.target.value}))}><option value="">Other / uncategorized</option>{categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><label>Package size<input value={form.packageSize} onChange={e=>setForm(v=>({...v,packageSize:e.target.value}))} placeholder="3.5 g"/></label><label>Variant<input value={form.variant} onChange={e=>setForm(v=>({...v,variant:e.target.value}))} placeholder="Flavor / format"/></label></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><label>Price (USD)<input inputMode="decimal" value={form.price} onChange={e=>setForm(v=>({...v,price:e.target.value}))} placeholder="29.99"/></label><label>Availability<select value={form.inventoryStatus} onChange={e=>setForm(v=>({...v,inventoryStatus:e.target.value}))}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="out_of_stock">Out of stock</option><option value="unknown">Unknown</option></select></label></div>
-          <div style={{display:'flex',gap:8}}><button className="owner-primary" type="button" disabled={saving} onClick={()=>void save()}>{saving?'Saving…':editingId?'Save changes':'Add to menu'}</button>{editingId&&<button type="button" onClick={reset}>Cancel</button>}</div>
+          <div className="owner-product-form-grid"><label>Package size<input value={form.packageSize} onChange={e=>setForm(v=>({...v,packageSize:e.target.value}))} placeholder="3.5 g"/></label><label>Variant<input value={form.variant} onChange={e=>setForm(v=>({...v,variant:e.target.value}))} placeholder="Flavor / format"/></label></div>
+          <div className="owner-product-form-grid"><label>Price (USD)<input inputMode="decimal" value={form.price} onChange={e=>setForm(v=>({...v,price:e.target.value}))} placeholder="29.99"/></label><label>Availability<select value={form.inventoryStatus} onChange={e=>setForm(v=>({...v,inventoryStatus:e.target.value}))}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="out_of_stock">Out of stock</option><option value="unknown">Unknown</option></select></label></div>
+          <div className="owner-product-save-actions"><button className="owner-primary" type="button" disabled={saving} onClick={()=>void save()}>{saving?'Saving…':editingId?'Save changes':'Add to menu'}</button>{editingId&&<button type="button" onClick={reset}>Cancel</button>}</div>
         </div>
       </div>
     </div>
