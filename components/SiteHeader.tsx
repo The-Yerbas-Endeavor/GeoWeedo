@@ -2,7 +2,7 @@ export default function SiteHeader() {
   const links = [
     ['/how-to-play', 'How to play'],
     ['/leaderboard', 'Leaderboard'],
-    ['/geoweedo-facts', 'GeoWeedo Facts'],
+    ['/facts', 'Scanner'],
     ['/product-chemistry', 'Products'],
     ['/rewards', 'YERB rewards'],
     ['/for-dispensaries', 'For dispensaries'],
