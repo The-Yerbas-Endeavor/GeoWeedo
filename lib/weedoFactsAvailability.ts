@@ -174,9 +174,9 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
   ensureWeedoCoreSchema();
   const db = getDatabase();
   const canonicalProductId = resolveCanonicalProductId(productId, db);
-  repairMergedMenuProductIds(canonicalProductId);
-  repairExplicitOwnerProductLinks(canonicalProductId);
-  refreshStrongMenuLinksForProduct(canonicalProductId);
+  // Public product views are read-only. Expensive menu repair/rematching must
+  // happen during imports, owner edits, or explicit maintenance jobs rather
+  // than every time a shopper or crawler opens a product page.
   const rows = db.prepare(`
     SELECT mi.id AS menu_item_id, mi.product_id, mi.batch_id, mi.item_name, mi.brand_name,
            mi.category, mi.variant, mi.package_size, mi.price_cents, mi.currency,
