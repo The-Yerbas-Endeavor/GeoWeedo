@@ -18,7 +18,7 @@ export default function HuntLeaderboardEnhancer(){
    const statusHost=huntAgain.parentElement;
    if(!statusHost)return;
    if(!statusHost.querySelector('[data-hunt-leaderboard-status]')){
-    const status=document.createElement('div');status.dataset.huntLeaderboardStatus='1';status.style.cssText='display:grid;gap:4px;margin:12px 0;padding:12px 13px;border:1px solid rgba(103,214,110,.24);border-radius:11px;background:rgba(103,214,110,.05);';status.innerHTML='<strong style="color:#67d66e">🏆 Weedo Hunt Leaderboard</strong><span style="font-size:12px;color:#cbd5cd">Open the Hunt board to compare scores and earned YERB.</span>';huntAgain.insertAdjacentElement('beforebegin',status);
+    const status=document.createElement('div');status.dataset.huntLeaderboardStatus='1';status.style.cssText='display:grid;gap:4px;margin:12px 0;padding:12px 13px;border:1px solid rgba(103,214,110,.24);border-radius:11px;background:rgba(103,214,110,.05);';status.innerHTML='<strong style="color:#67d66e">🏆 GeoWeedo Hunt Leaderboard</strong><span style="font-size:12px;color:#cbd5cd">Open the Hunt board to compare scores and earned YERB.</span>';huntAgain.insertAdjacentElement('beforebegin',status);
    }
    if(!statusHost.querySelector('[data-hunt-share-leaderboard]')){
     const button=document.createElement('button');button.type='button';button.dataset.huntShareLeaderboard='1';button.className='secondary full';button.style.marginBottom='8px';button.textContent='Share Result + Leaderboard';button.addEventListener('click',async()=>{
@@ -26,8 +26,8 @@ export default function HuntLeaderboardEnhancer(){
      const rewardText=final.querySelector('span')?.textContent||'';
      const targetName=document.querySelector<HTMLElement>('.weedo-hunt-location-info h2')?.textContent?.replace(/^📍\s*/,'').trim()||'';
      const guesses=document.querySelectorAll('.weedo-hunt-guesses > div').length;
-     const text=`🌿 Weedo Hunt\n⭐ ${scoreText}${guesses?`\n🎯 ${guesses} guess${guesses===1?'':'es'}`:''}${targetName?`\n📍 ${targetName}`:''}${rewardText?`\n🪙 ${rewardText}`:''}\n🏆 ${leaderboardUrl}\n#GeoWeedo`;
-     if(navigator.share){try{await navigator.share({title:'Weedo Hunt',text,url:leaderboardUrl});window.location.href=leaderboardPath;return;}catch(error){if((error as Error)?.name==='AbortError')return;}}
+     const text=`🌿 GeoWeedo Hunt\n⭐ ${scoreText}${guesses?`\n🎯 ${guesses} guess${guesses===1?'':'es'}`:''}${targetName?`\n📍 ${targetName}`:''}${rewardText?`\n🪙 ${rewardText}`:''}\n🏆 ${leaderboardUrl}\n#GeoWeedo`;
+     if(navigator.share){try{await navigator.share({title:'GeoWeedo Hunt',text,url:leaderboardUrl});window.location.href=leaderboardPath;return;}catch(error){if((error as Error)?.name==='AbortError')return;}}
      await copyText(text);window.location.href=leaderboardPath;
     });huntAgain.insertAdjacentElement('beforebegin',button);
    }
