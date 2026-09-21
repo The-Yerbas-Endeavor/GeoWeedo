@@ -122,6 +122,29 @@ export function ensureSponsorshipSchema() {
     CREATE INDEX IF NOT EXISTS sponsor_entitlements_location_idx ON sponsor_entitlements(dispensary_id,status,starts_at,ends_at);
     CREATE INDEX IF NOT EXISTS sponsor_events_location_idx ON sponsor_events(dispensary_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS sponsor_events_business_idx ON sponsor_events(business_id,created_at DESC);
+    CREATE TABLE IF NOT EXISTS sponsor_requests (
+      id TEXT PRIMARY KEY,
+      business_id TEXT NOT NULL,
+      dispensary_id TEXT NOT NULL,
+      owner_user_id TEXT NOT NULL,
+      request_type TEXT NOT NULL,
+      billing_interval TEXT,
+      game_type TEXT,
+      duration_code TEXT,
+      geography_type TEXT NOT NULL DEFAULT 'all',
+      geography_value TEXT,
+      radius_km REAL,
+      preferred_start_at TEXT,
+      note TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by_admin_id TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(business_id) REFERENCES sponsor_businesses(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS sponsor_requests_owner_idx ON sponsor_requests(owner_user_id,dispensary_id,status,created_at DESC);
+    CREATE INDEX IF NOT EXISTS sponsor_requests_status_idx ON sponsor_requests(status,created_at DESC);
   `);
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO sponsor_plans(id,code,name,currency,monthly_price_cents,annual_price_cents,active,created_at,updated_at)
@@ -222,6 +245,110 @@ export function recordSponsorEvent(dispensaryId: string, eventType: SponsorEvent
   return true;
 }
 
+export type SponsorRequest = {
+  id:string;
+  businessId:string;
+  dispensaryId:string;
+  ownerUserId:string;
+  requestType:'featured'|'game';
+  billingInterval:'monthly'|'annual'|null;
+  gameType:'classic'|'daily'|'hunt'|null;
+  durationCode:'day'|'week'|'month'|'year'|null;
+  geographyType:'all'|'country'|'region'|'city'|'radius';
+  geographyValue:string|null;
+  radiusKm:number|null;
+  preferredStartAt:string|null;
+  note:string|null;
+  status:'pending'|'approved'|'rejected'|'cancelled';
+  reviewedByAdminId:string|null;
+  reviewedAt:string|null;
+  createdAt:string;
+  updatedAt:string;
+};
+
+function mapSponsorRequest(row:any):SponsorRequest{
+  return {
+    id:String(row.id),businessId:String(row.business_id),dispensaryId:String(row.dispensary_id),ownerUserId:String(row.owner_user_id),
+    requestType:row.request_type==='game'?'game':'featured',
+    billingInterval:row.billing_interval||null,gameType:row.game_type||null,durationCode:row.duration_code||null,
+    geographyType:row.geography_type||'all',geographyValue:row.geography_value||null,radiusKm:row.radius_km==null?null:Number(row.radius_km),
+    preferredStartAt:row.preferred_start_at||null,note:row.note||null,status:row.status||'pending',
+    reviewedByAdminId:row.reviewed_by_admin_id||null,reviewedAt:row.reviewed_at||null,
+    createdAt:String(row.created_at),updatedAt:String(row.updated_at),
+  };
+}
+
+export function listOwnerSponsorshipRequests(userId:string,dispensaryId:string){
+  ensureSponsorshipSchema();
+  return (getDatabase().prepare(`SELECT * FROM sponsor_requests WHERE owner_user_id=? AND dispensary_id=? ORDER BY created_at DESC`).all(userId,dispensaryId) as any[]).map(mapSponsorRequest);
+}
+
+export function listSponsorshipRequests(status?:string){
+  ensureSponsorshipSchema();
+  const db=getDatabase();
+  const rows=status
+    ? db.prepare(`SELECT * FROM sponsor_requests WHERE status=? ORDER BY created_at ASC`).all(status)
+    : db.prepare(`SELECT * FROM sponsor_requests ORDER BY created_at DESC`).all();
+  return (rows as any[]).map(mapSponsorRequest);
+}
+
+export function createOwnerSponsorshipRequest(userId:string,dispensaryId:string,input:{
+  requestType:'featured'|'game';
+  billingInterval?:'monthly'|'annual'|null;
+  gameType?:'classic'|'daily'|'hunt'|null;
+  durationCode?:'day'|'week'|'month'|'year'|null;
+  geographyType?:'all'|'country'|'region'|'city'|'radius';
+  geographyValue?:string|null;
+  radiusKm?:number|null;
+  preferredStartAt?:string|null;
+  note?:string|null;
+}){
+  ensureSponsorshipSchema();
+  const business=businessForVerifiedOwner(userId,dispensaryId);
+  if(!business)throw new Error('Verified dispensary owner access is required.');
+  const requestType=input.requestType==='game'?'game':'featured';
+  const billingInterval=requestType==='featured'?(input.billingInterval==='annual'?'annual':'monthly'):null;
+  const gameType=requestType==='game'&&['classic','daily','hunt'].includes(String(input.gameType))?String(input.gameType):null;
+  if(requestType==='game'&&!gameType)throw new Error('Choose Classic GeoWeedo, Daily Weedo, or Weedo Hunt.');
+  const durationCode=requestType==='game'&&['day','week','month','year'].includes(String(input.durationCode))?String(input.durationCode):null;
+  if(requestType==='game'&&!durationCode)throw new Error('Choose a sponsorship duration.');
+  const geographyType=['all','country','region','city','radius'].includes(String(input.geographyType))?String(input.geographyType):'all';
+  const geographyValue=geographyType==='all'||geographyType==='radius'?null:String(input.geographyValue||'').trim()||null;
+  const radiusKm=geographyType==='radius'?Number(input.radiusKm||0):null;
+  if(geographyType==='radius'&&(!Number.isFinite(radiusKm)||Number(radiusKm)<=0))throw new Error('Radius sponsorships require a positive radius.');
+  const preferredStartAt=input.preferredStartAt?new Date(input.preferredStartAt):null;
+  if(preferredStartAt&&!Number.isFinite(preferredStartAt.getTime()))throw new Error('Preferred start date is invalid.');
+  const db=getDatabase();
+  const duplicate=db.prepare(`SELECT id FROM sponsor_requests WHERE owner_user_id=? AND dispensary_id=? AND request_type=? AND status='pending' ORDER BY created_at DESC LIMIT 1`).get(userId,dispensaryId,requestType) as {id:string}|undefined;
+  if(duplicate)throw new Error('A pending '+(requestType==='game'?'game sponsorship':'Featured')+' request already exists for this dispensary.');
+  const now=new Date().toISOString(),id=`sponsor-request-${crypto.randomUUID()}`;
+  db.prepare(`INSERT INTO sponsor_requests(id,business_id,dispensary_id,owner_user_id,request_type,billing_interval,game_type,duration_code,geography_type,geography_value,radius_km,preferred_start_at,note,status,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)`).run(
+      id,business.id,dispensaryId,userId,requestType,billingInterval,gameType,durationCode,geographyType,geographyValue,radiusKm,
+      preferredStartAt?preferredStartAt.toISOString():null,String(input.note||'').trim().slice(0,1000)||null,now,now
+    );
+  return mapSponsorRequest(db.prepare('SELECT * FROM sponsor_requests WHERE id=?').get(id));
+}
+
+export function updateOwnerSponsorshipRequestStatus(userId:string,requestId:string,status:'cancelled'){
+  ensureSponsorshipSchema();
+  const db=getDatabase(),now=new Date().toISOString();
+  const row=db.prepare('SELECT * FROM sponsor_requests WHERE id=? AND owner_user_id=? LIMIT 1').get(requestId,userId) as any;
+  if(!row)throw new Error('Sponsorship request not found.');
+  if(row.status!=='pending')throw new Error('Only pending requests can be cancelled.');
+  db.prepare(`UPDATE sponsor_requests SET status=?,updated_at=? WHERE id=?`).run(status,now,requestId);
+  return mapSponsorRequest(db.prepare('SELECT * FROM sponsor_requests WHERE id=?').get(requestId));
+}
+
+export function reviewSponsorshipRequest(requestId:string,status:'approved'|'rejected',adminId:string){
+  ensureSponsorshipSchema();
+  const db=getDatabase(),now=new Date().toISOString();
+  const row=db.prepare('SELECT * FROM sponsor_requests WHERE id=? LIMIT 1').get(requestId) as any;
+  if(!row)throw new Error('Sponsorship request not found.');
+  db.prepare(`UPDATE sponsor_requests SET status=?,reviewed_by_admin_id=?,reviewed_at=?,updated_at=? WHERE id=?`).run(status,adminId,now,now,requestId);
+  return mapSponsorRequest(db.prepare('SELECT * FROM sponsor_requests WHERE id=?').get(requestId));
+}
+
 export function sponsorshipSummaryForOwner(userId: string, dispensaryId: string) {
   ensureSponsorshipSchema();
   expireEndedFeaturedEntitlements();
@@ -248,5 +375,6 @@ export function sponsorshipSummaryForOwner(userId: string, dispensaryId: string)
     plan: { code:'featured', name:'GeoWeedo Featured', currency:'USD', monthlyPriceCents:3900, annualPriceCents:39000 },
     metrics,
     dailyTrend,
+    requests:listOwnerSponsorshipRequests(userId,dispensaryId),
   };
 }
