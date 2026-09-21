@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import DispensaryLogoUploader from '@/components/DispensaryLogoUploader';
-import OwnerProductManager from '@/components/OwnerProductManager';
 
 type SponsorMetrics={pin_impression:number;pin_click:number;listing_view:number;website_click:number;menu_click:number;directions_click:number;game_impression:number;game_completed:number};
 type DailyTrend={date:string;total:number}&SponsorMetrics;
@@ -33,7 +32,7 @@ function MetricBars({metrics}:{metrics:SponsorMetrics}){
   return <div style={{display:'grid',gap:8}}>{METRICS.map(([key,label])=>{const value=metrics[key]||0;return <div key={key} style={{display:'grid',gridTemplateColumns:'140px 1fr 52px',gap:10,alignItems:'center',fontSize:12}}><span>{label}</span><div style={{height:9,borderRadius:999,background:'rgba(255,255,255,.07)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.max(value?4:0,(value/max)*100)}%`,background:'#67d66e',borderRadius:999}}/></div><strong style={{textAlign:'right'}}>{value.toLocaleString()}</strong></div>})}</div>;
 }
 
-export default function OwnerPage({showProducts=true}:{showProducts?:boolean}={}){
+export default function OwnerPage(){
   const[items,setItems]=useState<Owned[]>([]),[selected,setSelected]=useState(''),[loading,setLoading]=useState(true),[message,setMessage]=useState<string|null>(null),[saving,setSaving]=useState(false);
   const[overview,setOverview]=useState(''),[phone,setPhone]=useState(''),[website,setWebsite]=useState(''),[customAmenities,setCustomAmenities]=useState(''),[selectedAmenities,setSelectedAmenities]=useState<string[]>([]),[hours,setHours]=useState<Record<string,string>>({}),[instagram,setInstagram]=useState(''),[facebook,setFacebook]=useState(''),[x,setX]=useState('');
   const current=useMemo(()=>items.find(i=>i.locationId===selected)||null,[items,selected]);
@@ -59,7 +58,7 @@ export default function OwnerPage({showProducts=true}:{showProducts?:boolean}={}
   const trend=current?.sponsorship?.dailyTrend||[];
 
   return <main className="owner-shell">
-    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>{showProducts?'Keep your public listing accurate, add or remove products, manage menu availability, see GeoWeedo activity, and manage Featured visibility from one workspace.':'Keep your public listing accurate, review GeoWeedo activity, manage Featured visibility, and update the public dispensary profile.'}</p></div></header>
+    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>Keep your public listing accurate, review GeoWeedo activity, manage Featured visibility, and update the public dispensary profile.</p></div></header>
     {message&&<div className="owner-message">{message}</div>}
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>Your ownership claim may still be under review. Open the dispensary profile to check its claim status or submit a claim.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
@@ -73,7 +72,6 @@ export default function OwnerPage({showProducts=true}:{showProducts?:boolean}={}
           </>}
           {current.sponsorship?.plan&&<small style={{display:'block',marginTop:14}}>{current.sponsorship.plan.name}: ${(current.sponsorship.plan.monthlyPriceCents/100).toFixed(0)}/month or ${(current.sponsorship.plan.annualPriceCents/100).toFixed(0)}/year. Sponsorship payments are USD-only.</small>}
         </section>
-        {showProducts&&<OwnerProductManager locationId={current.locationId}/>}
         <section className="owner-panel owner-form" id="public-profile">
           <div className="owner-panel-head"><div><span>PUBLIC PROFILE</span><h2>{current.location.name}</h2></div><a href={`/dispensary/${encodeURIComponent(current.locationId)}`} target="_blank" rel="noreferrer">View public profile ↗</a></div>
           <DispensaryLogoUploader locationId={current.locationId}/>
