@@ -90,7 +90,10 @@ export function classifyWeedoScanPayload(value: unknown): WeedoScanPayloadKind {
   return raw.length >= 3 ? 'text' : 'unknown';
 }
 
+let coreSchemaReady = false;
+
 export function ensureWeedoCoreSchema() {
+  if (coreSchemaReady) return getDatabase();
   ensureWeedoFactsSchema();
   ensureWeedoMenuSchema();
   ensureWeedoFactsQrSchema();
@@ -151,6 +154,7 @@ export function ensureWeedoCoreSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_qr_scans_resolution_idx ON cannabis_qr_scans(resolution_status,last_seen_at DESC);
   `);
 
+  coreSchemaReady = true;
   return db;
 }
 
