@@ -467,3 +467,162 @@
     gap:6px;
   }
 }
+
+
+/* Owner sponsorship request workflow */
+.owner-sponsor-actions{
+  display:grid;
+  gap:12px;
+  margin:16px 0 18px;
+  padding:16px;
+  border:1px solid rgba(126,217,87,.18);
+  border-radius:15px;
+  background:rgba(126,217,87,.035);
+}
+.owner-sponsor-status-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+}
+.owner-sponsor-status-row>div:first-child{
+  display:grid;
+  gap:4px;
+}
+.owner-sponsor-status-row>div:first-child>span{
+  color:#83d86a;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.13em;
+}
+.owner-sponsor-status{
+  display:block;
+  font-size:18px;
+}
+.owner-sponsor-status.active{color:#7ee16d}
+.owner-sponsor-status.expired,.owner-sponsor-status.cancelled{color:#9aa69d}
+.owner-sponsor-status-row small{color:#89958c}
+.owner-sponsor-price{
+  display:grid;
+  justify-items:end;
+  gap:2px;
+  white-space:nowrap;
+}
+.owner-sponsor-price>strong{
+  font-size:20px;
+}
+.owner-sponsor-price strong small{
+  font-size:10px;
+  color:#89958c;
+}
+.owner-sponsor-price>span{
+  color:#9cab9f;
+  font-size:11px;
+}
+.owner-sponsor-buttons{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.owner-sponsor-buttons button{
+  min-height:42px;
+}
+.owner-game-request{
+  display:grid;
+  gap:11px;
+  padding:14px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:13px;
+  background:rgba(0,0,0,.16);
+}
+.owner-game-request-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.owner-game-request label{
+  display:grid;
+  gap:5px;
+  min-width:0;
+  color:#dce6de;
+  font-size:12px;
+  font-weight:800;
+}
+.owner-game-request input,
+.owner-game-request select,
+.owner-game-request textarea{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.owner-game-request textarea{
+  min-height:82px;
+  resize:vertical;
+}
+.owner-game-request>small{
+  color:#849087;
+  line-height:1.45;
+}
+.owner-sponsor-requests{
+  display:grid;
+  gap:7px;
+  padding-top:2px;
+}
+.owner-sponsor-request-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:9px 0;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.owner-sponsor-request-row>div{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.owner-sponsor-request-row>div:first-child{
+  display:grid;
+  gap:2px;
+}
+.owner-sponsor-request-row small{
+  color:#849087;
+}
+.owner-sponsor-request-row button{
+  min-height:30px;
+  padding:5px 8px;
+}
+.owner-sponsor-message{
+  padding:9px 11px;
+  border-radius:9px;
+  background:rgba(255,255,255,.04);
+  color:#dce7df;
+  font-size:12px;
+}
+
+@media(max-width:700px){
+  .owner-sponsor-status-row{
+    flex-direction:column;
+  }
+  .owner-sponsor-price{
+    justify-items:start;
+  }
+  .owner-sponsor-buttons{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+  }
+  .owner-sponsor-buttons button{
+    width:100%!important;
+  }
+  .owner-game-request-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .owner-sponsor-request-row{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .owner-sponsor-request-row>div:last-child{
+    width:100%;
+    justify-content:space-between;
+  }
+}
