@@ -155,7 +155,7 @@ export default function AdminHomePage() {
       </article>:null}
 
       {data.scans?<article className={styles.dashboardCard}>
-        <div className={styles.dashboardCardHead}><div><span className={styles.eyebrow}>WEEDO FACTS</span><h2>Scans & products</h2></div><Link href="/admin/products-menus">Open products →</Link></div>
+        <div className={styles.dashboardCardHead}><div><span className={styles.eyebrow}>GEOWEEDO FACTS</span><h2>Scans & products</h2></div><Link href="/admin/products-menus">Open products →</Link></div>
         <div className={styles.dashboardMetrics}>
           <Metric value={data.scans.recentQrCodes} label="QRs seen · 7d"/>
           <Metric value={data.scans.scanEvents} label="Scan events"/>
