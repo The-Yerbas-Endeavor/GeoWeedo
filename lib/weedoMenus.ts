@@ -51,9 +51,12 @@ export type ScanContributionInput = {
   } | null;
 };
 
+let menuSchemaReady = false;
+
 function ensureSchema() {
   ensureWeedoFactsSchema();
   const db = getDatabase();
+  if (menuSchemaReady) return db;
   db.exec(`
     CREATE TABLE IF NOT EXISTS dispensary_menus (
       id TEXT PRIMARY KEY,
@@ -169,7 +172,8 @@ function ensureSchema() {
 
   const menuItemColumns = db.prepare('PRAGMA table_info(dispensary_menu_items)').all() as any[];
   if (!menuItemColumns.some(column => column.name === 'image_url')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN image_url TEXT');
-  ensureProductCategorySchema(db);
+  ensureProductCategorySchema(db, { backfill: false });
+  menuSchemaReady = true;
   return db;
 }
 
