@@ -115,7 +115,7 @@ export default function HomePromoExploreCategories() {
             <span className="home-explore-icon" aria-hidden="true">🎮</span>
             <span className="home-explore-copy">
               <strong>Play GeoWeedo</strong>
-              <small>Classic · GeoWeedo Hunt · Daily · Sponsored Missions</small>
+              <small>Classic GeoWeedo · GeoWeedo Hunt · Daily GeoWeedo · Sponsored Missions</small>
             </span>
             <b>PLAY →</b>
           </button>
