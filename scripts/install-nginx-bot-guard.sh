@@ -86,26 +86,30 @@ EOF
 sudo install -m 0644 "$TMPDIR/server.conf" "$SERVER_SNIPPET"
 
 log "Ensuring the GeoWeedo vhost includes the guard"
-sudo python3 - "$SITE" "$SERVER_SNIPPET" <<'PY'
+sudo python3 - "$SITE" "$SERVER_SNIPPET" "$NGINX_HOST" <<'PY'
 from pathlib import Path
 import re, sys
 
 site = Path(sys.argv[1])
 snippet = sys.argv[2]
-text = site.read_text()
+host = sys.argv[3]
 include = f"    include {snippet};"
 
-if snippet in text:
-    raise SystemExit(0)
+lines = [line for line in site.read_text().splitlines() if snippet not in line]
+out = []
+matched = 0
+pattern = re.compile(r"^\s*server_name\s+[^;]*\b" + re.escape(host) + r"\b[^;]*;\s*$")
 
-host = "geoweedo.com"
-pattern = re.compile(r"(^\s*server_name\s+[^;]*\b" + re.escape(host) + r"\b[^;]*;\s*$)", re.M)
-match = pattern.search(text)
-if not match:
+for line in lines:
+    out.append(line)
+    if pattern.search(line):
+        out.append(include)
+        matched += 1
+
+if not matched:
     raise SystemExit(f"Could not find server_name line for {host} in {site}")
 
-text = text[:match.end()] + "\n" + include + text[match.end():]
-site.write_text(text)
+site.write_text("\n".join(out) + "\n")
 PY
 
 log "Validating nginx"
