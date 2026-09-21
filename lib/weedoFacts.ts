@@ -36,8 +36,11 @@ export type WeedoFactsRecord = {
   source: { type: string; name: string | null; url: string | null; verified: boolean };
 };
 
+let schemaReady = false;
+
 function ensureSchema() {
   const db = getDatabase();
+  if (schemaReady) return db;
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_products (
       id TEXT PRIMARY KEY,
@@ -135,6 +138,7 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_analytes_batch_group_idx ON cannabis_analytes(batch_id, group_name);
   `);
   ensureProductIdentitySchema(db);
+  schemaReady = true;
   return db;
 }
 
