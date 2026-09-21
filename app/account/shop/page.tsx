@@ -6,6 +6,6 @@ export default function AccountShopPage(){
   return <>
     <SiteHeader/>
     <AccountWorkspaceTabs/>
-    <OwnerPage showProducts={false}/>
+    <OwnerPage/>
   </>;
 }
