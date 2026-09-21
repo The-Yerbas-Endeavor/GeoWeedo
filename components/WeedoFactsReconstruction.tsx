@@ -259,15 +259,24 @@ export default function WeedoFactsReconstruction() {
   const candidates = Array.isArray(result?.candidates) ? result.candidates.slice(0, 5) : [];
 
   return (
-    <section className="weedoFactsReconstruction">
-      <div className="weedoFactsReconstructionHead">
-        <div>
-          <span className="weedoFactsEyebrow">UNKNOWN BARCODE RECOVERY</span>
-          <h2>Reconstruct an unlisted cannabis product</h2>
-          <p>If GeoWeedo has no listing, photograph the printed package label. Fill most of the frame with the label, keep the text horizontal, and avoid glare. GeoWeedo reads the label locally, then compares useful product, batch, manufacturer and potency evidence with public sources. A UPC/EAN can be added before or after the label photo.</p>
+    <details className="weedoFactsReconstruction" open={Boolean(message || error || labelText || result) || undefined}>
+      <summary className="weedoFactsRecoverySummary">
+        <span>
+          <small>NO MATCH?</small>
+          <strong>Recover from package label</strong>
+          <em>Photograph the printed label and GeoWeedo will read it locally.</em>
+        </span>
+        <b>Open →</b>
+      </summary>
+      <div className="weedoFactsRecoveryBody">
+        <div className="weedoFactsReconstructionHead">
+          <div>
+            <span className="weedoFactsEyebrow">PACKAGE LABEL RECOVERY</span>
+            <h2>Reconstruct an unlisted cannabis product</h2>
+            <p>Photograph the printed package label. Fill most of the frame with the label, keep the text horizontal, and avoid glare. GeoWeedo reads the label locally, then compares useful product, batch, manufacturer and potency evidence with public sources.</p>
+          </div>
+          <button type="button" className="weedoFactsScanButton" onClick={start} disabled={busy}>{busy ? 'Working…' : '📷 Scan product label'}</button>
         </div>
-        <button type="button" className="weedoFactsScanButton" onClick={start} disabled={busy}>{busy ? 'Working…' : '📷 Scan product label'}</button>
-      </div>
 
       <input
         ref={fileRef}
@@ -337,6 +346,7 @@ export default function WeedoFactsReconstruction() {
           <p className="weedoFactsReconstructionNotice">{result.notice || 'This reconstruction is public-source evidence, not verification of the exact laboratory batch.'}</p>
         </div>
       ) : null}
-    </section>
+      </div>
+    </details>
   );
 }
