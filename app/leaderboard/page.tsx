@@ -9,8 +9,8 @@ type Payload={date:string;boards:Record<GameKey,Leader[]>;limits:Record<GameKey,
 
 const GAME_META:Record<GameKey,{icon:string;name:string;description:string;href:string}>={
  classic:{icon:'🎮',name:'Classic GeoWeedo',description:'Five Street View rounds. Scores are ranked out of 25,000.',href:'/'},
- hunt:{icon:'🌿',name:'Weedo Hunt',description:'Track down the hidden dispensary. Scores are ranked out of 5,000.',href:'/hunt'},
- daily:{icon:'🌎',name:'Daily Weedo',description:'One shared challenge every day. Today’s scores are ranked out of 5,000.',href:'/daily'},
+ hunt:{icon:'🌿',name:'GeoWeedo Hunt',description:'Track down the hidden dispensary. Scores are ranked out of 5,000.',href:'/hunt'},
+ daily:{icon:'🌎',name:'Daily GeoWeedo',description:'One shared challenge every day. Today’s scores are ranked out of 5,000.',href:'/daily'},
 };
 
 function initialGame():GameKey{if(typeof window==='undefined')return'classic';const value=new URLSearchParams(window.location.search).get('game');return value==='hunt'||value==='daily'||value==='classic'?value:'classic';}
@@ -22,7 +22,7 @@ export default function LeaderboardPage(){
  const select=(game:GameKey)=>{setActive(game);const url=new URL(window.location.href);url.searchParams.set('game',game);window.history.replaceState({},'',url.pathname+url.search);};
  const leaders=useMemo(()=>data?.boards?.[active]||[],[data,active]),meta=GAME_META[active],max=data?.limits?.[active]||0,period=data?.periods?.[active]||'';
  return <main className="landing-shell"><SiteHeader/><section className="leaderboard-page">
-  <header className="leaderboard-hero"><div><div className="eyebrow">GEOWEEDO COMPETITION</div><h1>🏆 Weedo Leaderboard</h1><p>Top GeoWeedo scores and the YERB actually earned from completed games. Classic, Weedo Hunt and Daily Weedo all report from the same authoritative game records.</p></div><a className="secondary" href="/">Back to GeoWeedo</a></header>
+  <header className="leaderboard-hero"><div><div className="eyebrow">GEOWEEDO COMPETITION</div><h1>🏆 GeoWeedo Leaderboard</h1><p>Top GeoWeedo scores and the YERB actually earned from completed games. Classic, GeoWeedo Hunt and Daily GeoWeedo all report from the same authoritative game records.</p></div><a className="secondary" href="/">Back to GeoWeedo</a></header>
   <div className="leaderboard-games" role="tablist" aria-label="Choose leaderboard game">{(Object.keys(GAME_META) as GameKey[]).map(game=>{const item=GAME_META[game],count=data?.boards?.[game]?.length||0;return <button key={game} type="button" role="tab" aria-selected={active===game} className={`leaderboard-game-card ${active===game?'active':''}`} onClick={()=>select(game)}><span className="leaderboard-game-icon">{item.icon}</span><span><strong>{item.name}</strong><small>{item.description}</small></span><b>{count} listed</b></button>;})}</div>
   <section className="leaderboard-board result-card"><div className="leaderboard-board-head"><div><div className="eyebrow">{period||'LEADERBOARD'}</div><h2>{meta.icon} {meta.name}</h2><p>{max.toLocaleString()} maximum points</p></div><a className="secondary" href={meta.href}>Play {meta.name}</a></div>
    {error?<p>{error}</p>:!data?<p>Loading leaderboard…</p>:leaders.length===0?<div className="leaderboard-empty"><strong>No scores yet.</strong><span>Complete a {meta.name} game while signed in to claim the first spot.</span></div>:<div className="leaderboard-table"><div className="leaderboard-row header"><span>Rank</span><span>Player</span><span>Score</span><span>Earned YERB</span><span>Status</span></div>{leaders.map(item=><div className="leaderboard-row" key={item.gameId}><strong className={item.rank<=3?'podium':''}>#{item.rank}</strong><span>{item.player}</span><strong>{item.score.toLocaleString()} <small>/ {max.toLocaleString()}</small></strong><strong className="yerb">{item.earnedYerb.toFixed(4)} YERB</strong><span className="leaderboard-status">{rewardStatus(item.rewardStatus)}</span></div>)}</div>}
