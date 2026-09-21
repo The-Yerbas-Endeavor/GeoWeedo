@@ -109,12 +109,17 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     <main className="landing-shell">
       <SiteHeader />
       <div className="weedoFactsPage productChemistryPage">
-        <section className="weedoFactsHero productBrowseHero">
-          <span className="weedoFactsKicker">🌿 GEOWEEDO</span>
-          <h1>Products</h1>
-          <p className="weedoFactsLead">
-            Scanned and approved-uploaded products are shown by default. You can also switch to All products to browse GeoWeedo's complete public reference catalog.
-          </p>
+        <section className="productBrowseHero">
+          <div className="productBrowseHeroTop">
+            <div>
+              <span className="weedoFactsKicker">🌿 SCAN → BROWSE → FIND</span>
+              <h1>GeoWeedo Products</h1>
+              <p>
+                Browse products GeoWeedo has seen through real scans and approved evidence, then find matched dispensary listings.
+              </p>
+            </div>
+            <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" aria-hidden="true" className="productBrowseHeroMascot" />
+          </div>
           <div className="productChemistryStats" aria-label="GeoWeedo product evidence totals">
             <div><strong>{catalog.scannedProducts.toLocaleString()}</strong><span>Scanned</span></div>
             <div><strong>{catalog.uploadedProducts.toLocaleString()}</strong><span>COA uploads</span></div>
@@ -200,7 +205,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                         ? <span className="productBrowseAvailable">Found at {product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'dispensary listing' : 'dispensary listings'}</span>
                         : <span className="productBrowseUnavailable">No current menu match</span>}
                     </div>
-                    <span className="productBrowseOpen">View GeoWeedo Facts →</span>
+                    <span className="productBrowseOpen">View product →</span>
                   </a>
                 );
               })}
