@@ -62,6 +62,25 @@ function clean(value: unknown) {
   return text || null;
 }
 
+function inferEmbeddedBrand(productName: unknown) {
+  const text = clean(productName);
+  if (!text) return null;
+  const bracket = text.match(/^\[([^\]]{2,60})\]\s*(?:[-|:])/);
+  if (bracket?.[1]) return clean(bracket[1]);
+  const pipe = text.indexOf(' | ');
+  if (pipe > 1 && pipe <= 60) return clean(text.slice(0, pipe));
+  const lowered = text.toLowerCase();
+  for (const form of ['cured resin vape','live resin vape','resin vape','rosin vape','vape cartridge','vape cart','disposable vape']) {
+    const marker = ` ${form}`;
+    const pos = lowered.indexOf(marker);
+    if (pos > 1 && pos <= 32) {
+      const prefix = clean(text.slice(0, pos));
+      if (prefix && !prefix.includes(' ') && /^[A-Za-z0-9&.'-]{2,32}$/.test(prefix)) return prefix;
+    }
+  }
+  return null;
+}
+
 function injectMissingProductBrand(productId: string | null | undefined, brandName: unknown) {
   const id = clean(productId);
   const brand = clean(brandName);
@@ -216,7 +235,8 @@ export function persistQrScan(input: {
     );
   }
 
-  injectMissingProductBrand(input.productId, input.brandName);
+  const resolvedBrand = clean(input.brandName) || inferEmbeddedBrand(input.productName);
+  injectMissingProductBrand(input.productId, resolvedBrand);
 
   const row = db.prepare(`
     SELECT id,qr_value,resolver,product_id,batch_id,first_seen_at,last_seen_at,scan_count
