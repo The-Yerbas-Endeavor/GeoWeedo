@@ -57,7 +57,7 @@ import GlobalPhotoBarcodeScanner from '@/components/GlobalPhotoBarcodeScanner';
 export const metadata = {
   metadataBase: new URL('https://geoweedo.com'),
   title: 'GeoWeedo',
-  description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+  description: 'GEOWEEDO SEARCH. GEOWEEDO FIND. GEOWEEDO PLAY.',
   manifest: '/assets/geoweedo/site.webmanifest',
   icons: {
     icon: [
@@ -68,13 +68,13 @@ export const metadata = {
   },
   openGraph: {
     title: 'GeoWeedo',
-    description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+    description: 'GEOWEEDO SEARCH. GEOWEEDO FIND. GEOWEEDO PLAY.',
     images: ['/assets/geoweedo/geoweedo-logo-horizontal-dark.png'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'GeoWeedo',
-    description: 'WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.',
+    description: 'GEOWEEDO SEARCH. GEOWEEDO FIND. GEOWEEDO PLAY.',
     images: ['/assets/geoweedo/geoweedo-logo-horizontal-dark.png'],
   },
 };
