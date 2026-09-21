@@ -80,6 +80,10 @@ export async function PATCH(request: NextRequest) {
 
   const now = new Date().toISOString();
   const entryType = nextStatus === 'posted' ? 'reward_credit' : 'reward_pending';
+  let metadata: Record<string, unknown> = {};
+  try { metadata = existing.metadata_json ? JSON.parse(existing.metadata_json) : {}; } catch {}
+  metadata = { ...metadata, adminId: admin.id, reviewedAt: now, reviewedStatus: nextStatus };
+
   db.exec('BEGIN IMMEDIATE');
   try {
     if (nextStatus === 'posted') {
@@ -93,8 +97,31 @@ export async function PATCH(request: NextRequest) {
         metadata: { adminId: admin.id, userId: existing.user_id },
       }, db);
     }
+
     db.prepare('UPDATE wallet_ledger SET status = ?, entry_type = ?, posted_at = ?, metadata_json = ? WHERE id = ?')
-      .run(nextStatus, entryType, nextStatus === 'posted' ? now : null, JSON.stringify({ adminId: admin.id, reviewedAt: now }), id);
+      .run(nextStatus, entryType, nextStatus === 'posted' ? now : null, JSON.stringify(metadata), id);
+
+    // Gameplay rewards are represented in three places. Keep all of them in
+    // sync so Admin approval immediately updates the player account and public
+    // leaderboard instead of leaving the game marked "Pending Review".
+    if (existing.reference_type === 'game_reward' && existing.reference_id) {
+      db.prepare('UPDATE games SET reward_status = ? WHERE id = ? AND user_id = ?')
+        .run(nextStatus, existing.reference_id, existing.user_id);
+      db.prepare('UPDATE reward_claims SET status = ?, updated_at = ? WHERE ledger_id = ? OR (game_id = ? AND wallet_id = ?)')
+        .run(nextStatus, now, id, existing.reference_id, existing.wallet_id);
+    }
+
+    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at)
+                VALUES (?,?,?,?,?,?,?,?)`)
+      .run(`audit-${crypto.randomUUID()}`,'admin',admin.id,'reward.status_changed','wallet_ledger',id,JSON.stringify({
+        userId: existing.user_id,
+        from: existing.status,
+        to: nextStatus,
+        referenceType: existing.reference_type || null,
+        referenceId: existing.reference_id || null,
+        amountAtomic: Number(existing.amount_atomic || 0),
+      }),now);
+
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
