@@ -68,45 +68,60 @@ export default function HomePromoExploreCategories() {
   };
 
   return createPortal(
-    <>
-      <div className="home-explore-intro">
-        <div className="home-explore-kicker">EXPLORE GEOWEEDO</div>
-        <p>Search dispensaries, scan cannabis products, or jump into a GeoWeedo game.</p>
-      </div>
-      <div className="home-explore-categories" role="group" aria-label="Explore GeoWeedo">
-        <button type="button" className="home-explore-card home-explore-search" onClick={openSearch}>
-          <span className="home-explore-icon" aria-hidden="true">🔎</span>
-          <span className="home-explore-copy">
-            <strong>Search GeoWeedo</strong>
-            <small>Find dispensaries, browse the map, and explore locations.</small>
-          </span>
-          <b>SEARCH →</b>
+    playOpen ? (
+      <div className="home-games-panel-head">
+        <button type="button" className="home-games-back" onClick={() => setPlayOpen(false)}>
+          ← Explore GeoWeedo
         </button>
-
-        <a className="home-explore-card home-explore-scan" href="/geoweedo-facts">
-          <span className="home-explore-icon" aria-hidden="true">📷</span>
-          <span className="home-explore-copy">
-            <strong>Scan GeoWeedo</strong>
-            <small>Scan packages, QR codes, barcodes, batches, and COAs with GeoWeedo Facts.</small>
-          </span>
-          <b>SCAN →</b>
-        </a>
-
-        <button
-          type="button"
-          className={`home-explore-card home-explore-play${playOpen ? ' active' : ''}`}
-          onClick={() => setPlayOpen((value) => !value)}
-          aria-expanded={playOpen}
-        >
-          <span className="home-explore-icon" aria-hidden="true">🎮</span>
-          <span className="home-explore-copy">
+        <div className="home-games-title">
+          <span className="home-games-icon" aria-hidden="true">🎮</span>
+          <div>
             <strong>Play GeoWeedo</strong>
-            <small>Classic · Weedo Hunt · Daily · Sponsored Missions</small>
-          </span>
-          <b>{playOpen ? 'HIDE GAMES ↑' : 'PLAY →'}</b>
-        </button>
+            <small>Choose a game mode and start playing.</small>
+          </div>
+        </div>
       </div>
-    </>,
+    ) : (
+      <>
+        <div className="home-explore-intro">
+          <div className="home-explore-kicker">EXPLORE GEOWEEDO</div>
+          <p>Search dispensaries, scan cannabis products, or jump into a GeoWeedo game.</p>
+        </div>
+        <div className="home-explore-categories" role="group" aria-label="Explore GeoWeedo">
+          <button type="button" className="home-explore-card home-explore-search" onClick={openSearch}>
+            <span className="home-explore-icon" aria-hidden="true">🔎</span>
+            <span className="home-explore-copy">
+              <strong>Search GeoWeedo</strong>
+              <small>Find dispensaries, browse the map, and explore locations.</small>
+            </span>
+            <b>SEARCH →</b>
+          </button>
+
+          <a className="home-explore-card home-explore-scan" href="/geoweedo-facts">
+            <span className="home-explore-icon" aria-hidden="true">📷</span>
+            <span className="home-explore-copy">
+              <strong>Scan GeoWeedo</strong>
+              <small>Scan packages, QR codes, barcodes, batches, and COAs with GeoWeedo Facts.</small>
+            </span>
+            <b>SCAN →</b>
+          </a>
+
+          <button
+            type="button"
+            className="home-explore-card home-explore-play"
+            onClick={() => setPlayOpen(true)}
+            aria-haspopup="true"
+          >
+            <span className="home-explore-icon" aria-hidden="true">🎮</span>
+            <span className="home-explore-copy">
+              <strong>Play GeoWeedo</strong>
+              <small>Classic · Weedo Hunt · Daily · Sponsored Missions</small>
+            </span>
+            <b>PLAY →</b>
+          </button>
+        </div>
+      </>
+    ),
     target,
   );
 }
