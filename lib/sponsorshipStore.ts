@@ -150,8 +150,21 @@ export function syncVerifiedOwnerBusiness(userId: string, dispensaryId: string) 
   return businessForVerifiedOwner(userId, dispensaryId);
 }
 
+export function expireEndedFeaturedEntitlements(now = new Date().toISOString()) {
+  ensureSponsorshipSchema();
+  const result = getDatabase().prepare(`
+    UPDATE sponsor_entitlements
+       SET status='expired',updated_at=?
+     WHERE entitlement_type='featured_listing'
+       AND status='active'
+       AND ends_at<=?
+  `).run(now, now);
+  return Number(result.changes || 0);
+}
+
 export function listFeaturedEntitlements(): FeaturedEntitlement[] {
   ensureSponsorshipSchema();
+  expireEndedFeaturedEntitlements();
   const rows = getDatabase().prepare(`SELECT * FROM sponsor_entitlements ORDER BY created_at DESC`).all() as any[];
   return rows.map((row) => ({
     id: String(row.id), businessId: String(row.business_id), dispensaryId: String(row.dispensary_id),
@@ -163,6 +176,7 @@ export function listFeaturedEntitlements(): FeaturedEntitlement[] {
 export function activeFeaturedMap() {
   ensureSponsorshipSchema();
   const now = new Date().toISOString();
+  expireEndedFeaturedEntitlements(now);
   const rows = getDatabase().prepare(`SELECT * FROM sponsor_entitlements WHERE entitlement_type='featured_listing' AND status='active' AND starts_at<=? AND ends_at>? ORDER BY created_at DESC`).all(now, now) as any[];
   const map = new Map<string, any>();
   for (const row of rows) if (!map.has(String(row.dispensary_id))) map.set(String(row.dispensary_id), row);
@@ -210,6 +224,7 @@ export function recordSponsorEvent(dispensaryId: string, eventType: SponsorEvent
 
 export function sponsorshipSummaryForOwner(userId: string, dispensaryId: string) {
   ensureSponsorshipSchema();
+  expireEndedFeaturedEntitlements();
   const business = businessForVerifiedOwner(userId, dispensaryId);
   if (!business) return null;
   const db=getDatabase();
