@@ -10,7 +10,7 @@ import '../geoweedo-facts/headline-totals.css';
 import '../geoweedo-facts/reconstruction.css';
 
 export const metadata = {
-  title: 'GeoWeedo Facts | GeoWeedo',
+  title: 'GeoWeedo Scanner | GeoWeedo',
   description: 'Scan cannabis products, understand exact-batch lab results, and connect verified product identity to dispensary availability.',
   alternates: { canonical: '/facts' },
 };
@@ -22,7 +22,7 @@ export default function FactsPage() {
       <div className="weedoFactsPage">
         <section className="weedoFactsHero">
           <span className="weedoFactsKicker">🌿 SCAN → KNOW → FIND</span>
-          <h1>GeoWeedo Facts</h1>
+          <h1>GeoWeedo Scanner</h1>
           <p className="weedoFactsLead">
             Scan a cannabis package or paste its QR, barcode, UID, batch, or COA identifier. GeoWeedo resolves one canonical product, keeps the exact tested batch separate, and shows the available lab evidence in a consumer-friendly format.
           </p>
