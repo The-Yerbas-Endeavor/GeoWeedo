@@ -12,7 +12,7 @@ function gameForPath(pathname:string):Game|null{
  if(pathname.startsWith('/hunt'))return 'hunt';
  return null;
 }
-function gameName(game:Game){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily GeoWeedo':'GeoWeedo Hunt';}
+function gameName(game:Game){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily GeoWeedo':'GeoGeoWeedo Hunt';}
 
 export default function GameSponsorPlacement(){
  const pathname=usePathname(),routeGame=useMemo(()=>gameForPath(pathname),[pathname]);
@@ -77,7 +77,7 @@ export default function GameSponsorPlacement(){
 
  return <aside aria-label={`${gameName(game)} sponsor`} style={{position:'fixed',right:18,bottom:18,zIndex:40,width:'min(360px,calc(100vw - 36px))',border:'1px solid rgba(245,196,81,.34)',borderRadius:16,background:'rgba(8,13,9,.96)',boxShadow:'0 18px 55px rgba(0,0,0,.42)',backdropFilter:'blur(12px)',padding:14,color:'#f4f7f4'}}>
   <button type="button" aria-label="Hide sponsor" onClick={()=>setHidden(true)} style={{position:'absolute',right:8,top:8,width:28,height:28,border:0,borderRadius:999,background:'rgba(255,255,255,.06)',color:'#d7dfd9',cursor:'pointer'}}>×</button>
-  <div style={{color:'#f5c451',fontSize:9,fontWeight:900,letterSpacing:'.14em',paddingRight:30}}>{game==='hunt'?'SPONSORED WEEDO HUNT':`${gameName(game).toUpperCase()} · PRESENTED BY`}</div>
+  <div style={{color:'#f5c451',fontSize:9,fontWeight:900,letterSpacing:'.14em',paddingRight:30}}>{game==='hunt'?'SPONSORED GEOWEEDO HUNT':`${gameName(game).toUpperCase()} · PRESENTED BY`}</div>
   <div style={{display:'flex',alignItems:'center',gap:12,marginTop:9}}>{sponsor.logo&&<img src={sponsor.logo} alt="" style={{width:52,height:52,objectFit:'contain',borderRadius:10,border:'1px solid rgba(103,214,110,.28)'}}/>}<div style={{minWidth:0}}><strong style={{display:'block',fontSize:16,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{campaign.title||sponsor.name}</strong><small style={{color:'#9aa69d'}}>{[sponsor.city,sponsor.region].filter(Boolean).join(', ')} · {geo}</small></div></div>
   <div style={{display:'flex',gap:8,marginTop:11}}><a href={sponsor.profileHref} onClick={()=>event('listing_view')} style={{flex:1,textAlign:'center',textDecoration:'none',padding:'9px 10px',borderRadius:9,background:'#67d66e',color:'#071108',fontWeight:800,fontSize:12}}>View sponsor</a>{sponsor.website&&<a href={sponsor.website} target="_blank" rel="noreferrer" onClick={()=>event('website_click')} style={{flex:1,textAlign:'center',textDecoration:'none',padding:'9px 10px',borderRadius:9,border:'1px solid rgba(255,255,255,.14)',color:'#f4f7f4',fontWeight:800,fontSize:12}}>Website ↗</a>}</div>
   <small style={{display:'block',marginTop:8,color:'#7f8a82',fontSize:9}}>Sponsor placement never changes mystery-location odds.</small>
