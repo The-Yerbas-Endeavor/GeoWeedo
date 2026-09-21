@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       classic: { name: 'Classic Sponsor', dayPriceCents: 1000, weekPriceCents: 4900, monthPriceCents: 14900 },
       daily: { name: 'Daily Weedo Sponsor', dayPriceCents: 1500, weekPriceCents: 7900, monthPriceCents: 24900 },
       hunt: { name: 'Sponsored Weedo Hunt', weekPriceCents: 9900, monthPriceCents: 29900 },
+      mission: { name: 'Sponsored GeoWeedo Mission' },
     },
     entitlements: listFeaturedEntitlements(),
     campaigns: listGameCampaigns(),
@@ -39,14 +40,16 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const dispensaryId = String(body?.dispensaryId || '');
   const approved = await readApprovedDispensaries();
-  if (!approved.some((item) => item.id === dispensaryId)) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
+  const selectedDispensary = approved.find((item) => item.id === dispensaryId);
+  if (!selectedDispensary) return NextResponse.json({ error: 'Dispensary not found.' }, { status: 400 });
 
   if (body?.kind === 'campaign') {
     const gameType = String(body?.gameType || '') as GameCampaignType;
     const geographyType = String(body?.geographyType || 'all') as CampaignGeographyType;
     const campaignStatus = body?.status === 'paused' ? 'paused' : body?.status === 'expired' ? 'expired' : body?.status === 'cancelled' ? 'cancelled' : 'active';
     const source = body?.source === 'manual_invoice' ? 'manual_invoice' : body?.source === 'subscription' ? 'subscription' : 'admin_comp';
-    if (!['classic','daily','hunt'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, or Weedo Hunt.' }, { status: 400 });
+    if (!['classic','daily','hunt','mission'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, Weedo Hunt, or Sponsored Mission.' }, { status: 400 });
+    if (gameType === 'mission' && (!selectedDispensary.active || selectedDispensary.gameplayEnabled === false || !selectedDispensary.imageryPhotoId || !Number.isFinite(selectedDispensary.latitude) || !Number.isFinite(selectedDispensary.longitude))) return NextResponse.json({ error: 'Sponsored Mission requires an active gameplay-ready dispensary with approved Street View imagery.' }, { status: 400 });
     if (!['all','country','region','city','radius'].includes(geographyType)) return NextResponse.json({ error: 'Choose a valid campaign geography.' }, { status: 400 });
     try {
       const campaign = grantGameCampaign({
@@ -120,7 +123,7 @@ export async function PATCH(request: NextRequest) {
       const geographyType = String(body?.geographyType || 'all') as CampaignGeographyType;
       const campaignStatus = body?.status === 'paused' ? 'paused' : body?.status === 'expired' ? 'expired' : body?.status === 'cancelled' ? 'cancelled' : 'active';
       const source = body?.source === 'manual_invoice' ? 'manual_invoice' : body?.source === 'subscription' ? 'subscription' : 'admin_comp';
-      if (!['classic','daily','hunt'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, or Weedo Hunt.' }, { status: 400 });
+      if (!['classic','daily','hunt','mission'].includes(gameType)) return NextResponse.json({ error: 'Choose Classic, Daily Weedo, Weedo Hunt, or Sponsored Mission.' }, { status: 400 });
       if (!['all','country','region','city','radius'].includes(geographyType)) return NextResponse.json({ error: 'Choose a valid campaign geography.' }, { status: 400 });
 
       const startsAt = new Date(String(body?.startsAt || ''));
@@ -132,8 +135,12 @@ export async function PATCH(request: NextRequest) {
       if (amountCents != null && (!Number.isFinite(amountCents) || amountCents < 0)) return NextResponse.json({ error: 'Amount must be zero or greater.' }, { status: 400 });
 
       const db = getDatabase();
-      const existing = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id=? LIMIT 1`).get(id) as {id:string}|undefined;
+      const existing = db.prepare(`SELECT id,dispensary_id FROM sponsor_game_campaigns WHERE id=? LIMIT 1`).get(id) as {id:string;dispensary_id:string}|undefined;
       if (!existing) return NextResponse.json({ error: 'Game sponsorship not found.' }, { status: 404 });
+      if (gameType === 'mission') {
+        const missionTarget = (await readApprovedDispensaries()).find((item) => item.id === existing.dispensary_id);
+        if (!missionTarget?.active || missionTarget.gameplayEnabled === false || !missionTarget.imageryPhotoId || !Number.isFinite(missionTarget.latitude) || !Number.isFinite(missionTarget.longitude)) return NextResponse.json({ error: 'Sponsored Mission requires an active gameplay-ready dispensary with approved Street View imagery.' }, { status: 400 });
+      }
       if (gameType === 'daily' && campaignStatus === 'active') {
         const overlap = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id<>? AND game_type='daily' AND status='active' AND starts_at<? AND ends_at>? LIMIT 1`).get(id, endsAt.toISOString(), startsAt.toISOString()) as {id:string}|undefined;
         if (overlap) return NextResponse.json({ error: 'Daily Weedo already has another active sponsor during this period.' }, { status: 400 });
