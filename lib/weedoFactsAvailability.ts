@@ -1,6 +1,7 @@
 import { getDatabase } from './sqlite';
 import { ensureWeedoMenuSchema } from './weedoMenus';
 import { availabilityConfidence, ensureWeedoCoreSchema, findCanonicalProductMatch, type WeedoAvailabilityConfidence } from './weedoCore';
+import { ensureProductMaintenanceSchema, resolveCanonicalProductId } from './productMaintenance';
 
 export type WeedoFactsAvailabilityItem = {
   menuItemId: string;
@@ -33,6 +34,26 @@ export type WeedoFactsAvailabilityItem = {
   uid: string | null;
   batchVerified: boolean;
 };
+
+function repairMergedMenuProductIds(productId: string) {
+  const db = getDatabase();
+  ensureProductMaintenanceSchema(db);
+  const canonicalId = resolveCanonicalProductId(productId, db);
+  const history = db.prepare('SELECT source_product_id,target_product_id FROM cannabis_product_merge_history').all() as Array<{source_product_id?:string;target_product_id?:string}>;
+  const aliases = history
+    .map(row => String(row.source_product_id || '').trim())
+    .filter(Boolean)
+    .filter(sourceId => resolveCanonicalProductId(sourceId, db) === canonicalId);
+  if (!aliases.length) return 0;
+  const placeholders = aliases.map(() => '?').join(',');
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    UPDATE dispensary_menu_items
+       SET product_id=?,updated_at=?
+     WHERE product_id IN (${placeholders})
+  `).run(canonicalId, now, ...aliases);
+  return Number(result.changes || 0);
+}
 
 function repairExplicitOwnerProductLinks(productId: string) {
   const db = getDatabase();
@@ -152,8 +173,10 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
   ensureWeedoMenuSchema();
   ensureWeedoCoreSchema();
   const db = getDatabase();
-  repairExplicitOwnerProductLinks(productId);
-  refreshStrongMenuLinksForProduct(productId);
+  const canonicalProductId = resolveCanonicalProductId(productId, db);
+  repairMergedMenuProductIds(canonicalProductId);
+  repairExplicitOwnerProductLinks(canonicalProductId);
+  refreshStrongMenuLinksForProduct(canonicalProductId);
   const rows = db.prepare(`
     SELECT mi.id AS menu_item_id, mi.product_id, mi.batch_id, mi.item_name, mi.brand_name,
            mi.category, mi.variant, mi.package_size, mi.price_cents, mi.currency,
@@ -180,7 +203,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
               mi.verified DESC,
               d.name COLLATE NOCASE,
               mi.item_name COLLATE NOCASE
-  `).all(productId, batchId || null, batchId || null) as any[];
+  `).all(canonicalProductId, batchId || null, batchId || null) as any[];
 
   return rows.map((row) => {
     const confidence = availabilityConfidence({
