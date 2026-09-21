@@ -51,7 +51,7 @@ export default function GameSponsorPlacement(){
   };
   const observer=new MutationObserver(detect);observer.observe(document.body,{childList:true,subtree:true,characterData:true});detect();return()=>observer.disconnect();
  },[game,data,pathname]);
- if(!game||!data||hidden)return null;
+ if(!game||!data||hidden||completed)return null;
  const {campaign,sponsor}=data,geo=campaign.geographyType==='all'?'All players':campaign.geographyType==='radius'?`${campaign.radiusKm||''} km radius`:campaign.geographyValue||campaign.geographyType;
  const event=(eventType:'listing_view'|'website_click')=>{void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:campaign.id,eventType,metadata:{surface:'presented_by',path:pathname}})}).catch(()=>{});};
 
@@ -71,7 +71,7 @@ export default function GameSponsorPlacement(){
      {sponsor.website&&<a href={sponsor.website} target="_blank" rel="noreferrer" onClick={()=>event('website_click')} style={{textAlign:'center',textDecoration:'none',padding:'10px 13px',borderRadius:9,border:'1px solid rgba(255,255,255,.16)',color:'#f4f7f4',fontWeight:800,fontSize:12}}>Website ↗</a>}
     </div>
    </div>
-   {completed&&<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,.08)',fontSize:12,color:'#c9d2cb'}}><b style={{color:'#f5c451'}}>Game complete.</b> Thanks to {sponsor.name} for sponsoring this Classic GeoWeedo session.</div>}
+   
   </aside>;
  }
 
