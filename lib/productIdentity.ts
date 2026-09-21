@@ -22,7 +22,10 @@ export function normalizeProductIdentifier(identifierType: unknown, value: unkno
   return raw;
 }
 
+let schemaReady = false;
+
 export function ensureProductIdentitySchema(db: Db = getDatabase()) {
+  if (schemaReady) return db;
   if (!tableExists(db, 'cannabis_products')) return db;
 
   ensureColumn(db, 'cannabis_products', 'source_category', 'TEXT');
@@ -81,5 +84,6 @@ export function ensureProductIdentitySchema(db: Db = getDatabase()) {
     db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_variant_idx ON dispensary_menu_items(product_variant_id,active)');
   }
 
+  schemaReady = true;
   return db;
 }
