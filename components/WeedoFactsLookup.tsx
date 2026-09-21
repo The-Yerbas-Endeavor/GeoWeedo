@@ -123,6 +123,7 @@ export default function WeedoFactsLookup() {
   const [error, setError] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerMessage, setScannerMessage] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const frameRef = useRef<number | null>(null);
@@ -266,11 +267,26 @@ export default function WeedoFactsLookup() {
     }
   }
 
+  const showManualEntry = manualOpen || Boolean(error) || Boolean(identifier && result?.found === false);
+
   return (
-    <div className="weedoFactsLookup">
-      <div className="weedoFactsScanActions">
-        <button type="button" className="weedoFactsScanButton" onClick={startScanner} disabled={loading || scannerOpen}>📷 Scan package</button>
-        <span>Scan QR codes and UPC/EAN barcodes with the camera. On supported phones GeoWeedo combines the browser's native detector with enhanced barcode decoding.</span>
+    <div className={`weedoFactsLookup${result?.found ? ' has-result' : ''}`}>
+      <div className="weedoScannerLauncher">
+        <div className="weedoFactsScanActions">
+          <button type="button" className="weedoFactsScanButton weedoFactsCameraButton" onClick={startScanner} disabled={loading || scannerOpen}>
+            <span aria-hidden="true">📷</span>
+            <strong>Scan package</strong>
+            <small>Camera · QR · barcode</small>
+          </button>
+          <button type="button" className="weedoFactsScanButton weedoFactsManualButton" onClick={() => setManualOpen(value => !value)} aria-expanded={showManualEntry}>
+            <span aria-hidden="true">⌨️</span>
+            <strong>Enter code</strong>
+            <small>UPC · UID · batch · COA</small>
+          </button>
+        </div>
+        <div className="weedoScannerFormats" aria-label="Supported scanner inputs">
+          <span>QR</span><span>UPC / EAN</span><span>Batch / UID</span><span>COA</span>
+        </div>
       </div>
 
       {scannerOpen ? (
@@ -282,18 +298,20 @@ export default function WeedoFactsLookup() {
         </div>
       ) : null}
 
-      <form onSubmit={submit} className="weedoFactsLookupForm">
-        <label htmlFor="weedo-facts-identifier">Product, batch, UID, barcode, QR URL, or COA identifier</label>
-        <div className="weedoFactsLookupRow">
-          <input id="weedo-facts-identifier" value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="Paste an identifier or scan the package" autoComplete="off" />
-          <button type="submit" disabled={loading}>{loading ? 'Checking…' : 'Look up'}</button>
-        </div>
-      </form>
+      <div className={`weedoFactsManualEntry${showManualEntry ? ' open' : ''}`}>
+        <form onSubmit={submit} className="weedoFactsLookupForm">
+          <label htmlFor="weedo-facts-identifier">Product, batch, UID, barcode, QR URL, or COA identifier</label>
+          <div className="weedoFactsLookupRow">
+            <input id="weedo-facts-identifier" value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="Paste an identifier" autoComplete="off" />
+            <button type="submit" disabled={loading}>{loading ? 'Checking…' : 'Look up'}</button>
+          </div>
+        </form>
+      </div>
 
       {error ? <p className="weedoFactsError">{error}</p> : null}
       {result?.found === false ? (
         <div className="weedoFactsEmpty">
-          <strong>No GeoWeedo Facts record yet.</strong>
+          <strong>No scanner match yet.</strong>
           <p>GeoWeedo does not know this scan yet. Add what you can read from the package below. A batch/lot, source link, or supporting COA can help verify it, but none of those are required to start the record.</p>
           <UnknownContribution identifier={identifier} identifierType={inferIdentifierType(identifier)} />
         </div>
@@ -442,7 +460,7 @@ function FactsCard({ record }: { record: any }) {
   return (
     <article className="weedoFactsCard">
       <div className="weedoFactsCardHead">
-        <div><span className="weedoFactsEyebrow">GEOWEEDO FACTS</span><h2>{record.productName}</h2><p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p></div>
+        <div><span className="weedoFactsEyebrow">SCANNER RESULT</span><h2>{record.productName}</h2><p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p></div>
         <span className={`weedoFactsStatus ${exact || sourceBacked ? 'verified' : 'partial'}`}>{exact ? '✓ Verified lab batch' : sourceBacked ? '✓ Source-backed batch data' : record.matchLevel === 'product_only' ? 'Product match — batch needed' : 'Community record — unverified'}</span>
       </div>
 
