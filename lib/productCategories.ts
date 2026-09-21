@@ -123,8 +123,11 @@ function backfillWithoutEnsure(db: Db) {
   return { products, menuItems };
 }
 
-export function ensureProductCategorySchema(db: Db = getDatabase(), options: { backfill?: boolean } = {}) {
-  db.exec(`
+let categorySchemaReady = false;
+
+export function ensureProductCategorySchema(db: Db = getDatabase(), options: { backfill?: boolean } = { backfill: false }) {
+  if (!categorySchemaReady) {
+    db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_product_categories (
       id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, parent_id TEXT,
       description TEXT, sort_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1,
@@ -140,15 +143,17 @@ export function ensureProductCategorySchema(db: Db = getDatabase(), options: { b
     CREATE INDEX IF NOT EXISTS cannabis_product_categories_active_idx ON cannabis_product_categories(active,sort_order,name);
     CREATE INDEX IF NOT EXISTS cannabis_product_category_aliases_category_idx ON cannabis_product_category_aliases(category_id,normalized_alias);
   `);
-  ensureColumn(db, 'cannabis_products', 'category_id', 'TEXT');
-  ensureColumn(db, 'cannabis_products', 'category_source', 'TEXT');
-  ensureColumn(db, 'dispensary_menu_items', 'category_id', 'TEXT');
-  ensureColumn(db, 'dispensary_menu_items', 'category_source', 'TEXT');
-  ensureProductIdentitySchema(db);
-  if (tableExists(db, 'cannabis_products')) db.exec('CREATE INDEX IF NOT EXISTS cannabis_products_category_idx ON cannabis_products(category_id)');
-  if (tableExists(db, 'dispensary_menu_items')) db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_category_id_idx ON dispensary_menu_items(category_id,active)');
-  seedCategories(db);
-  if (options.backfill !== false) backfillWithoutEnsure(db);
+    ensureColumn(db, 'cannabis_products', 'category_id', 'TEXT');
+    ensureColumn(db, 'cannabis_products', 'category_source', 'TEXT');
+    ensureColumn(db, 'dispensary_menu_items', 'category_id', 'TEXT');
+    ensureColumn(db, 'dispensary_menu_items', 'category_source', 'TEXT');
+    ensureProductIdentitySchema(db);
+    if (tableExists(db, 'cannabis_products')) db.exec('CREATE INDEX IF NOT EXISTS cannabis_products_category_idx ON cannabis_products(category_id)');
+    if (tableExists(db, 'dispensary_menu_items')) db.exec('CREATE INDEX IF NOT EXISTS dispensary_menu_items_category_id_idx ON dispensary_menu_items(category_id,active)');
+    seedCategories(db);
+    categorySchemaReady = true;
+  }
+  if (options.backfill === true) backfillWithoutEnsure(db);
   return db;
 }
 
