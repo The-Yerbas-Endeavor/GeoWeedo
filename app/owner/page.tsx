@@ -59,7 +59,7 @@ export default function OwnerPage({showProducts=true}:{showProducts?:boolean}={}
   const trend=current?.sponsorship?.dailyTrend||[];
 
   return <main className="owner-shell">
-    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>Keep your public listing accurate, add or remove products, manage menu availability, see GeoWeedo activity, and manage Featured visibility from one workspace.</p></div></header>
+    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>{showProducts?'Keep your public listing accurate, add or remove products, manage menu availability, see GeoWeedo activity, and manage Featured visibility from one workspace.':'Keep your public listing accurate, review GeoWeedo activity, manage Featured visibility, and update the public dispensary profile.'}</p></div></header>
     {message&&<div className="owner-message">{message}</div>}
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>Your ownership claim may still be under review. Open the dispensary profile to check its claim status or submit a claim.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
