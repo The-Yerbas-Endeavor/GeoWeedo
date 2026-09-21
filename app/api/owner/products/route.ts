@@ -4,6 +4,7 @@ import { userOwnerCanEdit } from '@/lib/dispensaryCommunity';
 import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu } from '@/lib/weedoMenus';
 import { listProductCategories } from '@/lib/productCategories';
 import { getDatabase } from '@/lib/sqlite';
+import { ensureWeedoCoreSchema } from '@/lib/weedoCore';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +24,7 @@ function ensureOwnerScanColumns(db: ReturnType<typeof getDatabase>) {
   const names = new Set(columns.map(column => String(column.name || '')));
   if (!names.has('owner_scan_type')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN owner_scan_type TEXT');
   if (!names.has('owner_scan_value')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN owner_scan_value TEXT');
+  if (!names.has('owner_user_id')) db.exec('ALTER TABLE dispensary_menu_items ADD COLUMN owner_user_id TEXT');
 }
 
 function normalizedScanType(value: unknown, scanValue: string) {
@@ -42,6 +44,63 @@ function ownerAccess(request: NextRequest, locationId: string) {
   return { user } as const;
 }
 
+function setOwnerProductLinkState(
+  db: ReturnType<typeof getDatabase>,
+  itemId: string,
+  userId: string,
+  productId: string | null,
+  previouslyLinked = false,
+) {
+  const now = new Date().toISOString();
+  if (productId) {
+    db.prepare(`
+      UPDATE dispensary_menu_items
+         SET owner_user_id=?,
+             product_id=?,
+             suggested_product_id=NULL,
+             match_confidence='high',
+             match_score=100,
+             match_reason='verified dispensary owner linked canonical GeoWeedo product',
+             matched_at=?,
+             match_review_status='confirmed',
+             match_reviewed_at=?,
+             match_reviewed_by=NULL,
+             verified=1,
+             active=1,
+             updated_at=?
+       WHERE id=?
+    `).run(userId, productId, now, now, now, itemId);
+    return;
+  }
+
+  db.prepare(`
+    UPDATE dispensary_menu_items
+       SET owner_user_id=?,
+           product_id=NULL,
+           batch_id=NULL,
+           suggested_product_id=NULL,
+           match_confidence='unmatched',
+           match_score=0,
+           match_reason=?,
+           matched_at=?,
+           match_review_status=?,
+           match_reviewed_at=?,
+           match_reviewed_by=NULL,
+           verified=1,
+           active=1,
+           updated_at=?
+     WHERE id=?
+  `).run(
+    userId,
+    previouslyLinked ? 'verified dispensary owner explicitly unlinked canonical product' : 'verified dispensary owner added unlinked menu item',
+    now,
+    previouslyLinked ? 'rejected' : 'unmatched',
+    previouslyLinked ? now : null,
+    now,
+    itemId,
+  );
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const locationId = cleanText(searchParams.get('locationId'), 160);
@@ -49,6 +108,7 @@ export async function GET(request: NextRequest) {
   if ('error' in access) return access.error;
 
   ensureWeedoMenuSchema();
+  ensureWeedoCoreSchema();
   const db = getDatabase();
   ensureOwnerScanColumns(db);
   const query = cleanText(searchParams.get('q'), 120);
@@ -84,6 +144,7 @@ export async function POST(request: NextRequest) {
 
   try {
     ensureWeedoMenuSchema();
+    ensureWeedoCoreSchema();
     const db = getDatabase();
     ensureOwnerScanColumns(db);
     const productId = cleanText(body?.productId, 180) || null;
@@ -124,6 +185,7 @@ export async function POST(request: NextRequest) {
       db.prepare('UPDATE dispensary_menu_items SET owner_scan_type=?,owner_scan_value=?,updated_at=? WHERE id=?')
         .run(scanType, scanValue, new Date().toISOString(), id);
     }
+    setOwnerProductLinkState(db, id, access.user.id, productId, false);
     const item = listDispensaryMenu(locationId).find(row => row.id === id) || null;
     return NextResponse.json({ ok: true, item });
   } catch (error) {
@@ -140,10 +202,11 @@ export async function PATCH(request: NextRequest) {
   if (!itemId) return NextResponse.json({ error: 'itemId is required.' }, { status: 400 });
 
   ensureWeedoMenuSchema();
+  ensureWeedoCoreSchema();
   const db = getDatabase();
   ensureOwnerScanColumns(db);
   const existing = db.prepare(`
-    SELECT mi.id FROM dispensary_menu_items mi
+    SELECT mi.id,mi.product_id FROM dispensary_menu_items mi
     JOIN dispensary_menus m ON m.id=mi.menu_id
     WHERE mi.id=? AND m.dispensary_id=? LIMIT 1
   `).get(itemId, locationId) as any;
@@ -197,6 +260,8 @@ export async function PATCH(request: NextRequest) {
     itemId,
   );
 
+  setOwnerProductLinkState(db, itemId, access.user.id, productId, Boolean(existing.product_id));
+
   const item = listDispensaryMenu(locationId).find(row => row.id === itemId) || null;
   return NextResponse.json({ ok: true, item });
 }
@@ -210,6 +275,7 @@ export async function DELETE(request: NextRequest) {
   if (!itemId) return NextResponse.json({ error: 'itemId is required.' }, { status: 400 });
 
   ensureWeedoMenuSchema();
+  ensureWeedoCoreSchema();
   const db = getDatabase();
   ensureOwnerScanColumns(db);
   const result = db.prepare(`
