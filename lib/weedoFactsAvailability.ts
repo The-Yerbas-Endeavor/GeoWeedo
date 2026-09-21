@@ -34,6 +34,42 @@ export type WeedoFactsAvailabilityItem = {
   batchVerified: boolean;
 };
 
+function repairExplicitOwnerProductLinks(productId: string) {
+  const db = getDatabase();
+  const columns = new Set(
+    (db.prepare('PRAGMA table_info(dispensary_menu_items)').all() as Array<{name?:string}>)
+      .map(column => String(column.name || ''))
+  );
+  if (!columns.has('match_confidence') || !columns.has('match_review_status')) return 0;
+
+  const ownerEvidence: string[] = ["mi.source_type IN ('owner','verified_owner_scan')"];
+  if (columns.has('owner_user_id')) ownerEvidence.push("(mi.owner_user_id IS NOT NULL AND TRIM(mi.owner_user_id)<>'')");
+  if (columns.has('owner_scan_value')) ownerEvidence.push("(mi.owner_scan_value IS NOT NULL AND TRIM(mi.owner_scan_value)<>'')");
+
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    UPDATE dispensary_menu_items AS mi
+       SET match_confidence='high',
+           match_score=100,
+           match_reason='verified dispensary owner linked canonical GeoWeedo product',
+           suggested_product_id=NULL,
+           match_review_status='confirmed',
+           match_reviewed_at=COALESCE(match_reviewed_at,?),
+           match_reviewed_by=NULL,
+           matched_at=COALESCE(matched_at,?),
+           verified=1,
+           updated_at=?
+     WHERE mi.product_id=?
+       AND mi.active=1
+       AND (${ownerEvidence.join(' OR ')})
+       AND (
+         COALESCE(mi.match_confidence,'') IN ('','possible','unmatched')
+         OR COALESCE(mi.match_review_status,'') IN ('','pending','unmatched')
+       )
+  `).run(now, now, now, productId);
+  return Number(result.changes || 0);
+}
+
 function refreshStrongMenuLinksForProduct(productId: string) {
   const db = getDatabase();
   const product = db.prepare(`
@@ -116,6 +152,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
   ensureWeedoMenuSchema();
   ensureWeedoCoreSchema();
   const db = getDatabase();
+  repairExplicitOwnerProductLinks(productId);
   refreshStrongMenuLinksForProduct(productId);
   const rows = db.prepare(`
     SELECT mi.id AS menu_item_id, mi.product_id, mi.batch_id, mi.item_name, mi.brand_name,
