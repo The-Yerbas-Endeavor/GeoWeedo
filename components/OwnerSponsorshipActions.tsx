@@ -67,7 +67,7 @@ export default function OwnerSponsorshipActions({locationId,featured,plan,reques
     setBusy('featured');setMessage('');
     try{
       const response=await fetch('/api/owner/sponsorships',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        locationId,requestType:'featured',billingInterval:interval,preferredStartAt:new Date().toISOString(),
+        locationId,requestType:'featured',billingInterval:interval,preferredStartAt:featured?.status==='active'?featured.endsAt:new Date().toISOString(),
         note:featured?.status==='active'?'Owner requested Featured extension.':'Owner requested GeoWeedo Featured.',
       })});
       const body=await response.json().catch(()=>({}));
