@@ -95,11 +95,11 @@ export default function HomePromoExploreCategories() {
             <b>SEARCH →</b>
           </button>
 
-          <a className="home-explore-card home-explore-scan" href="/geoweedo-facts">
+          <a className="home-explore-card home-explore-scan" href="/facts">
             <span className="home-explore-icon" aria-hidden="true">📷</span>
             <span className="home-explore-copy">
               <strong>Scan GeoWeedo</strong>
-              <small>Scan packages, QR codes, barcodes, batches, and COAs with GeoWeedo Facts.</small>
+              <small>Scan packages, QR codes, barcodes, batches, and COAs with the GeoWeedo Scanner.</small>
             </span>
             <b>SCAN →</b>
           </a>
