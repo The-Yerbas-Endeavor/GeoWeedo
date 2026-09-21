@@ -141,9 +141,9 @@ export async function PATCH(request: NextRequest) {
         const missionTarget = (await readApprovedDispensaries()).find((item) => item.id === existing.dispensary_id);
         if (!missionTarget?.active || missionTarget.gameplayEnabled === false || !missionTarget.imageryPhotoId || !Number.isFinite(missionTarget.latitude) || !Number.isFinite(missionTarget.longitude)) return NextResponse.json({ error: 'Sponsored Mission requires an active gameplay-ready dispensary with approved Street View imagery.' }, { status: 400 });
       }
-      if (gameType === 'daily' && campaignStatus === 'active') {
-        const overlap = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id<>? AND game_type='daily' AND status='active' AND starts_at<? AND ends_at>? LIMIT 1`).get(id, endsAt.toISOString(), startsAt.toISOString()) as {id:string}|undefined;
-        if (overlap) return NextResponse.json({ error: 'Daily Weedo already has another active sponsor during this period.' }, { status: 400 });
+      if ((gameType === 'daily' || gameType === 'mission') && campaignStatus === 'active') {
+        const overlap = db.prepare(`SELECT id FROM sponsor_game_campaigns WHERE id<>? AND game_type=? AND status='active' AND starts_at<? AND ends_at>? LIMIT 1`).get(id, gameType, endsAt.toISOString(), startsAt.toISOString()) as {id:string}|undefined;
+        if (overlap) return NextResponse.json({ error: gameType === 'daily' ? 'Daily Weedo already has another active sponsor during this period.' : 'Sponsored Missions already has another active mission during this period.' }, { status: 400 });
       }
       const now = new Date().toISOString();
       db.prepare(`UPDATE sponsor_game_campaigns SET game_type=?,placement='presented_by',geography_type=?,geography_value=?,radius_km=?,starts_at=?,ends_at=?,status=?,source=?,amount_cents=?,title=?,updated_at=? WHERE id=?`).run(
