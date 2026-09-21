@@ -33,7 +33,7 @@ type Props={
   onChanged:()=>Promise<void>|void;
 };
 
-const GAME_NAMES={classic:'Classic GeoWeedo',daily:'Daily Weedo',hunt:'Weedo Hunt',mission:'Sponsored Mission'} as const;
+const GAME_NAMES={classic:'Classic GeoWeedo',daily:'Daily GeoWeedo',hunt:'GeoWeedo Hunt',mission:'Sponsored Mission'} as const;
 function money(cents:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(cents/100);}
 function dateInput(date=new Date()){return date.toISOString().slice(0,10);}
 function labelRequest(item:RequestRow){
@@ -140,7 +140,7 @@ export default function OwnerSponsorshipActions({locationId,featured,plan,reques
 
     {showGame&&!pendingGame?<div className="owner-game-request">
       <div className="owner-game-request-grid">
-        <label>Game<select value={gameType} onChange={event=>setGameType(event.target.value as typeof gameType)}><option value="mission">Sponsored Mission</option><option value="classic">Classic GeoWeedo</option><option value="daily">Daily Weedo</option><option value="hunt">Weedo Hunt</option></select></label>
+        <label>Game<select value={gameType} onChange={event=>setGameType(event.target.value as typeof gameType)}><option value="mission">Sponsored Mission</option><option value="classic">Classic GeoWeedo</option><option value="daily">Daily GeoWeedo</option><option value="hunt">GeoWeedo Hunt</option></select></label>
         <label>Duration<select value={durationCode} onChange={event=>setDurationCode(event.target.value as typeof durationCode)}><option value="day">1 day</option><option value="week">1 week</option><option value="month">1 month</option><option value="year">1 year</option></select></label>
         <label>Preferred start<input type="date" value={preferredStartAt} onChange={event=>setPreferredStartAt(event.target.value)}/></label>
         <label>Audience<select value={geographyType} onChange={event=>setGeographyType(event.target.value as typeof geographyType)}><option value="all">All players</option><option value="country">Country</option><option value="region">State / Province</option><option value="city">City / Region</option><option value="radius">Radius around dispensary</option></select></label>
