@@ -34,7 +34,9 @@ function MetricBars({metrics}:{metrics:SponsorMetrics}){
   return <div style={{display:'grid',gap:8}}>{METRICS.map(([key,label])=>{const value=metrics[key]||0;return <div key={key} style={{display:'grid',gridTemplateColumns:'140px 1fr 52px',gap:10,alignItems:'center',fontSize:12}}><span>{label}</span><div style={{height:9,borderRadius:999,background:'rgba(255,255,255,.07)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.max(value?4:0,(value/max)*100)}%`,background:'#67d66e',borderRadius:999}}/></div><strong style={{textAlign:'right'}}>{value.toLocaleString()}</strong></div>})}</div>;
 }
 
-export default function OwnerPage(){
+type OwnerPageProps={section?:'shop'|'featured'};
+
+export default function OwnerPage({section='shop'}:OwnerPageProps){
   const[items,setItems]=useState<Owned[]>([]),[selected,setSelected]=useState(''),[loading,setLoading]=useState(true),[message,setMessage]=useState<string|null>(null),[saving,setSaving]=useState(false);
   const[overview,setOverview]=useState(''),[phone,setPhone]=useState(''),[website,setWebsite]=useState(''),[customAmenities,setCustomAmenities]=useState(''),[selectedAmenities,setSelectedAmenities]=useState<string[]>([]),[hours,setHours]=useState<Record<string,string>>({}),[instagram,setInstagram]=useState(''),[facebook,setFacebook]=useState(''),[x,setX]=useState('');
   const current=useMemo(()=>items.find(i=>i.locationId===selected)||null,[items,selected]);
@@ -59,13 +61,15 @@ export default function OwnerPage(){
   const metrics=current?.sponsorship?.metrics;
   const trend=current?.sponsorship?.dailyTrend||[];
 
+  const featuredSection=section==='featured';
+
   return <main className="owner-shell">
-    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Manage your shop</h1><p>Keep your public listing accurate, review GeoWeedo activity, manage Featured visibility, and update the public dispensary profile.</p></div></header>
+    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>{featuredSection?'Featured listings':'Manage your shop'}</h1><p>{featuredSection?'Manage Featured visibility, sponsorship requests, campaign activity, and sponsor analytics for your verified dispensary.':'Keep your public listing accurate and update the public dispensary profile.'}</p></div></header>
     {message&&<div className="owner-message">{message}</div>}
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>Your ownership claim may still be under review. Open the dispensary profile to check its claim status or submit a claim.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
       {current&&<>
-        <section className="owner-panel" id="featured-analytics">
+        {featuredSection?<section className="owner-panel" id="featured-analytics">
           <div className="owner-panel-head"><div><span>SPONSOR DASHBOARD · LAST 30 DAYS</span><h2>{current.sponsorship?.featured?.status==='active'?'★ Featured listing':'Standard listing'}</h2></div><a href="/for-dispensaries#featured">Featured details ↗</a></div>
           {current.sponsorship?.featured?<p>Featured {new Date(current.sponsorship.featured.startsAt).toLocaleDateString()} → {new Date(current.sponsorship.featured.endsAt).toLocaleDateString()} · billed/managed in USD.</p>:<p>Claiming and maintaining your business profile is free. GeoWeedo Featured adds enhanced map/discovery visibility and analytics without changing gameplay selection odds.</p>}
           {current.sponsorship?.plan?<OwnerSponsorshipActions locationId={current.locationId} featured={current.sponsorship.featured||null} plan={current.sponsorship.plan} requests={current.sponsorship.requests||[]} onChanged={load}/>:null}
@@ -74,8 +78,8 @@ export default function OwnerPage(){
             <div style={{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(260px,.8fr)',gap:16,marginTop:18}}><TrendChart data={trend}/><div style={{border:'1px solid var(--border)',borderRadius:14,padding:14,background:'rgba(255,255,255,.015)'}}><strong style={{display:'block',marginBottom:12}}>Activity breakdown</strong><MetricBars metrics={metrics}/></div></div>
           </>}
           {current.sponsorship?.plan&&<small style={{display:'block',marginTop:14}}>{current.sponsorship.plan.name}: ${(current.sponsorship.plan.monthlyPriceCents/100).toFixed(0)}/month or ${(current.sponsorship.plan.annualPriceCents/100).toFixed(0)}/year. Sponsorship payments are USD-only.</small>}
-        </section>
-        <section className="owner-panel owner-form" id="public-profile">
+        </section>:null}
+        {!featuredSection?<section className="owner-panel owner-form" id="public-profile">
           <div className="owner-panel-head"><div><span>PUBLIC PROFILE</span><h2>{current.location.name}</h2></div><a href={`/dispensary/${encodeURIComponent(current.locationId)}`} target="_blank" rel="noreferrer">View public profile ↗</a></div>
           <DispensaryLogoUploader locationId={current.locationId}/>
           <label>Overview<textarea value={overview} onChange={e=>setOverview(e.target.value)} maxLength={5000} placeholder="Tell visitors about the shop, specialties, atmosphere, services, and what makes it useful."/></label>
@@ -84,7 +88,7 @@ export default function OwnerPage(){
           <div className="owner-hours"><strong>Hours</strong>{DAYS.map(day=><label key={day}><span>{day}</span><input value={hours[day]||''} onChange={e=>setHours(v=>({...v,[day]:e.target.value}))} placeholder="9:00 AM – 9:00 PM"/></label>)}</div>
           <div className="owner-grid"><label>Instagram<input value={instagram} onChange={e=>setInstagram(e.target.value)} placeholder="https://instagram.com/..."/></label><label>Facebook<input value={facebook} onChange={e=>setFacebook(e.target.value)} placeholder="https://facebook.com/..."/></label><label>X / Twitter<input value={x} onChange={e=>setX(e.target.value)} placeholder="https://x.com/..."/></label></div>
           <button className="owner-primary" type="button" disabled={saving} onClick={save}>{saving?'Saving…':'Save public profile'}</button>
-        </section>
+        </section>:null}
       </>}
     </>}
   </main>;
