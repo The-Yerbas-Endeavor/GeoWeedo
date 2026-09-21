@@ -63,7 +63,7 @@ export default function HomePromoExploreCategories() {
 
   const openSearch = () => {
     const shell = target.closest<HTMLElement>('.home-promo-shell');
-    const originalSearch = shell?.querySelector<HTMLButtonElement>('button[aria-label="Findo Weedo on the dispensary map"]');
+    const originalSearch = shell?.querySelector<HTMLButtonElement>('button[aria-label="Findo GeoWeedo on the dispensary map"]');
     originalSearch?.click();
   };
 
@@ -115,7 +115,7 @@ export default function HomePromoExploreCategories() {
             <span className="home-explore-icon" aria-hidden="true">🎮</span>
             <span className="home-explore-copy">
               <strong>Play GeoWeedo</strong>
-              <small>Classic · Weedo Hunt · Daily · Sponsored Missions</small>
+              <small>Classic · GeoWeedo Hunt · Daily · Sponsored Missions</small>
             </span>
             <b>PLAY →</b>
           </button>
