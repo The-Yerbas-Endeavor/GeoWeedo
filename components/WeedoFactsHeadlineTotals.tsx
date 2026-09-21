@@ -99,7 +99,7 @@ export default function WeedoFactsHeadlineTotals({ cannabinoids, terpenes }: { c
   const metrics = [totalThc, totalCbd, totalCannabinoids, totalTerpenes];
 
   return (
-    <section className="weedoFactsHeadlineTotals" aria-label="Primary Weedo Facts totals">
+    <section className="weedoFactsHeadlineTotals" aria-label="Primary GeoWeedo Facts totals">
       {metrics.map(metric => (
         <div className={`weedoFactsHeadlineMetric ${metric.kind}`} key={metric.key}>
           <span>{metric.label}</span>
