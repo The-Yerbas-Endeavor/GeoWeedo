@@ -10,7 +10,9 @@ export function slugifyDispensaryName(value:string){
   .replace(/^-+|-+$/g,'').replace(/-{2,}/g,'-').slice(0,110)||'dispensary';
 }
 
+let schemaReady=false;
 function ensureSchema(){
+ if(schemaReady)return;
  getDatabase().exec(`
  CREATE TABLE IF NOT EXISTS dispensary_slugs(
   location_id TEXT PRIMARY KEY,
@@ -25,6 +27,7 @@ function ensureSchema(){
  );
  CREATE INDEX IF NOT EXISTS dispensary_slug_alias_location_idx ON dispensary_slug_aliases(location_id);
  `);
+ schemaReady=true;
 }
 function available(slug:string,locationId:string){
  const db=getDatabase();
