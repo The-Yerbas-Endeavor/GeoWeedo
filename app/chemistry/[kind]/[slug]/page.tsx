@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const profile = chemistryProfileBySlug(kind, slug);
   if (!profile) return { title: 'Chemistry profile not found · GeoWeedo' };
   return {
-    title: `${profile.name} chemistry · Weedo Facts · GeoWeedo`,
+    title: `${profile.name} chemistry · GeoWeedo Facts · GeoWeedo`,
     description: `Chemical identity and lab context for ${profile.name}, without consumer-effect or medical claims.`,
   };
 }
@@ -49,7 +49,7 @@ export default async function ChemistryPage({ params }: Props) {
       <SiteHeader />
       <div className="weedoFactsPage">
         <section className="weedoFactsHero">
-          <span className="weedoFactsKicker">WEEDO CHEMISTRY · {kindLabel.toUpperCase()}</span>
+          <span className="weedoFactsKicker">GEOWEEDO CHEMISTRY · {kindLabel.toUpperCase()}</span>
           <h1>{profile.name}</h1>
           <p className="weedoFactsLead">{profile.overview}</p>
           <div className="weedoFactsPrinciples">
