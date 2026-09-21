@@ -11,6 +11,7 @@ type GameType='classic'|'daily'|'hunt';
 type EditorTab='featured'|'game';
 type Campaign={id:string;dispensaryId:string;businessId:string;gameType:GameType;placement:string;geographyType:string;geographyValue:string|null;radiusKm:number|null;startsAt:string;endsAt:string;status:string;source:string;amountCents:number|null;currency:'USD';title:string|null};
 type GameProducts=Record<GameType,{name:string;dayPriceCents?:number;weekPriceCents?:number;monthPriceCents?:number}>;
+type SponsorRequest={id:string;dispensaryId:string;ownerUserId:string;requestType:'featured'|'game';billingInterval:'monthly'|'annual'|null;gameType:GameType|null;durationCode:'day'|'week'|'month'|'year'|null;geographyType:string;geographyValue:string|null;radiusKm:number|null;preferredStartAt:string|null;note:string|null;status:string;createdAt:string};
 
 function localInput(date:Date){const copy=new Date(date.getTime()-date.getTimezoneOffset()*60000);return copy.toISOString().slice(0,16);}
 function money(cents:number){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(cents/100);}
@@ -19,10 +20,11 @@ function gameLabel(game:GameType){return game==='classic'?'Classic GeoWeedo':gam
 const DEFAULT_PRODUCTS:GameProducts={classic:{name:'Classic Sponsor',dayPriceCents:1000,weekPriceCents:4900,monthPriceCents:14900},daily:{name:'Daily Weedo Sponsor',dayPriceCents:1500,weekPriceCents:7900,monthPriceCents:24900},hunt:{name:'Sponsored Weedo Hunt',weekPriceCents:9900,monthPriceCents:29900}};
 
 export default function AdminSponsorshipManager(){
- const[dispensaries,setDispensaries]=useState<Dispensary[]>([]),[items,setItems]=useState<Entitlement[]>([]),[campaigns,setCampaigns]=useState<Campaign[]>([]),[claims,setClaims]=useState<Claim[]>([]);
+ const[dispensaries,setDispensaries]=useState<Dispensary[]>([]),[items,setItems]=useState<Entitlement[]>([]),[campaigns,setCampaigns]=useState<Campaign[]>([]),[claims,setClaims]=useState<Claim[]>([]),[requests,setRequests]=useState<SponsorRequest[]>([]);
  const[plan,setPlan]=useState<Plan>({code:'featured',name:'GeoWeedo Featured',currency:'USD',monthlyPriceCents:3900,annualPriceCents:39000}),[products,setProducts]=useState<GameProducts>(DEFAULT_PRODUCTS);
  const now=()=>localInput(new Date());
  const[selectedDispensaryId,setSelectedDispensaryId]=useState('');
+ const[loadedRequestId,setLoadedRequestId]=useState<string|null>(null);
  const[editingCampaignId,setEditingCampaignId]=useState<string|null>(null);
  const[form,setForm]=useState({source:'admin_comp',status:'active',startsAt:now(),endsAt:localInput(new Date(Date.now()+30*86400000))});
  const[campaignForm,setCampaignForm]=useState({gameType:'classic' as GameType,title:'',geographyType:'all',geographyValue:'',radiusKm:'25',source:'admin_comp',status:'active',startsAt:now(),endsAt:localInput(new Date(Date.now()+86400000)),amountUsd:''});
@@ -40,7 +42,7 @@ export default function AdminSponsorshipManager(){
   if(!sponsorResponse.ok)throw new Error(sponsorData.error||'Sponsorship admin access failed.');
   if(!claimResponse.ok)throw new Error(claimData.error||'Could not load ownership claims.');
   const ds:Dispensary[]=sponsorData.dispensaries||[];
-  setDispensaries(ds);setItems(sponsorData.entitlements||[]);setCampaigns(sponsorData.campaigns||[]);setClaims(claimData.claims||[]);
+  setDispensaries(ds);setItems(sponsorData.entitlements||[]);setCampaigns(sponsorData.campaigns||[]);setRequests(sponsorData.requests||[]);setClaims(claimData.claims||[]);
   if(sponsorData.plan)setPlan(sponsorData.plan);if(sponsorData.gameProducts)setProducts(sponsorData.gameProducts);
   setSelectedDispensaryId(current=>current&&ds.some(item=>item.id===current)?current:(ds[0]?.id||''));
   setStatus('Sponsorship workspace ready. Featured and game sponsorships control promotion only; normal game selection odds remain unchanged.');
