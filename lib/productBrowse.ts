@@ -94,15 +94,15 @@ function requireColumns(actual: Set<string>, required: string[], table: string) 
   if (missing.length) throw new Error(`${table} is missing columns: ${missing.join(', ')}`);
 }
 
-function productSortSql(value: unknown) {
+function productSortSql(value: unknown, brandSql = 'p.brand_name') {
   switch (String(value || '').trim()) {
-    case 'name-asc': return 'p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
-    case 'name-desc': return 'p.product_name COLLATE NOCASE DESC,p.brand_name COLLATE NOCASE ASC,p.id ASC';
-    case 'brand-asc': return "COALESCE(NULLIF(TRIM(p.brand_name),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC";
+    case 'name-asc': return `p.product_name COLLATE NOCASE ASC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
+    case 'name-desc': return `p.product_name COLLATE NOCASE DESC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
+    case 'brand-asc': return `COALESCE(NULLIF(TRIM(${brandSql}),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
     case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'batches-desc': return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'category':
-    default: return 'COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.brand_name COLLATE NOCASE ASC,latest_record DESC';
+    default: return `COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,${brandSql} COLLATE NOCASE ASC,latest_record DESC`;
   }
 }
 
@@ -127,9 +127,23 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
 
   const hasScans = qrColumns.has('product_id') && qrColumns.has('scan_count') && qrColumns.has('last_seen_at');
   const hasScanBrands = hasScans && qrColumns.has('brand_name');
-  const effectiveBrandSql = hasScanBrands
-    ? `COALESCE(NULLIF(TRIM(p.brand_name),''),(SELECT NULLIF(TRIM(qb.brand_name),'') FROM cannabis_qr_scans qb WHERE qb.product_id=p.id AND qb.brand_name IS NOT NULL AND TRIM(qb.brand_name)<>'' ORDER BY qb.last_seen_at DESC LIMIT 1))`
-    : `NULLIF(TRIM(p.brand_name),'')`;
+  const oneWordFormCases = [' cured resin vape',' live resin vape',' resin vape',' rosin vape',' vape cartridge',' vape cart',' disposable vape']
+    .map(marker => {
+      const pos = `instr(lower(p.product_name),'${marker}')`;
+      const prefix = `trim(substr(p.product_name,1,${pos}-1))`;
+      return `WHEN ${pos} BETWEEN 3 AND 33 AND instr(${prefix},' ')=0 THEN ${prefix}`;
+    }).join(' ');
+  const inferredBrandSql = `CASE
+    WHEN substr(trim(p.product_name),1,1)='[' AND instr(p.product_name,']') BETWEEN 3 AND 62
+      THEN trim(substr(p.product_name,2,instr(p.product_name,']')-2))
+    WHEN instr(p.product_name,' | ') BETWEEN 3 AND 61
+      THEN trim(substr(p.product_name,1,instr(p.product_name,' | ')-1))
+    ${oneWordFormCases}
+    ELSE NULL END`;
+  const scanBrandSql = hasScanBrands
+    ? `(SELECT NULLIF(TRIM(qb.brand_name),'') FROM cannabis_qr_scans qb WHERE qb.product_id=p.id AND qb.brand_name IS NOT NULL AND TRIM(qb.brand_name)<>'' ORDER BY qb.last_seen_at DESC LIMIT 1)`
+    : 'NULL';
+  const effectiveBrandSql = `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql},${inferredBrandSql})`;
   const hasApprovedUploads =
     submissionColumns.has('id') && submissionColumns.has('product_id') && submissionColumns.has('status') &&
     uploadColumns.has('submission_id') && uploadColumns.has('status');
@@ -161,7 +175,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   const brand = String(filters.brand || '').trim();
   const type = String(filters.type || '').trim();
   const pageSize = pageSizeFor(filters);
-  const orderBy = productSortSql(filters.sort);
+  const orderBy = productSortSql(filters.sort, effectiveBrandSql);
   const conditions: string[] = [];
   const params: Array<string | number> = [];
 
