@@ -71,6 +71,7 @@ async function handlePost(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const requestedIds = Array.isArray(body?.ids) ? body.ids.map(String) : [];
   const requestedPhotoId = String(body?.selectedPhotoId || '').trim();
+  const allowAdminOverride = body?.adminOverride !== false;
   const source = body?.source === 'enrichment_approved' ? 'enrichment_approved' : 'coordinate_ready';
   const limit = Math.max(1, Math.min(Number(body?.limit) || 10, 50));
   const all = await listCandidates();
@@ -111,6 +112,7 @@ async function handlePost(request: NextRequest) {
 
     const alreadyAdminConfirmed =
       explicitAdminConfirmation &&
+      allowAdminOverride &&
       !requestedPhotoId &&
       item.imageryStatus === 'coverage' &&
       /^ADMIN_(?:SELECTED|CONFIRMED)_STREET_VIEW/.test(String(item.imageryMessage || ''));
@@ -153,8 +155,8 @@ async function handlePost(request: NextRequest) {
 
       const hasUsablePhoto = Boolean(selectedPhoto?.id && selectedPhoto?.imageUrl);
       const automaticPlayable = Boolean(result.quality?.playable && hasUsablePhoto);
-      const adminSelected = Boolean(explicitAdminConfirmation && requestedPhotoId && exactSelectedPhoto && hasUsablePhoto);
-      const adminConfirmed = Boolean(explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
+      const adminSelected = Boolean(allowAdminOverride && explicitAdminConfirmation && requestedPhotoId && exactSelectedPhoto && hasUsablePhoto);
+      const adminConfirmed = Boolean(allowAdminOverride && explicitAdminConfirmation && hasUsablePhoto && !automaticPlayable);
       const playable = automaticPlayable || adminConfirmed || adminSelected;
       return {
         item,
