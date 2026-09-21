@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminHasPermission, getAdminFromRequest } from '@/lib/adminAuth';
 import { readApprovedDispensaries } from '@/lib/dispensaryStore';
-import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements } from '@/lib/sponsorshipStore';
+import { ensureSponsorshipSchema, grantFeatured, listFeaturedEntitlements, listSponsorshipRequests, reviewSponsorshipRequest } from '@/lib/sponsorshipStore';
 import { grantGameCampaign, listGameCampaigns, updateGameCampaignStatus, type CampaignGeographyType, type GameCampaignStatus, type GameCampaignType } from '@/lib/gameSponsorship';
 import { getDatabase } from '@/lib/sqlite';
 
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     },
     entitlements: listFeaturedEntitlements(),
     campaigns: listGameCampaigns(),
+    requests: listSponsorshipRequests(),
     dispensaries: await readApprovedDispensaries(),
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         title: body?.title ? String(body.title) : null,
         grantedByAdminId: admin.id,
       });
+      if(body?.requestId)reviewSponsorshipRequest(String(body.requestId),'approved',admin.id);
       return NextResponse.json({ campaign }, { status: 200 });
     } catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not save game campaign.' }, { status: 400 });
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
       source,
       adminId: admin.id,
     });
+    if(body?.requestId)reviewSponsorshipRequest(String(body.requestId),'approved',admin.id);
     return NextResponse.json({ entitlement }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not save Featured entitlement.' }, { status: 400 });
@@ -102,6 +105,11 @@ export async function PATCH(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'Sponsorship id is required.' }, { status: 400 });
 
   try {
+    if(kind==='request'){
+      const status=body?.status==='approved'?'approved':'rejected';
+      const requestRow=reviewSponsorshipRequest(id,status,auth.admin.id);
+      return NextResponse.json({request:requestRow},{status:200});
+    }
     if (kind === 'campaign') {
       if (body?.action !== 'edit') {
         const campaign = updateGameCampaignStatus(id, 'cancelled');
