@@ -56,7 +56,8 @@
   gap:10px!important;
   margin:0!important;
 }
-.weedoScannerCockpit .weedoFactsScanActions .weedoFactsScanButton{
+.weedoScannerCockpit .weedoFactsScanActions .weedoFactsScanButton,
+.weedoScannerCockpit .weedoFactsScanActions .weedoFactsManualButton{
   display:flex;
   min-height:82px;
   flex-direction:column;
@@ -73,7 +74,8 @@
   text-align:left;
   transition:transform .15s ease,border-color .15s ease,background .15s ease;
 }
-.weedoScannerCockpit .weedoFactsScanActions .weedoFactsScanButton:hover{
+.weedoScannerCockpit .weedoFactsScanActions .weedoFactsScanButton:hover,
+.weedoScannerCockpit .weedoFactsScanActions .weedoFactsManualButton:hover{
   transform:translateY(-1px);
   border-color:rgba(126,217,87,.4);
   background:rgba(126,217,87,.08);
@@ -84,11 +86,19 @@
   background:linear-gradient(135deg,#65d36d,#43b956)!important;
   color:#071108!important;
 }
-.weedoScannerCockpit .weedoFactsScanActions [data-geoweedo-photo-scanner]{order:2}
+.weedoScannerCockpit .weedoFactsScanActions [data-geoweedo-photo-scanner]{
+  order:2;
+  border-color:rgba(255,255,255,.12)!important;
+  background:rgba(255,255,255,.045)!important;
+  color:#eef7ef!important;
+}
 .weedoScannerCockpit .weedoFactsManualButton{order:3}
-.weedoScannerCockpit .weedoFactsScanButton>span{font-size:20px;line-height:1}
-.weedoScannerCockpit .weedoFactsScanButton>strong{font-size:14px}
-.weedoScannerCockpit .weedoFactsScanButton>small{font-size:10px;opacity:.72;font-weight:700}
+.weedoScannerCockpit .weedoFactsScanButton>span,
+.weedoScannerCockpit .weedoFactsManualButton>span{font-size:20px;line-height:1}
+.weedoScannerCockpit .weedoFactsScanButton>strong,
+.weedoScannerCockpit .weedoFactsManualButton>strong{font-size:14px}
+.weedoScannerCockpit .weedoFactsScanButton>small,
+.weedoScannerCockpit .weedoFactsManualButton>small{font-size:10px;opacity:.72;font-weight:700}
 .weedoScannerFormats{display:flex;flex-wrap:wrap;gap:7px}
 .weedoScannerFormats span{
   padding:5px 9px;
@@ -221,7 +231,8 @@
   .weedoScannerHero img{width:64px;height:64px}
   .weedoScannerHero p{max-width:260px}
   .weedoScannerCockpit .weedoFactsScanActions{gap:7px!important}
-  .weedoScannerCockpit .weedoFactsScanButton{padding:10px 11px!important}
+  .weedoScannerCockpit .weedoFactsScanButton,
+  .weedoScannerCockpit .weedoFactsManualButton{padding:10px 11px!important}
   .weedoScannerFlow{padding:13px!important}
   .weedoScannerFlowSteps{grid-template-columns:1fr}
 }
