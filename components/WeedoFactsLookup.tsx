@@ -278,7 +278,7 @@ export default function WeedoFactsLookup() {
             <strong>Scan package</strong>
             <small>Camera · QR · barcode</small>
           </button>
-          <button type="button" className="weedoFactsScanButton weedoFactsManualButton" onClick={() => setManualOpen(value => !value)} aria-expanded={showManualEntry}>
+          <button type="button" className="weedoFactsManualButton" onClick={() => setManualOpen(value => !value)} aria-expanded={showManualEntry}>
             <span aria-hidden="true">⌨️</span>
             <strong>Enter code</strong>
             <small>UPC · UID · batch · COA</small>
