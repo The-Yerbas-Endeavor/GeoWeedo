@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { listCandidates } from '@/lib/candidateStore';
-import {getOrCreateDispensarySlug} from '@/lib/dispensarySlug';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+let cachedPayload: { expiresAt: number; value: unknown } | null = null;
+const CACHE_MS = 30_000;
 
 function basicValidCoordinates(latitude: unknown, longitude: unknown) {
   return Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -34,10 +36,14 @@ function plausibleCountryCoordinates(countryValue: unknown, latitude: unknown, l
 }
 
 export async function GET() {
+  const now = Date.now();
+  if (cachedPayload && cachedPayload.expiresAt > now) {
+    return NextResponse.json(cachedPayload.value, { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } });
+  }
+
   const all = (await listCandidates()).filter((item) => item.status !== 'rejected');
   const candidates = all.filter((item) => plausibleCountryCoordinates(item.country, item.latitude, item.longitude)).map((item) => ({
     id: item.id,
-    slug:getOrCreateDispensarySlug(item.id),
     name: item.name,
     latitude: item.latitude as number,
     longitude: item.longitude as number,
@@ -65,5 +71,7 @@ export async function GET() {
   const regions = Array.from(regionMap.values()).sort((a, b) => a.country.localeCompare(b.country) || a.region.localeCompare(b.region));
   const countryRows = Array.from(countryMap.values());for (const country of countryRows) country.regions = regions.filter((region) => region.country === country.country).length;
   const countries = countryRows.sort((a, b) => a.country.localeCompare(b.country));
-  return NextResponse.json({candidates,regions,countries,stats:{total: all.length,mapped: candidates.length,missingCoordinates: Math.max(0, all.length - candidates.length - invalidCoordinates),invalidCoordinates,states: regions.filter((item) => item.country === 'USA').length,regions: regions.length,countries: countries.length}}, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+  const value = {candidates,regions,countries,stats:{total: all.length,mapped: candidates.length,missingCoordinates: Math.max(0, all.length - candidates.length - invalidCoordinates),invalidCoordinates,states: regions.filter((item) => item.country === 'USA').length,regions: regions.length,countries: countries.length}};
+  cachedPayload = { expiresAt: now + CACHE_MS, value };
+  return NextResponse.json(value, { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } });
 }
