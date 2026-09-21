@@ -25,7 +25,7 @@ export default function SiteHeader() {
             alt="GeoWeedo"
             className="geoweedo-header-logo"
           />
-          <span className="geoweedo-header-tagline">WEEDO SEARCH · WEEDO FIND · WEEDO PLAY</span>
+          <span className="geoweedo-header-tagline">GEOWEEDO SEARCH · GEOWEEDO FIND · GEOWEEDO PLAY</span>
         </span>
       </a>
 
