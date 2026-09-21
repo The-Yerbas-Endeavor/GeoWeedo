@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import DispensaryLogoUploader from '@/components/DispensaryLogoUploader';
+import OwnerSponsorshipActions from '@/components/OwnerSponsorshipActions';
 
 type SponsorMetrics={pin_impression:number;pin_click:number;listing_view:number;website_click:number;menu_click:number;directions_click:number;game_impression:number;game_completed:number};
 type DailyTrend={date:string;total:number}&SponsorMetrics;
-type SponsorSummary={business:{id:string;name:string};featured?:{status:string;startsAt:string;endsAt:string;source:string;planCode:string;currency:'USD'}|null;plan:{code:string;name:string;currency:'USD';monthlyPriceCents:number;annualPriceCents:number};metrics:SponsorMetrics;dailyTrend?:DailyTrend[]};
+type SponsorRequest={id:string;requestType:'featured'|'game';billingInterval:'monthly'|'annual'|null;gameType:'classic'|'daily'|'hunt'|null;durationCode:'day'|'week'|'month'|'year'|null;geographyType:'all'|'country'|'region'|'city'|'radius';geographyValue:string|null;radiusKm:number|null;preferredStartAt:string|null;note:string|null;status:'pending'|'approved'|'rejected'|'cancelled';createdAt:string};
+type SponsorSummary={business:{id:string;name:string};featured?:{status:string;startsAt:string;endsAt:string;source:string;planCode:string;currency:'USD'}|null;plan:{code:string;name:string;currency:'USD';monthlyPriceCents:number;annualPriceCents:number};metrics:SponsorMetrics;dailyTrend?:DailyTrend[];requests?:SponsorRequest[]};
 type Owned={locationId:string;verifiedAt:string;location:{id:string;name:string;city?:string;region?:string;country?:string};profile?:{overview?:string;phone?:string;website?:string;hours?:Record<string,string>;amenities?:string[];social?:Record<string,string>};sponsorship?:SponsorSummary|null};
 
 const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -66,6 +68,7 @@ export default function OwnerPage(){
         <section className="owner-panel" id="featured-analytics">
           <div className="owner-panel-head"><div><span>SPONSOR DASHBOARD · LAST 30 DAYS</span><h2>{current.sponsorship?.featured?.status==='active'?'★ Featured listing':'Standard listing'}</h2></div><a href="/for-dispensaries#featured">Featured details ↗</a></div>
           {current.sponsorship?.featured?<p>Featured {new Date(current.sponsorship.featured.startsAt).toLocaleDateString()} → {new Date(current.sponsorship.featured.endsAt).toLocaleDateString()} · billed/managed in USD.</p>:<p>Claiming and maintaining your business profile is free. GeoWeedo Featured adds enhanced map/discovery visibility and analytics without changing gameplay selection odds.</p>}
+          {current.sponsorship?.plan?<OwnerSponsorshipActions locationId={current.locationId} featured={current.sponsorship.featured||null} plan={current.sponsorship.plan} requests={current.sponsorship.requests||[]} onChanged={load}/>:null}
           {metrics&&<>
             <div className="owner-grid">{METRICS.map(([key,label])=><div key={key}><strong style={{fontSize:'1.6rem',display:'block'}}>{(metrics[key]||0).toLocaleString()}</strong><span>{label}</span></div>)}</div>
             <div style={{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(260px,.8fr)',gap:16,marginTop:18}}><TrendChart data={trend}/><div style={{border:'1px solid var(--border)',borderRadius:14,padding:14,background:'rgba(255,255,255,.015)'}}><strong style={{display:'block',marginBottom:12}}>Activity breakdown</strong><MetricBars metrics={metrics}/></div></div>
