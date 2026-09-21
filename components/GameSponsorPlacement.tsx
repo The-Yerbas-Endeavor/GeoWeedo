@@ -12,7 +12,7 @@ function gameForPath(pathname:string):Game|null{
  if(pathname.startsWith('/hunt'))return 'hunt';
  return null;
 }
-function gameName(game:Game){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily Weedo':'Weedo Hunt';}
+function gameName(game:Game){return game==='classic'?'Classic GeoWeedo':game==='daily'?'Daily GeoWeedo':'GeoWeedo Hunt';}
 
 export default function GameSponsorPlacement(){
  const pathname=usePathname(),routeGame=useMemo(()=>gameForPath(pathname),[pathname]);
