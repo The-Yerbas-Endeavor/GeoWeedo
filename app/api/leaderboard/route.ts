@@ -14,7 +14,9 @@ function board(mode:string,key:BoardKey,today:string,limit:number){
  const db=getDatabase();
  const dailyFilter=key==='daily'?' AND g.id LIKE ?':'';
  const sql=`
-  SELECT g.id,g.user_id,g.total_score,g.reward_atomic,g.reward_status,g.completed_at,
+  SELECT g.id,g.user_id,g.total_score,g.reward_atomic,
+         COALESCE((SELECT wl.status FROM wallet_ledger wl WHERE wl.reference_type='game_reward' AND wl.reference_id=g.id ORDER BY wl.created_at ASC LIMIT 1),g.reward_status) AS reward_status,
+         g.completed_at,
          COALESCE(NULLIF(u.display_name,''),NULLIF(u.username,''),'Player') AS player,
          COALESCE((SELECT wl.amount_atomic FROM wallet_ledger wl WHERE wl.reference_type='game_reward' AND wl.reference_id=g.id AND wl.status IN ('pending','held','posted') ORDER BY wl.created_at ASC LIMIT 1),g.reward_atomic,0) AS earned_atomic
   FROM games g
