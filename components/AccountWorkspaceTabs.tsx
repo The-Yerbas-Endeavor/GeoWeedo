@@ -7,7 +7,6 @@ const tabs = [
   { href: '/account/security', label: 'Login & Security', accountSection: true },
   { href: '/account/shop', label: 'Shop', accountSection: true },
   { href: '/account/products', label: 'Products / Menu', accountSection: true },
-  { href: '/account/shop#featured-analytics', label: 'Featured', accountSection: false },
   { href: '/account/yerbas', label: 'Yerbas', accountSection: true },
   { href: '/', label: 'View map', accountSection: false },
 ];
