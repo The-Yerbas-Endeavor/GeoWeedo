@@ -252,7 +252,7 @@ export type SponsorRequest = {
   ownerUserId:string;
   requestType:'featured'|'game';
   billingInterval:'monthly'|'annual'|null;
-  gameType:'classic'|'daily'|'hunt'|null;
+  gameType:'classic'|'daily'|'hunt'|'mission'|null;
   durationCode:'day'|'week'|'month'|'year'|null;
   geographyType:'all'|'country'|'region'|'city'|'radius';
   geographyValue:string|null;
@@ -295,7 +295,7 @@ export function listSponsorshipRequests(status?:string){
 export function createOwnerSponsorshipRequest(userId:string,dispensaryId:string,input:{
   requestType:'featured'|'game';
   billingInterval?:'monthly'|'annual'|null;
-  gameType?:'classic'|'daily'|'hunt'|null;
+  gameType?:'classic'|'daily'|'hunt'|'mission'|null;
   durationCode?:'day'|'week'|'month'|'year'|null;
   geographyType?:'all'|'country'|'region'|'city'|'radius';
   geographyValue?:string|null;
@@ -308,8 +308,8 @@ export function createOwnerSponsorshipRequest(userId:string,dispensaryId:string,
   if(!business)throw new Error('Verified dispensary owner access is required.');
   const requestType=input.requestType==='game'?'game':'featured';
   const billingInterval=requestType==='featured'?(input.billingInterval==='annual'?'annual':'monthly'):null;
-  const gameType=requestType==='game'&&['classic','daily','hunt'].includes(String(input.gameType))?String(input.gameType):null;
-  if(requestType==='game'&&!gameType)throw new Error('Choose Classic GeoWeedo, Daily Weedo, or Weedo Hunt.');
+  const gameType=requestType==='game'&&['classic','daily','hunt','mission'].includes(String(input.gameType))?String(input.gameType):null;
+  if(requestType==='game'&&!gameType)throw new Error('Choose Classic GeoWeedo, Daily Weedo, Weedo Hunt, or Sponsored Mission.');
   const durationCode=requestType==='game'&&['day','week','month','year'].includes(String(input.durationCode))?String(input.durationCode):null;
   if(requestType==='game'&&!durationCode)throw new Error('Choose a sponsorship duration.');
   const geographyType=['all','country','region','city','radius'].includes(String(input.geographyType))?String(input.geographyType):'all';
