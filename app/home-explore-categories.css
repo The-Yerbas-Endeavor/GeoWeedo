@@ -2,8 +2,19 @@
 .home-promo-explore-updated > .home-promo-intro{display:none!important}
 .home-promo-explore-updated > .game-selector{display:none!important}
 .home-promo-explore-updated.home-promo-play-open > .game-selector{display:grid!important;animation:homeExploreReveal .18s ease-out}
+.home-promo-explore-updated.home-promo-play-open > .home-promo-stats{display:none!important}
+.home-promo-explore-updated.home-promo-play-open > .map-coverage-note{display:none!important}
+.home-promo-explore-updated.home-promo-play-open{gap:10px}
 
 .home-explore-category-host{display:grid;gap:11px}
+.home-games-panel-head{display:grid;gap:12px;padding:2px 0 1px}
+.home-games-back{justify-self:start;padding:7px 10px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.055);color:#dce6de;font:inherit;font-size:11px;font-weight:850;cursor:pointer}
+.home-games-back:hover,.home-games-back:focus-visible{border-color:rgba(126,217,87,.55);background:rgba(126,217,87,.10);outline:none}
+.home-games-title{display:flex;align-items:center;justify-content:center;gap:12px;text-align:left;padding:11px 14px;border:1px solid rgba(245,196,81,.23);border-radius:15px;background:linear-gradient(135deg,rgba(245,196,81,.08),rgba(126,217,87,.055))}
+.home-games-icon{font-size:32px;line-height:1}
+.home-games-title>div{display:grid;gap:3px}
+.home-games-title strong{font-size:19px;line-height:1.1}
+.home-games-title small{color:#c9d4cc;font-size:11px;line-height:1.35}
 .home-explore-intro{text-align:center;padding:0 18px 2px}
 .home-explore-kicker{font-size:17px;font-weight:900;letter-spacing:.05em;color:#f3f7f4}
 .home-explore-intro p{max-width:590px;margin:5px auto 0;color:#d6dfd8;font-size:14px;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.55)}
@@ -32,6 +43,12 @@
 
 @media(max-width:650px){
   .home-explore-category-host{gap:8px}
+  .home-games-panel-head{gap:8px}
+  .home-games-back{font-size:10px;padding:6px 9px}
+  .home-games-title{padding:9px 11px}
+  .home-games-icon{font-size:25px}
+  .home-games-title strong{font-size:16px}
+  .home-games-title small{font-size:9px}
   .home-explore-intro{padding:0 8px}
   .home-explore-kicker{font-size:14px}
   .home-explore-intro p{font-size:11px;margin-top:3px}
