@@ -5,3 +5,168 @@
 .productBrowseModeSwitch a:hover,.productBrowseModeSwitch a:focus-visible{background:#eaf3ec;color:#245f39;outline:none}
 .productBrowseModeSwitch a.active{background:#245f39;color:#fff;box-shadow:0 4px 12px rgba(36,95,57,.16)}
 @media(max-width:520px){.productBrowseModeSwitch{display:grid;grid-template-columns:1fr 1fr;width:100%}.productBrowseModeSwitch a{white-space:normal;text-align:center}}
+
+
+/* Scanner-aligned Products experience */
+.productChemistryPage{max-width:1120px!important;padding:28px 20px 64px!important}
+.productBrowseHero{
+  position:relative;
+  overflow:hidden;
+  padding:24px;
+  border:1px solid rgba(126,217,87,.22);
+  border-radius:26px;
+  background:
+    radial-gradient(circle at 92% 4%,rgba(126,217,87,.18),transparent 28%),
+    linear-gradient(145deg,rgba(7,18,10,.98),rgba(12,31,18,.96));
+  box-shadow:0 26px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045);
+  color:#eef7ef;
+}
+.productBrowseHeroTop{display:flex;align-items:center;justify-content:space-between;gap:26px}
+.productBrowseHeroTop>div{max-width:760px}
+.productBrowseHero .weedoFactsKicker{color:#7ed957}
+.productBrowseHero h1{
+  margin:4px 0 8px;
+  color:#f5faf6;
+  font-size:clamp(2.15rem,5vw,3.7rem);
+  line-height:.96;
+  letter-spacing:-.045em;
+}
+.productBrowseHero p{margin:0;max-width:700px;color:#b9c8bd;font-size:1rem;line-height:1.45}
+.productBrowseHeroMascot{
+  flex:0 0 auto;
+  width:118px;
+  height:118px;
+  object-fit:contain;
+  filter:drop-shadow(0 16px 25px rgba(0,0,0,.34));
+  transform:rotate(4deg);
+}
+.productBrowseHero .productChemistryStats{margin-top:18px}
+.productBrowseHero .productChemistryStats>div{
+  border-color:rgba(126,217,87,.16);
+  background:rgba(255,255,255,.035);
+}
+.productBrowseHero .productChemistryStats strong{color:#eef7ef}
+.productBrowseHero .productChemistryStats span{color:#9eaca2}
+
+/* Main catalog becomes the same dark/glass workspace as Scanner. */
+.productBrowseIndex{
+  margin-top:14px!important;
+  padding:20px!important;
+  border:1px solid rgba(126,217,87,.16)!important;
+  border-radius:20px!important;
+  background:rgba(8,18,11,.92)!important;
+  box-shadow:0 20px 55px rgba(0,0,0,.2)!important;
+  color:#edf5ef!important;
+}
+.productBrowseIndex .productBrowseModeSwitch{
+  margin-bottom:14px;
+  border-color:rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);
+}
+.productBrowseIndex .productBrowseModeSwitch a{color:#aebbb2}
+.productBrowseIndex .productBrowseModeSwitch a:hover,
+.productBrowseIndex .productBrowseModeSwitch a:focus-visible{background:rgba(126,217,87,.08);color:#8be276}
+.productBrowseIndex .productBrowseModeSwitch a.active{
+  background:linear-gradient(135deg,#65d36d,#43b956);
+  color:#071108;
+  box-shadow:none;
+}
+.productBrowseIndex .nutritionalFactsIndexHead{
+  align-items:center;
+  border-bottom-color:rgba(255,255,255,.1);
+}
+.productBrowseIndex .nutritionalFactsIndexHead h2{color:#f1f7f2}
+.productBrowseIndex .nutritionalFactsIndexHead p{color:#9eaca2}
+.productBrowseIndex .weedoFactsEyebrow{color:#7ed957}
+.productBrowseIndex .nutritionalFactsCount{color:#7ed957}
+
+/* Filters: flatter, denser, and readable on the dark workspace. */
+.productBrowseIndex .productChemistryFilters{
+  padding:14px 0;
+  border-bottom-color:rgba(255,255,255,.09);
+}
+.productBrowseIndex .productChemistryFilters label>span{color:#9eaca2}
+.productBrowseIndex .productChemistryFilters input,
+.productBrowseIndex .productChemistryFilters select{
+  min-height:43px;
+  border-color:rgba(255,255,255,.12);
+  border-radius:11px;
+  background:#f5f8f5;
+  color:#172019;
+}
+.productBrowseIndex .productChemistryFilterActions button{
+  min-height:43px;
+  border-radius:11px;
+  background:linear-gradient(135deg,#65d36d,#43b956);
+  color:#071108;
+}
+.productBrowseIndex .productChemistryFilterActions a{
+  min-height:43px;
+  display:inline-flex;
+  align-items:center;
+  background:rgba(255,255,255,.07);
+  color:#cbd7ce;
+}
+
+/* Compact product tiles instead of large white slabs. */
+.productBrowseIndex .productBrowseGrid{gap:10px;margin-top:14px}
+.productBrowseIndex .productBrowseCard{
+  min-height:176px;
+  padding:15px;
+  border-color:rgba(255,255,255,.09);
+  border-radius:14px;
+  background:rgba(255,255,255,.035);
+  color:#edf5ef;
+  box-shadow:none;
+}
+.productBrowseIndex .productBrowseCard:hover{
+  transform:translateY(-2px);
+  border-color:rgba(126,217,87,.42);
+  background:rgba(126,217,87,.06);
+  box-shadow:0 10px 26px rgba(0,0,0,.18);
+}
+.productBrowseIndex .productBrowseCardTop{margin-bottom:10px}
+.productBrowseIndex .productBrowseCategory{
+  padding:4px 8px;
+  background:rgba(126,217,87,.1);
+  color:#8be276;
+  font-size:.66rem;
+}
+.productBrowseIndex .productBrowseName{color:#f4f8f5;font-size:1rem}
+.productBrowseIndex .productBrowseBrand{color:#b2c0b6}
+.productBrowseIndex .productBrowseSecondary{color:#859389}
+.productBrowseIndex .productBrowseEvidence{
+  border-top-color:rgba(255,255,255,.08);
+  color:#93a198;
+}
+.productBrowseIndex .productBrowseAvailable{color:#7ed957!important}
+.productBrowseIndex .productBrowseUnavailable{color:#c8aa76!important}
+.productBrowseIndex .productBrowseOpen{color:#7ed957}
+
+/* Supporting states */
+.productBrowseIndex .nutritionalFactsEmptyIndex{color:#9eaca2}
+.productBrowseIndex .productChemistryPagination{border-top-color:rgba(255,255,255,.08)}
+.productBrowseIndex .productChemistryPagination a{color:#7ed957}
+.productBrowseIndex .productChemistryPagination strong{color:#9eaca2}
+.productBrowseIndex .productChemistryAttribution{
+  border-color:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);
+  color:#8f9d93;
+}
+.productBrowseIndex .productChemistryAttribution strong{color:#cbd7ce}
+.productBrowseIndex .productChemistryAttribution a{color:#7ed957}
+
+@media(max-width:700px){
+  .productChemistryPage{padding:14px 10px 42px!important}
+  .productBrowseHero{padding:16px;border-radius:20px}
+  .productBrowseHeroTop{gap:12px}
+  .productBrowseHero h1{font-size:clamp(2rem,11vw,3rem)}
+  .productBrowseHero p{font-size:.9rem}
+  .productBrowseHeroMascot{width:76px;height:76px}
+  .productBrowseIndex{padding:14px!important;border-radius:16px!important}
+  .productBrowseIndex .productChemistryStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:430px){
+  .productBrowseHeroMascot{width:64px;height:64px}
+  .productBrowseHero p{max-width:260px}
+}
