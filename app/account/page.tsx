@@ -61,7 +61,7 @@ export default function AccountPage(){
             <a className="primary" href="/account/shop" style={{display:'inline-block',textDecoration:'none'}}>Manage shop</a>
           </div>
           {summary.ownership.dashboard?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12,marginTop:16}}>
-            <a href="/account/shop#featured-analytics" style={{display:'grid',gap:8,minHeight:180,padding:15,border:'1px solid rgba(255,255,255,.1)',borderRadius:14,background:'rgba(255,255,255,.025)',color:'inherit',textDecoration:'none'}}>
+            <a href="/account/featured" style={{display:'grid',gap:8,minHeight:180,padding:15,border:'1px solid rgba(255,255,255,.1)',borderRadius:14,background:'rgba(255,255,255,.025)',color:'inherit',textDecoration:'none'}}>
               <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'start'}}><span className="eyebrow">FEATURED LISTING</span><strong style={{color:summary.ownership.dashboard.featured.active?'#8fe36e':'#d6ddd7'}}>{summary.ownership.dashboard.featured.active?'★ Active':'Standard'}</strong></div>
               <div><strong style={{fontSize:'1.2rem'}}>Featured listing analytics</strong><p className="account-note" style={{margin:'5px 0 0'}}>Last 30 days for {summary.ownership.dashboard.locationName}.</p></div>
               <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginTop:'auto'}}>
