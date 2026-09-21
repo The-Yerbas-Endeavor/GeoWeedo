@@ -29,7 +29,7 @@ export default function OwnerProductsPage(){
   if(loading)return <main className="owner-shell"><div className="owner-panel">Loading product workspace…</div></main>;
 
   return <main className="owner-shell">
-    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Products</h1><p>Add and edit the products your dispensary sells, connect listings to canonical GeoWeedo Products, and keep menu pricing and availability current.</p></div><div className="owner-header-actions"><a href="/owner">Dashboard</a><a href="/account">Account</a><a href="/">View map</a></div></header>
+    <header className="owner-header"><div><a href="/">✦ GEOWEEDO</a><span>VERIFIED DISPENSARY OWNER</span><h1>Products</h1><p>Add and edit the products your dispensary sells, connect listings to canonical GeoWeedo Products, and keep menu pricing and availability current.</p></div></header>
     {message&&<div className="owner-message">{message}</div>}
     {items.length===0?<section className="owner-panel"><h2>No verified dispensary yet</h2><p>A verified ownership claim is required before editing products.</p><a className="owner-primary" href="/">Find and claim a dispensary</a></section>:<>
       <section className="owner-panel"><label>Managed dispensary<select value={selected} onChange={e=>setSelected(e.target.value)}>{items.map(item=><option key={item.locationId} value={item.locationId}>{item.location.name} · {[item.location.city,item.location.region].filter(Boolean).join(', ')}</option>)}</select></label>{current&&<small>Verified {new Date(current.verifiedAt).toLocaleDateString()}</small>}</section>
