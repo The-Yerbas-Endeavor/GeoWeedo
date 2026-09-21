@@ -53,7 +53,7 @@ export default function MobileHomeMode() {
             <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="GeoWeedo mascot" className="mobile-home-mascot" />
             <img src="/assets/geoweedo/geoweedo-logo-horizontal-dark.png" alt="GeoWeedo" className="mobile-home-logo" />
           </div>
-          <div className="mobile-home-tagline">WEEDO SEARCH. WEEDO FIND. WEEDO PLAY.</div>
+          <div className="mobile-home-tagline">GEOWEEDO SEARCH. GEOWEEDO FIND. GEOWEEDO PLAY.</div>
           <p>What would you like to do?</p>
           <div className="mobile-home-choice-actions">
             <button type="button" className="mobile-home-search" onClick={() => choose('search')}>Search GeoWeedo</button>
