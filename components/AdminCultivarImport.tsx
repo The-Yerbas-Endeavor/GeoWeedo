@@ -68,7 +68,7 @@ export default function AdminCultivarImport(){
   }catch(importError){setError(importError instanceof Error?importError.message:'Cultivar import failed.');}finally{setSaving(false);}
  }
  return <main className={styles.shell}>
-  <header className={styles.header}><div><span>WEEDO FACTS · CULTIVAR DATA</span><h1>Licensed pedigree import</h1><p>Import source-backed cultivar and pedigree data only when GeoWeedo has permission or a compatible reuse license. This tool deliberately does not scrape third-party cultivar databases.</p></div><div className={styles.headerLinks}><a href="/admin/cultivar-genetics">← Genetics manager</a><a href="/admin">Admin home</a></div></header>
+  <header className={styles.header}><div><span>GEOWEEDO FACTS · CULTIVAR DATA</span><h1>Licensed pedigree import</h1><p>Import source-backed cultivar and pedigree data only when GeoWeedo has permission or a compatible reuse license. This tool deliberately does not scrape third-party cultivar databases.</p></div><div className={styles.headerLinks}><a href="/admin/cultivar-genetics">← Genetics manager</a><a href="/admin">Admin home</a></div></header>
   <section className={styles.notice}><strong>Import guard</strong><p>The API refuses bulk imports unless <code>rightsConfirmed</code> is true and the source contains a meaningful <code>licenseNote</code>. Keep citation-only or restricted sources in manual corroboration workflows instead of importing their database contents.</p></section>
   {error?<div className={styles.error}>{error}</div>:null}{message?<div className={styles.success}>{message}</div>:null}
   <section className={styles.grid}>
