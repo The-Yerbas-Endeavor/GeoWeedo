@@ -124,6 +124,8 @@ export default function OwnerSponsorshipActions({locationId,featured,plan,reques
       </div>
     </div>
 
+    <div className="owner-sponsor-benefits"><span>★ Priority gold/star map pin</span><span>↑ Priority Browse & search placement</span><span>◎ Featured profile treatment</span><span>▥ Sponsor analytics</span></div>
+
     <div className="owner-sponsor-buttons">
       <button type="button" className="owner-primary" disabled={busy!==''||Boolean(pendingFeatured)} onClick={()=>void requestFeatured('monthly')}>
         {pendingFeatured?'Featured request pending':featured?.status==='active'?'Request 1-month extension':'Become Featured · '+money(plan.monthlyPriceCents)}
