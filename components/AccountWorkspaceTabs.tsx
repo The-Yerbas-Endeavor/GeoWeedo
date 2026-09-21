@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 
 const tabs = [
   { href: '/account', label: 'Account', accountSection: true },
+  { href: '/account/security', label: 'Login & Security', accountSection: true },
   { href: '/account/shop', label: 'Shop', accountSection: true },
   { href: '/account/products', label: 'Products / Menu', accountSection: true },
   { href: '/account/shop#featured-analytics', label: 'Featured', accountSection: false },
