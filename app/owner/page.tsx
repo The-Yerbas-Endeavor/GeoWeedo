@@ -33,7 +33,7 @@ function MetricBars({metrics}:{metrics:SponsorMetrics}){
   return <div style={{display:'grid',gap:8}}>{METRICS.map(([key,label])=>{const value=metrics[key]||0;return <div key={key} style={{display:'grid',gridTemplateColumns:'140px 1fr 52px',gap:10,alignItems:'center',fontSize:12}}><span>{label}</span><div style={{height:9,borderRadius:999,background:'rgba(255,255,255,.07)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.max(value?4:0,(value/max)*100)}%`,background:'#67d66e',borderRadius:999}}/></div><strong style={{textAlign:'right'}}>{value.toLocaleString()}</strong></div>})}</div>;
 }
 
-export default function OwnerPage(){
+export default function OwnerPage({showProducts=true}:{showProducts?:boolean}={}){
   const[items,setItems]=useState<Owned[]>([]),[selected,setSelected]=useState(''),[loading,setLoading]=useState(true),[message,setMessage]=useState<string|null>(null),[saving,setSaving]=useState(false);
   const[overview,setOverview]=useState(''),[phone,setPhone]=useState(''),[website,setWebsite]=useState(''),[customAmenities,setCustomAmenities]=useState(''),[selectedAmenities,setSelectedAmenities]=useState<string[]>([]),[hours,setHours]=useState<Record<string,string>>({}),[instagram,setInstagram]=useState(''),[facebook,setFacebook]=useState(''),[x,setX]=useState('');
   const current=useMemo(()=>items.find(i=>i.locationId===selected)||null,[items,selected]);
@@ -73,7 +73,7 @@ export default function OwnerPage(){
           </>}
           {current.sponsorship?.plan&&<small style={{display:'block',marginTop:14}}>{current.sponsorship.plan.name}: ${(current.sponsorship.plan.monthlyPriceCents/100).toFixed(0)}/month or ${(current.sponsorship.plan.annualPriceCents/100).toFixed(0)}/year. Sponsorship payments are USD-only.</small>}
         </section>
-        <OwnerProductManager locationId={current.locationId}/>
+        {showProducts&&<OwnerProductManager locationId={current.locationId}/>}
         <section className="owner-panel owner-form" id="public-profile">
           <div className="owner-panel-head"><div><span>PUBLIC PROFILE</span><h2>{current.location.name}</h2></div><a href={`/dispensary/${encodeURIComponent(current.locationId)}`} target="_blank" rel="noreferrer">View public profile ↗</a></div>
           <DispensaryLogoUploader locationId={current.locationId}/>
