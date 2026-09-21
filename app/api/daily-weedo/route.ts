@@ -43,10 +43,10 @@ export async function GET() {
     item.active && item.gameplayEnabled && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
 
   if (!approved.length) {
-    return NextResponse.json({ error: 'No enabled Daily Weedo locations are available.' }, { status: 503 });
+    return NextResponse.json({ error: 'No enabled Daily GeoWeedo locations are available.' }, { status: 503 });
   }
 
-  // Daily Weedo remains a fair, deterministic daily challenge. Featured status is
+  // Daily GeoWeedo remains a fair, deterministic daily challenge. Featured status is
   // presentation/analytics only and never changes a location's selection odds.
   const target = approved[hashString(`geoweedo-daily-enabled-${today}`) % approved.length];
 
