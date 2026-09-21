@@ -33,6 +33,8 @@ function hasCoordinates(r:Row){if(r.latitude==null||r.longitude==null||String(r.
 function gameReady(r:Row){return r.kind==='dispensary'&&hasCoordinates(r)&&Boolean(r.imagery_provider);}
 function candidateGameReady(r:Row){return r.kind==='candidate'&&hasCoordinates(r)&&r.imagery_status==='coverage';}
 function gameplayStatus(r:Row){if(r.kind!=='dispensary')return'candidate';if(!gameReady(r))return'not-ready';return r.gameplay_enabled===0?'disabled':'enabled';}
+function rowKey(r:Row){return r.kind+':'+r.id;}
+function bulkGameplayEligible(r:Row){return r.kind==='candidate'?r.status!=='rejected'&&hasCoordinates(r):r.gameplay_enabled===0&&gameReady(r);}
 function cmp(a:string,b:string){return a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'});}
 function dateText(value?:string|null){if(!value)return'Never';const d=new Date(value);return Number.isNaN(d.getTime())?'Never':d.toLocaleDateString();}
 
@@ -40,7 +42,7 @@ export default function AdminFullDispensaryEditor(){
  const[rows,setRows]=useState<Row[]>([]);
  const[query,setQuery]=useState(''),[country,setCountry]=useState('all'),[region,setRegion]=useState('all'),[kind,setKind]=useState('all'),[recordStatus,setRecordStatus]=useState('all'),[gameplayFilter,setGameplayFilter]=useState<GameplayFilter>('all');
  const[sortKey,setSortKey]=useState<SortKey>('region'),[sortDir,setSortDir]=useState<'asc'|'desc'>('asc'),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
- const[selected,setSelected]=useState<Row|null>(null),[form,setForm]=useState<Form|null>(null),[status,setStatus]=useState('Loading locations…'),[busyId,setBusyId]=useState<string|null>(null);
+ const[selected,setSelected]=useState<Row|null>(null),[form,setForm]=useState<Form|null>(null),[status,setStatus]=useState('Loading locations…'),[busyId,setBusyId]=useState<string|null>(null),[selectedKeys,setSelectedKeys]=useState<string[]>([]),[bulkBusy,setBulkBusy]=useState(false);
 
  async function fetchRows(){
   const response=await fetch('/api/admin/dispensary-records',{cache:'no-store'});
@@ -63,10 +65,17 @@ export default function AdminFullDispensaryEditor(){
  const stateStats=useMemo(()=>{const map=new Map<string,{state:string;total:number;dispensaries:number;candidates:number;gameplay:number}>();for(const row of rows){if(country!=='all'&&row.country!==country)continue;const state=normalizeState(row.region),current=map.get(state)||{state,total:0,dispensaries:0,candidates:0,gameplay:0};current.total++;if(row.kind==='dispensary'){current.dispensaries++;if(gameplayStatus(row)==='enabled')current.gameplay++;}else current.candidates++;map.set(state,current);}return Array.from(map.values()).sort((a,b)=>cmp(a.state,b.state));},[rows,country]);
  const filtered=useMemo(()=>{const q=query.trim().toLowerCase(),list=rows.filter(r=>{if(country!=='all'&&r.country!==country)return false;if(region!=='all'&&normalizeState(r.region)!==region)return false;if(kind!=='all'&&r.kind!==kind)return false;if(recordStatus!=='all'&&rowStatus(r)!==recordStatus)return false;if(gameplayFilter!=='all'&&gameplayStatus(r)!==gameplayFilter)return false;if(!q)return true;return(r.name+' '+(r.street_address||'')+' '+(r.city||'')+' '+normalizeState(r.region)+' '+(r.country||'')+' '+(r.license_number||'')+' '+(r.license_type||'')+' '+(r.license_types||[]).join(' ')+' '+(r.data_source||'')).toLowerCase().includes(q);});list.sort((a,b)=>{const value=(r:Row)=>sortKey==='kind'?r.kind:sortKey==='status'?rowStatus(r):sortKey==='gameplay'?gameplayStatus(r):sortKey==='region'?normalizeState(r.region):String((r as any)[sortKey]||'');const n=cmp(value(a),value(b))||cmp(a.name,b.name);return sortDir==='asc'?n:-n;});return list;},[rows,query,country,region,kind,recordStatus,gameplayFilter,sortKey,sortDir]);
  const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,totalPages),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
+ const selectedKeySet=useMemo(()=>new Set(selectedKeys),[selectedKeys]);
+ const selectedRows=useMemo(()=>rows.filter(row=>selectedKeySet.has(rowKey(row))&&bulkGameplayEligible(row)),[rows,selectedKeySet]);
+ const visibleEligible=useMemo(()=>visible.filter(bulkGameplayEligible),[visible]);
+ const visibleEligibleSelected=visibleEligible.length>0&&visibleEligible.every(row=>selectedKeySet.has(rowKey(row)));
 
  function choose(r:Row){setSelected(r);setForm(makeForm(r));setStatus('Editing '+r.name+'.');}
  function toggleLicense(type:string){if(!form)return;setForm({...form,licenseTypes:form.licenseTypes.includes(type)?form.licenseTypes.filter(x=>x!==type):[...form.licenseTypes,type]});}
  function clearFilters(){setQuery('');setCountry('all');setRegion('all');setKind('all');setRecordStatus('all');setGameplayFilter('all');setSortKey('region');setSortDir('asc');setPage(1);}
+ function toggleSelected(row:Row){if(!bulkGameplayEligible(row)||bulkBusy)return;const key=rowKey(row);setSelectedKeys(current=>current.includes(key)?current.filter(value=>value!==key):[...current,key]);}
+ function toggleVisibleSelection(){if(bulkBusy||!visibleEligible.length)return;const keys=visibleEligible.map(rowKey);setSelectedKeys(current=>{const set=new Set(current);const all=keys.every(key=>set.has(key));for(const key of keys){if(all)set.delete(key);else set.add(key);}return Array.from(set);});}
+ function clearSelection(){if(!bulkBusy)setSelectedKeys([]);}
  function closeEditor(){if(busyId)return;setSelected(null);setForm(null);}
  useEffect(()=>{if(!selected)return;const previous=document.body.style.overflow;document.body.style.overflow='hidden';const onKey=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busyId){setSelected(null);setForm(null);}};window.addEventListener('keydown',onKey);return()=>{document.body.style.overflow=previous;window.removeEventListener('keydown',onKey);};},[selected,busyId]);
  function setGameplayForm(enabled:boolean){if(!selected||!form||selected.kind!=='dispensary')return;if(enabled&&!gameReady(selected)){setStatus('Gameplay cannot be enabled until this dispensary has valid coordinates and approved Street View imagery. Save location/imagery corrections first.');return;}setForm({...form,gameplayEnabled:enabled});setStatus(enabled?'Gameplay will be enabled when you save.':'Gameplay will be disabled when you save. Browse visibility is independent.');}
@@ -93,6 +102,61 @@ export default function AdminFullDispensaryEditor(){
  async function enrichDispensary(row:Row){if(row.kind!=='dispensary')return;setBusyId(row.id);setStatus(row.name+': running Google Places enrichment…');try{const response=await fetch('/api/admin/dispensary-batch-enrichment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'singleDispensary',locationId:row.id,autoApply:true})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Enrichment failed.');const counts=data.job?.counts||{};let message=row.name+': enrichment finished.';if(Number(counts.applied||0)>0)message=row.name+': enrichment approved and applied.';else if(Number(counts.review||0)>0)message=row.name+': enrichment needs Admin review.';else if(Number(counts.failed||0)>0)message=row.name+': enrichment failed; review the result.';await reload(message,row);}catch(error){setStatus(error instanceof Error?error.message:'Enrichment failed.');}finally{setBusyId(null);}}
  async function enrichCandidate(row:Row){if(row.kind!=='candidate'||row.status==='rejected')return;setBusyId(row.id);setStatus(row.name+': running Google Places enrichment…');try{const response=await fetch('/api/admin/dispensary-batch-enrichment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'singleCandidate',locationId:row.id,autoApply:true})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Automated enrichment failed.');const counts=data.job?.counts||{};let message=row.name+': enrichment finished.';if(Number(counts.applied||0)>0)message=row.name+': enrichment applied; Confirm & Enable is now available.';else if(Number(counts.review||0)>0)message=row.name+': Google Places match needs Admin review.';else if(Number(counts.failed||0)>0)message=row.name+': enrichment failed; review the result.';await reload(message,row);}catch(error){setStatus(error instanceof Error?error.message:'Automated enrichment failed.');}finally{setBusyId(null);}}
  async function confirmAndEnableCandidate(row:Row){if(row.kind!=='candidate'||row.status==='rejected')return;if(!hasCoordinates(row)){setStatus(row.name+': save valid coordinates before enabling gameplay.');return;}setBusyId(row.id);setStatus(row.name+': validating Street View and enabling gameplay…');try{const check=await fetch('/api/admin/candidates/check-imagery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[row.id],limit:1,source:'coordinate_ready'})});const checked=await check.json().catch(()=>({}));if(!check.ok)throw new Error(checked.error||'Street View validation failed.');const result=Array.isArray(checked.results)?checked.results[0]:null,imageryStatus=result?.imageryStatus||row.imagery_status;if(imageryStatus!=='coverage')throw new Error(result?.imageryMessage||'This location does not yet have gameplay-ready Street View.');const approve=await fetch('/api/admin/candidates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[row.id],action:'approve'})});const approved=await approve.json().catch(()=>({}));if(!approve.ok)throw new Error(approved.error||'Promotion failed.');if(Number(approved.promoted||0)<1){const reason=Object.keys(approved.skippedReasons||{})[0];throw new Error(reason?'Promotion skipped: '+reason.replace(/_/g,' ')+'.':'Candidate did not pass final gameplay validation.');}await reload(row.name+': confirmed, promoted, and gameplay enabled.',null);window.dispatchEvent(new Event('geoweedo-pipeline-updated'));}catch(error){setStatus(error instanceof Error?error.message:'Could not confirm and enable gameplay.');}finally{setBusyId(null);}}
+ async function bulkEnableGameplay(){
+  const targets=selectedRows;
+  if(!targets.length){setStatus('Select one or more eligible rows first.');return;}
+  const candidateTargets=targets.filter(row=>row.kind==='candidate');
+  const dispensaryTargets=targets.filter(row=>row.kind==='dispensary');
+  if(!window.confirm('Enable gameplay for '+targets.length+' selected location'+(targets.length===1?'':'s')+'? Candidates will still receive Street View validation before promotion.'))return;
+  setBulkBusy(true);
+  setStatus('Bulk gameplay enable started for '+targets.length+' selected locations…');
+  let promoted=0,enabled=0,skipped=0;
+  const skippedReasons:Record<string,number>={};
+  const noteSkip=(reason:string,count=1)=>{skipped+=count;skippedReasons[reason]=(skippedReasons[reason]||0)+count;};
+  try{
+   const candidateIds=candidateTargets.map(row=>row.id);
+   for(let offset=0;offset<candidateIds.length;offset+=20){
+    const ids=candidateIds.slice(offset,offset+20);
+    setStatus('Validating Street View for candidates '+(offset+1)+'–'+Math.min(offset+ids.length,candidateIds.length)+' of '+candidateIds.length+'…');
+    const check=await fetch('/api/admin/candidates/check-imagery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,limit:ids.length,source:'coordinate_ready'})});
+    const checked=await check.json().catch(()=>({}));
+    if(!check.ok){noteSkip('imagery_check_failed',ids.length);continue;}
+    const results=Array.isArray(checked.results)?checked.results:[];
+    const readyIds=results.filter((item:any)=>item?.imageryStatus==='coverage').map((item:any)=>String(item.id)).filter(Boolean);
+    const notReady=Math.max(0,ids.length-readyIds.length);
+    if(notReady)noteSkip('imagery_not_ready',notReady);
+    if(!readyIds.length)continue;
+    const approve=await fetch('/api/admin/candidates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:readyIds,action:'approve'})});
+    const approved=await approve.json().catch(()=>({}));
+    if(!approve.ok){noteSkip('promotion_request_failed',readyIds.length);continue;}
+    promoted+=Number(approved.promoted||0);
+    const approveSkipped=Number(approved.skipped||0);
+    skipped+=approveSkipped;
+    for(const [reason,count] of Object.entries(approved.skippedReasons||{}))skippedReasons[reason]=(skippedReasons[reason]||0)+Number(count||0);
+   }
+
+   if(dispensaryTargets.length){
+    setStatus('Enabling gameplay for '+dispensaryTargets.length+' approved dispensar'+(dispensaryTargets.length===1?'y':'ies')+'…');
+    const response=await fetch('/api/admin/dispensary-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set-gameplay-bulk',ids:dispensaryTargets.map(row=>row.id)})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)noteSkip('dispensary_bulk_update_failed',dispensaryTargets.length);
+    else{
+     enabled+=Number(data.updated||0);
+     skipped+=Number(data.skipped||0);
+     for(const [reason,count] of Object.entries(data.skippedReasons||{}))skippedReasons[reason]=(skippedReasons[reason]||0)+Number(count||0);
+    }
+   }
+
+   await fetchRows();
+   setSelectedKeys([]);
+   const completed=promoted+enabled;
+   const details=Object.entries(skippedReasons).filter(([,count])=>count>0).map(([reason,count])=>count+' '+reason.replace(/_/g,' ')).join(' · ');
+   setStatus('Bulk gameplay complete: '+completed+' enabled'+(promoted?' · '+promoted+' candidates promoted':'')+(enabled?' · '+enabled+' dispensaries enabled':'')+(skipped?' · '+skipped+' skipped'+(details?' ('+details+')':''):'')+'.');
+   if(completed)window.dispatchEvent(new Event('geoweedo-pipeline-updated'));
+  }catch(error){
+   setStatus(error instanceof Error?error.message:'Bulk gameplay enable failed.');
+  }finally{setBulkBusy(false);}
+ }
  async function setCandidateStatus(row:Row,next:'candidate'|'reviewing'|'rejected'){if(row.kind!=='candidate')return;setBusyId(row.id);try{const response=await fetch('/api/admin/candidates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id,status:next})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Candidate status update failed.');await reload(row.name+': '+(next==='rejected'?'rejected.':next==='candidate'?'restored to candidate.':'moved to review.'),row);}catch(error){setStatus(error instanceof Error?error.message:'Candidate status update failed.');}finally{setBusyId(null);}}
  async function deleteRejectedCandidate(row:Row){if(row.kind!=='candidate'||row.status!=='rejected')return;if(!window.confirm('Permanently delete rejected candidate "'+row.name+'"? This cannot be undone.'))return;setBusyId(row.id);try{const response=await fetch('/api/admin/candidates',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not delete rejected candidate.');await reload(row.name+': rejected candidate deleted.',null);}catch(error){setStatus(error instanceof Error?error.message:'Could not delete rejected candidate.');}finally{setBusyId(null);}}
  function actionButton(label:string,onClick:()=>void,disabled=false,primary=false){return <button type="button" className={primary?'primary':'ghost'} disabled={disabled} onClick={event=>{event.stopPropagation();onClick();}}>{label}</button>;}
@@ -123,21 +187,29 @@ export default function AdminFullDispensaryEditor(){
    <button className="ghost" type="button" onClick={clearFilters}>Clear filters</button><span style={{marginLeft:'auto',color:'var(--muted)',fontSize:13}}>{filtered.length.toLocaleString()} matches</span>
   </div>
 
+  <div className="location-bulk-actions" style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginTop:12,padding:'10px 12px',border:'1px solid var(--border)',borderRadius:10,background:'rgba(255,255,255,.02)'}}>
+   <label style={{display:'inline-flex',gap:7,alignItems:'center',fontWeight:700}}><input type="checkbox" checked={visibleEligibleSelected} disabled={bulkBusy||visibleEligible.length===0} onChange={toggleVisibleSelection}/> Select eligible on this page ({visibleEligible.length})</label>
+   <span style={{color:'var(--muted)',fontSize:12}}>{selectedRows.length} selected across pages</span>
+   <button className="ghost" type="button" disabled={bulkBusy||selectedRows.length===0} onClick={clearSelection}>Clear selection</button>
+   <button className="primary" type="button" disabled={bulkBusy||selectedRows.length===0} onClick={()=>void bulkEnableGameplay()} style={{marginLeft:'auto'}}>{bulkBusy?'Enabling selected…':'Enable gameplay selected ('+selectedRows.length+')'}</button>
+  </div>
+
   <div className="admin-status" style={{margin:'12px 0'}}>{status}</div>
 
   <div>
    <div>
     <div className="location-table-wrap">
      <table className="location-table">
-      <thead><tr><th>Name</th><th>City</th><th>State</th><th>Type</th><th>Browse / status</th><th>Gameplay</th><th>Actions</th></tr></thead>
-      <tbody>{visible.map(row=><tr key={row.kind+':'+row.id} onClick={()=>choose(row)} style={{cursor:'pointer',borderTop:'1px solid var(--border)'}}>
+      <thead><tr><th style={{width:36,textAlign:'center'}}><input type="checkbox" aria-label="Select eligible rows on this page" checked={visibleEligibleSelected} disabled={bulkBusy||visibleEligible.length===0} onChange={toggleVisibleSelection}/></th><th>Name</th><th>City</th><th>State</th><th>Type</th><th>Browse / status</th><th>Gameplay</th><th>Actions</th></tr></thead>
+      <tbody>{visible.map(row=>{const eligible=bulkGameplayEligible(row),checked=selectedKeySet.has(rowKey(row));return <tr key={row.kind+':'+row.id} onClick={()=>choose(row)} style={{cursor:'pointer',borderTop:'1px solid var(--border)',background:checked?'rgba(103,214,110,.05)':undefined}}>
+       <td onClick={event=>event.stopPropagation()} style={{textAlign:'center',padding:'6px'}}><input type="checkbox" aria-label={'Select '+row.name+' for gameplay enable'} checked={checked} disabled={bulkBusy||!eligible} onChange={()=>toggleSelected(row)} title={eligible?'Select for bulk gameplay enable':row.kind==='dispensary'?'Already enabled or not game ready':'Candidate needs valid coordinates'}/></td>
        <td style={{padding:10}}><strong>{row.name}</strong>{row.license_number&&<div style={{fontSize:11,color:'var(--muted)'}}>{row.license_number}</div>}{row.kind==='candidate'&&row.automated_enrichment_approved&&<div style={{fontSize:10,color:'#8ecbff'}}>Enrichment approved</div>}</td>
        <td>{row.city||'—'}</td><td>{normalizeState(row.region)}</td><td>{row.kind==='candidate'?'Candidate':'Dispensary'}</td><td>{rowStatus(row)}</td><td>{gameplayStatus(row)==='enabled'?'Enabled':gameplayStatus(row)==='disabled'?'Disabled':gameplayStatus(row)==='not-ready'?'Not ready':'—'}</td>
        <td onClick={event=>event.stopPropagation()}><div className="location-actions">
         {actionButton('Edit',()=>choose(row))}
         {row.kind==='dispensary'?<>{actionButton('Confirm',()=>void confirmProfile(row),busyId===row.id)}{actionButton('Enrich',()=>void enrichDispensary(row),busyId===row.id)}{actionButton(row.active===0?'Show browse':'Hide browse',()=>void locationAction(row,'set-browse',row.active===0),busyId===row.id)}{actionButton(row.gameplay_enabled===0?'Gameplay on':'Gameplay off',()=>void locationAction(row,'set-gameplay',row.gameplay_enabled===0),busyId===row.id||row.gameplay_enabled===0&&!gameReady(row))}</>:row.status==='rejected'?<>{actionButton('Restore',()=>void setCandidateStatus(row,'candidate'),busyId===row.id,true)}{actionButton('Delete',()=>void deleteRejectedCandidate(row),busyId===row.id)}</>:<>{actionButton('Enrich',()=>void enrichCandidate(row),busyId===row.id)}{actionButton('Enable gameplay',()=>void confirmAndEnableCandidate(row),busyId===row.id||!hasCoordinates(row),true)}{actionButton('Reject',()=>void setCandidateStatus(row,'rejected'),busyId===row.id)}</>}
        </div></td>
-      </tr>)}</tbody>
+      </tr>})}</tbody>
      </table>
     </div>
     <div style={{display:'flex',justifyContent:'space-between',marginTop:10}}><span>Page {safePage} of {totalPages}</span><div style={{display:'flex',gap:6}}><button className="ghost" disabled={safePage<=1} onClick={()=>setPage(1)}>First</button><button className="ghost" disabled={safePage<=1} onClick={()=>setPage(p=>p-1)}>Previous</button><button className="ghost" disabled={safePage>=totalPages} onClick={()=>setPage(p=>p+1)}>Next</button><button className="ghost" disabled={safePage>=totalPages} onClick={()=>setPage(totalPages)}>Last</button></div></div>
