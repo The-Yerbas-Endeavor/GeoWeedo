@@ -126,6 +126,10 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   requireColumns(categoryColumns, ['id', 'slug', 'name', 'sort_order', 'active'], 'cannabis_product_categories');
 
   const hasScans = qrColumns.has('product_id') && qrColumns.has('scan_count') && qrColumns.has('last_seen_at');
+  const hasScanBrands = hasScans && qrColumns.has('brand_name');
+  const effectiveBrandSql = hasScanBrands
+    ? `COALESCE(NULLIF(TRIM(p.brand_name),''),(SELECT NULLIF(TRIM(qb.brand_name),'') FROM cannabis_qr_scans qb WHERE qb.product_id=p.id AND qb.brand_name IS NOT NULL AND TRIM(qb.brand_name)<>'' ORDER BY qb.last_seen_at DESC LIMIT 1))`
+    : `NULLIF(TRIM(p.brand_name),'')`;
   const hasApprovedUploads =
     submissionColumns.has('id') && submissionColumns.has('product_id') && submissionColumns.has('status') &&
     uploadColumns.has('submission_id') && uploadColumns.has('status');
@@ -162,7 +166,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   const params: Array<string | number> = [];
 
   if (brand) {
-    conditions.push('p.brand_name = ?');
+    conditions.push(`${effectiveBrandSql} = ? COLLATE NOCASE`);
     params.push(brand);
   }
   if (type) {
@@ -171,7 +175,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   }
 
   const searchExpression = `LOWER(
-    COALESCE(p.product_name,'') || ' ' || COALESCE(p.brand_name,'') || ' ' ||
+    COALESCE(p.product_name,'') || ' ' || COALESCE(${effectiveBrandSql},'') || ' ' ||
     COALESCE(c.name,'') || ' ' || COALESCE(p.product_type,'') || ' ' ||
     COALESCE(p.canonical_product_type,'') || ' ' || COALESCE(p.net_contents,'')
   )`;
@@ -184,7 +188,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   const stats = db.prepare(`${publicCte}
     SELECT
       COUNT(DISTINCT p.id) AS product_count,
-      COUNT(DISTINCT CASE WHEN p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> '' THEN p.brand_name END) AS brand_count,
+      COUNT(DISTINCT ${effectiveBrandSql}) AS brand_count,
       COUNT(DISTINCT CASE WHEN p.category_id IS NOT NULL THEN p.category_id END) AS category_count
     FROM cannabis_products p
     JOIN public_product_ids public ON public.product_id=p.id
@@ -272,7 +276,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   const rows = db.prepare(`${publicCte}
     SELECT
       p.id AS product_id,
-      p.brand_name,
+      ${effectiveBrandSql} AS brand_name,
       p.product_name,
       p.product_type,
       p.canonical_product_type,
@@ -294,10 +298,10 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   `).all(...params, pageSize, offset) as any[];
 
   const brandRows = db.prepare(`${publicCte}
-    SELECT DISTINCT p.brand_name AS value
+    SELECT DISTINCT ${effectiveBrandSql} AS value
     FROM cannabis_products p
     JOIN public_product_ids public ON public.product_id=p.id
-    WHERE p.brand_name IS NOT NULL AND TRIM(p.brand_name) <> ''
+    WHERE ${effectiveBrandSql} IS NOT NULL AND TRIM(${effectiveBrandSql}) <> ''
     ORDER BY value COLLATE NOCASE
   `).all() as Array<{ value: string }>;
 
