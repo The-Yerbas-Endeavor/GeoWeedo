@@ -118,7 +118,7 @@ export default function AdminFullDispensaryEditor(){
    for(let offset=0;offset<candidateIds.length;offset+=20){
     const ids=candidateIds.slice(offset,offset+20);
     setStatus('Validating Street View for candidates '+(offset+1)+'–'+Math.min(offset+ids.length,candidateIds.length)+' of '+candidateIds.length+'…');
-    const check=await fetch('/api/admin/candidates/check-imagery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,limit:ids.length,source:'coordinate_ready'})});
+    const check=await fetch('/api/admin/candidates/check-imagery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,limit:ids.length,source:'coordinate_ready',adminOverride:false})});
     const checked=await check.json().catch(()=>({}));
     if(!check.ok){noteSkip('imagery_check_failed',ids.length);continue;}
     const results=Array.isArray(checked.results)?checked.results:[];
@@ -159,7 +159,7 @@ export default function AdminFullDispensaryEditor(){
  }
  async function setCandidateStatus(row:Row,next:'candidate'|'reviewing'|'rejected'){if(row.kind!=='candidate')return;setBusyId(row.id);try{const response=await fetch('/api/admin/candidates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id,status:next})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Candidate status update failed.');await reload(row.name+': '+(next==='rejected'?'rejected.':next==='candidate'?'restored to candidate.':'moved to review.'),row);}catch(error){setStatus(error instanceof Error?error.message:'Candidate status update failed.');}finally{setBusyId(null);}}
  async function deleteRejectedCandidate(row:Row){if(row.kind!=='candidate'||row.status!=='rejected')return;if(!window.confirm('Permanently delete rejected candidate "'+row.name+'"? This cannot be undone.'))return;setBusyId(row.id);try{const response=await fetch('/api/admin/candidates',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not delete rejected candidate.');await reload(row.name+': rejected candidate deleted.',null);}catch(error){setStatus(error instanceof Error?error.message:'Could not delete rejected candidate.');}finally{setBusyId(null);}}
- function actionButton(label:string,onClick:()=>void,disabled=false,primary=false){return <button type="button" className={primary?'primary':'ghost'} disabled={disabled} onClick={event=>{event.stopPropagation();onClick();}}>{label}</button>;}
+ function actionButton(label:string,onClick:()=>void,disabled=false,primary=false){return <button type="button" className={primary?'primary':'ghost'} disabled={disabled||bulkBusy} onClick={event=>{event.stopPropagation();onClick();}}>{label}</button>;}
 
  const editLatitude=form?Number(form.latitude):NaN,editLongitude=form?Number(form.longitude):NaN;
 
