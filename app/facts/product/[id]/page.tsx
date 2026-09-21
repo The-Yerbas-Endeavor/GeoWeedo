@@ -35,9 +35,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const canonicalId = resolveCanonicalProductId(id);
   const record = getWeedoFactsProductListing(canonicalId);
-  if (!record) return { title: 'Product not found · Weedo Facts' };
+  if (!record) return { title: 'Product not found · GeoWeedo Facts' };
   return {
-    title: `${record.productName} · Weedo Facts`,
+    title: `${record.productName} · GeoWeedo Facts`,
     description: `${record.brandName ? `${record.brandName} · ` : ''}${record.productName} batch chemistry, testing evidence, and dispensary availability.`,
     alternates: { canonical: `/facts/product/${encodeURIComponent(canonicalId)}` },
   };
@@ -53,7 +53,7 @@ export default async function FactsProductPage({ params, searchParams }: Props) 
   const record = requestedBatch?.productId === productId ? requestedBatch : productRecord;
 
   if (!record) {
-    return <main className={`landing-shell ${productStyles.shell}`}><SiteHeader /><div className={productStyles.page}><a className={productStyles.back} href="/facts">← Weedo Facts</a><section className={productStyles.hero}><span>WEEDO FACTS</span><h1>Product not found</h1><p>This canonical product is not available in GeoWeedo.</p></section></div></main>;
+    return <main className={`landing-shell ${productStyles.shell}`}><SiteHeader /><div className={productStyles.page}><a className={productStyles.back} href="/facts">← GeoWeedo Facts</a><section className={productStyles.hero}><span>GEOWEEDO FACTS</span><h1>Product not found</h1><p>This canonical product is not available in GeoWeedo.</p></section></div></main>;
   }
 
   const availability = listWeedoFactsAvailability(productId, record.batchId);
