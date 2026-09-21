@@ -24,3 +24,56 @@
   .live-guess-card{max-height:68dvh}
   .live-guess-card .guess-map-wrap{height:min(39dvh,270px)!important;min-height:190px}
 }
+
+
+/* Round results: keep the continuation action visible without forcing a
+   player to discover it below a scrollable result card. */
+@media (max-width:760px){
+  .live-guess-card.round-revealed{
+    display:flex!important;
+    flex-direction:column;
+    max-height:calc(100dvh - 150px)!important;
+    overflow:hidden!important;
+  }
+  .live-guess-card.round-revealed .guess-map-wrap{
+    flex:0 0 auto;
+    height:min(28dvh,220px)!important;
+    min-height:145px!important;
+    margin-bottom:7px!important;
+  }
+  .live-guess-card .round-result-reveal{
+    display:grid;
+    grid-template-rows:minmax(0,1fr) auto;
+    min-height:0;
+    max-height:none!important;
+    overflow:hidden!important;
+  }
+  .live-guess-card .round-result-scroll{
+    min-height:0;
+    overflow:auto;
+    overscroll-behavior:contain;
+    padding:0 2px 6px;
+  }
+  .live-guess-card .round-next-button{
+    position:relative;
+    z-index:2;
+    width:100%;
+    min-height:52px!important;
+    margin-top:7px;
+    border-radius:12px;
+    box-shadow:0 -10px 24px rgba(0,0,0,.18),0 8px 22px rgba(67,185,86,.28);
+    font-size:15px;
+    font-weight:900;
+    letter-spacing:.025em;
+  }
+}
+@media (max-width:430px){
+  .live-guess-card.round-revealed{max-height:calc(100dvh - 132px)!important}
+  .live-guess-card.round-revealed .guess-map-wrap{
+    height:min(24dvh,185px)!important;
+    min-height:130px!important;
+  }
+  .live-guess-card .round-result-reveal h3{font-size:17px!important}
+  .live-guess-card .round-result-reveal .reveal-stat{padding:6px 0!important}
+  .live-guess-card .round-next-button{min-height:50px!important}
+}
