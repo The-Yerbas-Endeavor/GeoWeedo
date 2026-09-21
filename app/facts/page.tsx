@@ -30,21 +30,22 @@ export default function FactsPage() {
             <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" aria-hidden="true" />
           </div>
 
+          <section className="weedoFactsRoadmap weedoScannerFlow">
+            <span className="weedoFactsKicker">HOW IT WORKS</span>
+            <div className="weedoScannerFlowSteps">
+              <div><b>01</b><strong>Scan</strong><small>QR, barcode, UID, batch or COA</small></div>
+              <div><b>02</b><strong>Match</strong><small>Resolve the canonical product and exact batch</small></div>
+              <div><b>03</b><strong>Know</strong><small>Read cannabinoids, terpenes and lab evidence</small></div>
+              <div><b>04</b><strong>Find</strong><small>See current dispensary listings</small></div>
+            </div>
+          </section>
+
           <WeedoFactsNativeScanBridge />
           <WeedoFactsLookup />
         </section>
 
         <WeedoFactsReconstruction />
 
-        <section className="weedoFactsRoadmap weedoScannerFlow">
-          <span className="weedoFactsKicker">HOW IT WORKS</span>
-          <div className="weedoScannerFlowSteps">
-            <div><b>01</b><strong>Scan</strong><small>QR, barcode, UID, batch or COA</small></div>
-            <div><b>02</b><strong>Match</strong><small>Resolve the canonical product and exact batch</small></div>
-            <div><b>03</b><strong>Know</strong><small>Read cannabinoids, terpenes and lab evidence</small></div>
-            <div><b>04</b><strong>Find</strong><small>See current dispensary listings</small></div>
-          </div>
-        </section>
       </div>
     </main>
   );
