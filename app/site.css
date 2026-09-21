@@ -519,6 +519,20 @@
   color:#9cab9f;
   font-size:11px;
 }
+.owner-sponsor-benefits{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.owner-sponsor-benefits span{
+  padding:6px 8px;
+  border:1px solid rgba(233,167,47,.2);
+  border-radius:999px;
+  background:rgba(233,167,47,.055);
+  color:#dce7df;
+  font-size:11px;
+  font-weight:800;
+}
 .owner-sponsor-buttons{
   display:flex;
   gap:8px;
@@ -606,6 +620,14 @@
   }
   .owner-sponsor-price{
     justify-items:start;
+  }
+  .owner-sponsor-benefits{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  .owner-sponsor-benefits span{
+    border-radius:10px;
+    line-height:1.25;
   }
   .owner-sponsor-buttons{
     display:grid;
