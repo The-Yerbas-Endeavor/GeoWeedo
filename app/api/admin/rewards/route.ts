@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const players = db.prepare(`SELECT u.id, COALESCE(u.display_name, u.username, 'Player') AS handle, u.yerbas_address AS yerbasAddress,
                                      u.wallet_verified_at AS walletVerifiedAt, u.reward_eligible AS rewardEligible
                               FROM users u JOIN wallets w ON w.user_id = u.id
-                              WHERE u.reward_eligible = 1 AND u.wallet_verified_at IS NOT NULL AND u.account_status = 'active'
+                              WHERE u.reward_eligible = 1 AND u.account_status = 'active'
                               ORDER BY handle COLLATE NOCASE`).all().map((row: any) => ({ ...row, rewardEligible: Boolean(row.rewardEligible) }));
   const rewards = db.prepare(`SELECT l.*, w.user_id FROM wallet_ledger l JOIN wallets w ON w.id = l.wallet_id
                               WHERE l.entry_type IN ('reward_pending','reward_credit') OR l.reference_type IN ('reward','game_reward','admin_reward')
@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
   const db = getDatabase();
   ensureFinanceSchema(db);
   const player = db.prepare(`SELECT u.id, w.id AS wallet_id FROM users u JOIN wallets w ON w.user_id = u.id
-                             WHERE u.id = ? AND u.reward_eligible = 1 AND u.wallet_verified_at IS NOT NULL AND u.account_status = 'active'`).get(playerId) as any;
-  if (!player) return NextResponse.json({ error: 'Player is not reward eligible.' }, { status: 400 });
+                             WHERE u.id = ? AND u.reward_eligible = 1 AND u.account_status = 'active'`).get(playerId) as any;
+  if (!player) return NextResponse.json({ error: 'Player is not active or reward eligible.' }, { status: 400 });
   const duplicate = db.prepare(`SELECT id FROM wallet_ledger WHERE reference_type = 'admin_reward' AND reference_id = ?`).get(reference);
   if (duplicate) return NextResponse.json({ error: 'That reward reference already exists.' }, { status: 409 });
 
