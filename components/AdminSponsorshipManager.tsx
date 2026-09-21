@@ -58,6 +58,37 @@ export default function AdminSponsorshipManager(){
    else{const start=now();setForm({source:'admin_comp',status:'active',startsAt:start,endsAt:addDuration(start,'month')});}
   }
  }
+ function loadRequest(request:SponsorRequest){
+  setLoadedRequestId(request.id);
+  setDispensarySearch('');
+  setSelectedDispensaryId(request.dispensaryId);
+  const start=request.preferredStartAt?localInput(new Date(request.preferredStartAt)):now();
+  if(request.requestType==='featured'){
+   setEditorTab('featured');
+   setForm({source:'manual_invoice',status:'active',startsAt:start,endsAt:addDuration(start,request.billingInterval==='annual'?'year':'month')});
+   setStatus('Loaded Featured request for '+(names.get(request.dispensaryId)?.name||request.dispensaryId)+'. Review dates/source, then save to approve it.');
+  }else{
+   const game=request.gameType||'classic';
+   setEditorTab('game');
+   setEditingCampaignId(null);
+   setCampaignForm({gameType:game,title:'',geographyType:request.geographyType||'all',geographyValue:request.geographyValue||'',radiusKm:request.radiusKm==null?'25':String(request.radiusKm),source:'manual_invoice',status:'active',startsAt:start,endsAt:addDuration(start,request.durationCode||'week'),amountUsd:''});
+   setStatus('Loaded '+gameLabel(game)+' sponsorship request. Review details, then save to approve it.');
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+ }
+ async function rejectRequest(requestId:string){
+  if(!window.confirm('Reject this sponsorship request?'))return;
+  setBusy(true);
+  try{
+   const response=await fetch('/api/admin/sponsorships',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'request',id:requestId,status:'rejected'})});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(data.error||'Could not reject request.');
+   if(loadedRequestId===requestId)setLoadedRequestId(null);
+   setStatus('Sponsorship request rejected.');
+   await load();
+  }catch(error){setStatus(error instanceof Error?error.message:'Could not reject request.');}
+  finally{setBusy(false);}
+ }
  function handleSearch(value:string){
   setDispensarySearch(value);
   const q=value.trim().toLowerCase();
@@ -78,8 +109,8 @@ export default function AdminSponsorshipManager(){
  function cancelCampaignEdit(){setEditingCampaignId(null);const start=now();setCampaignForm({gameType:'classic',title:'',geographyType:'all',geographyValue:'',radiusKm:'25',source:'admin_comp',status:'active',startsAt:start,endsAt:addDuration(start,'day'),amountUsd:''});setStatus('Campaign edit cancelled.');}
  function quickButtons(onPick:(p:DurationPreset)=>void){return <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}><span style={{fontSize:12,opacity:.72,marginRight:2}}>Duration:</span>{([['day','1 day'],['week','1 week'],['month','1 month'],['year','1 year']] as Array<[DurationPreset,string]>).map(([p,label])=><button key={p} type="button" className="ghost" style={{padding:'6px 10px',minHeight:0}} onClick={()=>onPick(p)}>{label}</button>)}</div>;}
 
- async function saveFeatured(){if(!selectedDispensaryId)return;setBusy(true);setStatus(`Saving Featured listing for ${selectedName}…`);try{const response=await fetch('/api/admin/sponsorships',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dispensaryId:selectedDispensaryId,...form,startsAt:new Date(form.startsAt).toISOString(),endsAt:new Date(form.endsAt).toISOString()})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not save Featured entitlement.');setStatus(`Featured listing saved for ${selectedName}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not save Featured entitlement.');}finally{setBusy(false);}}
- async function saveCampaign(){if(!selectedDispensaryId)return;setBusy(true);const editing=Boolean(editingCampaignId);setStatus(`${editing?'Updating':'Saving'} ${gameLabel(campaignForm.gameType)} sponsorship for ${selectedName}…`);try{const response=await fetch('/api/admin/sponsorships',{method:editing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'campaign',...(editing?{action:'edit',id:editingCampaignId}:{}),dispensaryId:selectedDispensaryId,...campaignForm,startsAt:new Date(campaignForm.startsAt).toISOString(),endsAt:new Date(campaignForm.endsAt).toISOString(),amountCents:campaignForm.amountUsd===''?null:Math.round(Number(campaignForm.amountUsd)*100)})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Could not ${editing?'update':'save'} game sponsorship.`);setStatus(`${gameLabel(campaignForm.gameType)} sponsorship ${editing?'updated':'activated'} for ${selectedName}.`);setEditingCampaignId(null);await load();}catch(error){setStatus(error instanceof Error?error.message:`Could not ${editing?'update':'save'} game sponsorship.`);}finally{setBusy(false);}}
+ async function saveFeatured(){if(!selectedDispensaryId)return;setBusy(true);setStatus(`Saving Featured listing for ${selectedName}…`);try{const response=await fetch('/api/admin/sponsorships',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dispensaryId:selectedDispensaryId,...form,requestId:loadedRequestId||undefined,startsAt:new Date(form.startsAt).toISOString(),endsAt:new Date(form.endsAt).toISOString()})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not save Featured entitlement.');setStatus(`Featured listing saved for ${selectedName}.`);setLoadedRequestId(null);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not save Featured entitlement.');}finally{setBusy(false);}}
+ async function saveCampaign(){if(!selectedDispensaryId)return;setBusy(true);const editing=Boolean(editingCampaignId);setStatus(`${editing?'Updating':'Saving'} ${gameLabel(campaignForm.gameType)} sponsorship for ${selectedName}…`);try{const response=await fetch('/api/admin/sponsorships',{method:editing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'campaign',...(editing?{action:'edit',id:editingCampaignId}:{}),requestId:loadedRequestId||undefined,dispensaryId:selectedDispensaryId,...campaignForm,startsAt:new Date(campaignForm.startsAt).toISOString(),endsAt:new Date(campaignForm.endsAt).toISOString(),amountCents:campaignForm.amountUsd===''?null:Math.round(Number(campaignForm.amountUsd)*100)})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Could not ${editing?'update':'save'} game sponsorship.`);setStatus(`${gameLabel(campaignForm.gameType)} sponsorship ${editing?'updated':'activated'} for ${selectedName}.`);setEditingCampaignId(null);setLoadedRequestId(null);await load();}catch(error){setStatus(error instanceof Error?error.message:`Could not ${editing?'update':'save'} game sponsorship.`);}finally{setBusy(false);}}
  async function endSponsorship(kind:'featured'|'campaign',id:string,label:string){if(!window.confirm(`End sponsorship for ${label} now?`))return;setBusy(true);setStatus(`Ending sponsorship for ${label}…`);try{const response=await fetch('/api/admin/sponsorships',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,id})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not end sponsorship.');if(editingCampaignId===id)setEditingCampaignId(null);setStatus(`Sponsorship ended for ${label}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not end sponsorship.');}finally{setBusy(false);}}
  async function moderateClaim(claimId:string,nextStatus:'approved'|'rejected'){setBusy(true);setStatus(`${nextStatus==='approved'?'Approving':'Rejecting'} ownership claim…`);try{const response=await fetch('/api/admin/owner-claims',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({claimId,status:nextStatus})});if(response.status===401){window.location.href='/admin/login?next=/admin/sponsorships';return;}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not moderate ownership claim.');setStatus(`Ownership claim ${nextStatus}.`);await load();}catch(error){setStatus(error instanceof Error?error.message:'Could not moderate ownership claim.');}finally{setBusy(false);}}
  async function logout(){await fetch('/api/admin/auth/logout',{method:'POST'});window.location.href='/admin/login';}
