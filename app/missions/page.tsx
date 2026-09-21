@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import SiteHeader from '@/components/SiteHeader';
 import StreetViewStage from '@/components/StreetViewStage';
 import GuessMap, { type LatLng } from '@/components/GuessMap';
@@ -8,11 +8,19 @@ import styles from './mission.module.css';
 
 type MissionPayload={
   campaignId:string;
-  title:string;
   startsAt:string;
   endsAt:string;
+  missionDay:string;
+  difficulty:'Easy'|'Medium'|'Hard';
   start:{lat:number;lng:number;approxDistanceKm:number};
+};
+
+type MissionResult={
   target:{lat:number;lng:number};
+  distanceKm:number;
+  score:number;
+  elapsedSeconds:number;
+  campaignTitle:string;
   reveal:{
     id:string;
     name:string;
@@ -25,17 +33,6 @@ type MissionPayload={
   };
 };
 
-function distanceKm(a:LatLng,b:LatLng){
-  const r=6371.0088,rad=(v:number)=>(v*Math.PI)/180;
-  const dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng),lat1=rad(a.lat),lat2=rad(b.lat);
-  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
-  return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
-}
-function missionScore(km:number,elapsedSeconds:number){
-  const distancePoints=Math.round(5000*Math.exp(-km/1.5));
-  const timePoints=Math.max(0,1000-Math.floor(elapsedSeconds/3));
-  return Math.max(0,Math.min(6000,distancePoints+timePoints));
-}
 function distanceLabel(km:number){
   const miles=km*.621371;
   if(miles<.1)return Math.round(miles*5280).toLocaleString()+' ft';
@@ -48,12 +45,13 @@ function timeLabel(seconds:number){
 
 export default function SponsoredMissionPage(){
   const[mission,setMission]=useState<MissionPayload|null>(null);
+  const[result,setResult]=useState<MissionResult|null>(null);
   const[loading,setLoading]=useState(true);
   const[error,setError]=useState('');
+  const[submitError,setSubmitError]=useState('');
+  const[submitting,setSubmitting]=useState(false);
   const[guess,setGuess]=useState<LatLng|null>(null);
   const[revealed,setRevealed]=useState(false);
-  const[distance,setDistance]=useState<number|null>(null);
-  const[score,setScore]=useState<number|null>(null);
   const[startedAt,setStartedAt]=useState<number>(Date.now());
   const[elapsed,setElapsed]=useState(0);
   const[mapOpen,setMapOpen]=useState(false);
@@ -73,7 +71,7 @@ export default function SponsoredMissionPage(){
     const key='geoweedo-mission-impression:'+mission.campaignId;
     if(sessionStorage.getItem(key))return;
     sessionStorage.setItem(key,'1');
-    void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType:'game_impression',metadata:{surface:'sponsored_mission',path:'/missions'}})}).catch(()=>{});
+    void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType:'game_impression',metadata:{surface:'sponsored_mission',path:'/missions',missionDay:mission.missionDay,difficulty:mission.difficulty}})}).catch(()=>{});
   },[mission,revealed]);
 
   useEffect(()=>{
@@ -82,31 +80,44 @@ export default function SponsoredMissionPage(){
     return()=>window.clearInterval(timer);
   },[revealed,startedAt]);
 
-  const actual=useMemo(()=>mission?{lat:mission.target.lat,lng:mission.target.lng}:null,[mission]);
-
-  function reveal(){
-    if(!mission||!guess||!actual)return;
+  async function reveal(){
+    if(!mission||!guess||submitting)return;
+    setSubmitting(true);
+    setSubmitError('');
     const seconds=Math.max(1,Math.floor((Date.now()-startedAt)/1000));
-    const km=distanceKm(guess,actual);
-    setElapsed(seconds);
-    setDistance(km);
-    setScore(missionScore(km,seconds));
-    setRevealed(true);
-    setMapOpen(true);
-    const key='geoweedo-mission-complete:'+mission.campaignId;
-    if(!sessionStorage.getItem(key)){
-      sessionStorage.setItem(key,'1');
-      void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType:'game_completed',metadata:{surface:'sponsored_mission',distanceKm:Number(km.toFixed(3)),elapsedSeconds:seconds}})}).catch(()=>{});
+    try{
+      const response=await fetch('/api/missions/guess',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({campaignId:mission.campaignId,guess,elapsedSeconds:seconds}),
+      });
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||'Could not score this mission guess.');
+      const next=body.result as MissionResult;
+      setResult(next);
+      setElapsed(next.elapsedSeconds);
+      setRevealed(true);
+      setMapOpen(true);
+
+      const key='geoweedo-mission-complete:'+mission.campaignId;
+      if(!sessionStorage.getItem(key)){
+        sessionStorage.setItem(key,'1');
+        void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType:'game_completed',metadata:{surface:'sponsored_mission',distanceKm:Number(next.distanceKm.toFixed(3)),elapsedSeconds:next.elapsedSeconds,score:next.score,missionDay:mission.missionDay,difficulty:mission.difficulty}})}).catch(()=>{});
+      }
+    }catch(cause){
+      setSubmitError(cause instanceof Error?cause.message:'Could not score this mission guess.');
+    }finally{
+      setSubmitting(false);
     }
   }
 
   function sponsorEvent(eventType:'listing_view'|'website_click'){
-    if(!mission)return;
-    void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType:eventType,metadata:{surface:'mission_reveal',path:'/missions'}})}).catch(()=>{});
+    if(!mission||!result)return;
+    void fetch('/api/sponsorship/campaign',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({campaignId:mission.campaignId,eventType,metadata:{surface:'mission_reveal',path:'/missions',missionDay:mission.missionDay}})}).catch(()=>{});
   }
 
   function restart(){
-    setGuess(null);setRevealed(false);setDistance(null);setScore(null);setElapsed(0);setMapOpen(false);setStartedAt(Date.now());
+    setGuess(null);setResult(null);setRevealed(false);setSubmitError('');setElapsed(0);setMapOpen(false);setStartedAt(Date.now());
   }
 
   if(loading)return <main className={styles.shell}><SiteHeader/><section className={styles.empty}><strong>Loading Sponsored Mission…</strong></section></main>;
@@ -116,7 +127,7 @@ export default function SponsoredMissionPage(){
     <SiteHeader/>
     <header className={styles.gameHeader}>
       <a href="/" className={styles.brand}>← GeoWeedo</a>
-      <div><span>⭐ SPONSORED MISSION</span><strong>{revealed?mission.reveal.name:'Mystery dispensary'}</strong></div>
+      <div><span>⭐ SPONSORED MISSION</span><strong>{revealed&&result?result.reveal.name:'Mystery dispensary'}</strong></div>
       <div className={styles.timer}>{timeLabel(elapsed)}</div>
     </header>
 
@@ -126,7 +137,8 @@ export default function SponsoredMissionPage(){
         {!revealed?<div className={styles.missionBrief}>
           <span>MISSION</span>
           <strong>Find the sponsoring dispensary.</strong>
-          <p>You started about {mission.start.approxDistanceKm.toFixed(1)} km from the target. Explore the streets, use landmarks and signs, then place your guess.</p>
+          <div className={styles.missionMeta}><b>{mission.difficulty}</b><i>Daily route</i><i>{distanceLabel(mission.start.approxDistanceKm)} from target</i></div>
+          <p>Explore the streets, use landmarks and signs, then place your guess. The sponsor identity and target coordinates stay hidden until you lock it in.</p>
         </div>:null}
       </div>
 
@@ -134,28 +146,29 @@ export default function SponsoredMissionPage(){
 
       <aside className={styles.guessPanel+(mapOpen?' '+styles.open:'')}>
         <div className={styles.map}>
-          <GuessMap guess={guess} actual={actual} revealed={revealed} onGuess={setGuess}/>
+          <GuessMap guess={guess} actual={result?.target||null} revealed={revealed} onGuess={setGuess}/>
         </div>
         {!revealed?<div className={styles.guessActions}>
           <span>{guess?'Pin placed — move it until you are ready.':'Place a pin where you think the dispensary is.'}</span>
-          <button type="button" disabled={!guess} onClick={reveal}>{guess?'Lock in mission guess':'Place a pin first'}</button>
-        </div>:<div className={styles.reveal}>
+          {submitError?<span className={styles.guessError}>{submitError}</span>:null}
+          <button type="button" disabled={!guess||submitting} onClick={reveal}>{submitting?'Scoring mission…':guess?'Lock in mission guess':'Place a pin first'}</button>
+        </div>:result?<div className={styles.reveal}>
           <div className={styles.revealTop}>
-            {mission.reveal.logo?<img src={mission.reveal.logo} alt=""/>:<div className={styles.logoFallback}>★</div>}
-            <div><span>MISSION TARGET REVEALED</span><h1>{mission.reveal.name}</h1><p>{[mission.reveal.city,mission.reveal.region].filter(Boolean).join(', ')}</p></div>
+            {result.reveal.logo?<img src={result.reveal.logo} alt=""/>:<div className={styles.logoFallback}>★</div>}
+            <div><span>MISSION TARGET REVEALED</span><h1>{result.reveal.name}</h1><p>{[result.reveal.city,result.reveal.region].filter(Boolean).join(', ')}</p></div>
           </div>
           <div className={styles.stats}>
-            <div><span>Score</span><strong>{Number(score||0).toLocaleString()} <small>/ 6,000</small></strong></div>
-            <div><span>Distance</span><strong>{distance===null?'—':distanceLabel(distance)}</strong></div>
-            <div><span>Time</span><strong>{timeLabel(elapsed)}</strong></div>
+            <div><span>Score</span><strong>{Number(result.score||0).toLocaleString()} <small>/ 6,000</small></strong></div>
+            <div><span>Distance</span><strong>{distanceLabel(result.distanceKm)}</strong></div>
+            <div><span>Time</span><strong>{timeLabel(result.elapsedSeconds)}</strong></div>
           </div>
-          <p className={styles.thanks}>Sponsored Mission by {mission.reveal.name}. This business intentionally became the mission target; sponsorship does not affect Classic, Daily, or Hunt location odds.</p>
+          <p className={styles.thanks}>Sponsored Mission by {result.reveal.name}. Today’s starting route is shared for the mission day and changes on the next UTC day. Sponsorship does not affect Classic, Daily, or Hunt location odds.</p>
           <div className={styles.revealActions}>
-            <a href={mission.reveal.profileHref} onClick={()=>sponsorEvent('listing_view')}>View dispensary →</a>
-            {mission.reveal.website?<a href={mission.reveal.website} target="_blank" rel="noreferrer" onClick={()=>sponsorEvent('website_click')}>Website ↗</a>:null}
-            <button type="button" onClick={restart}>Play mission again</button>
+            <a href={result.reveal.profileHref} onClick={()=>sponsorEvent('listing_view')}>View dispensary →</a>
+            {result.reveal.website?<a href={result.reveal.website} target="_blank" rel="noreferrer" onClick={()=>sponsorEvent('website_click')}>Website ↗</a>:null}
+            <button type="button" onClick={restart}>Practice again</button>
           </div>
-        </div>}
+        </div>:null}
       </aside>
     </section>
   </main>;
