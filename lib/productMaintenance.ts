@@ -42,7 +42,10 @@ export function normalizeProductName(brandName: unknown, productName: unknown) {
   return `${clean(brandName)} ${clean(productName)}`.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+let maintenanceSchemaReady = false;
+
 export function ensureProductMaintenanceSchema(db: Db = getDatabase()) {
+  if (maintenanceSchemaReady) return db;
   if (!tableExists(db, 'cannabis_products')) return db;
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_product_merge_history (
@@ -57,6 +60,7 @@ export function ensureProductMaintenanceSchema(db: Db = getDatabase()) {
     CREATE INDEX IF NOT EXISTS cannabis_product_merge_target_idx
       ON cannabis_product_merge_history(target_product_id, merged_at DESC);
   `);
+  maintenanceSchemaReady = true;
   return db;
 }
 
