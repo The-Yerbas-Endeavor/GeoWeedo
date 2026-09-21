@@ -20,32 +20,30 @@ export default function FactsPage() {
     <main className="landing-shell">
       <SiteHeader />
       <div className="weedoFactsPage">
-        <section className="weedoFactsHero">
-          <span className="weedoFactsKicker">🌿 SCAN → KNOW → FIND</span>
-          <h1>GeoWeedo Scanner</h1>
-          <p className="weedoFactsLead">
-            Scan a cannabis package or paste its QR, barcode, UID, batch, or COA identifier. GeoWeedo resolves one canonical product, keeps the exact tested batch separate, and shows the available lab evidence in a consumer-friendly format.
-          </p>
-          <div className="weedoFactsPrinciples">
-            <span>✓ Exact-batch first</span>
-            <span>✓ Original COA linked</span>
-            <span>✓ Match confidence shown</span>
-            <span>✓ Find current listings</span>
+        <section className="weedoScannerCockpit">
+          <div className="weedoScannerHero">
+            <div>
+              <span className="weedoFactsKicker">🌿 SCAN → KNOW → FIND</span>
+              <h1>GeoWeedo Scanner</h1>
+              <p>Identify the product, exact batch, lab evidence, and where you can find it.</p>
+            </div>
+            <img src="/assets/geoweedo/geoweedo-icon-master.png" alt="" aria-hidden="true" />
           </div>
+
+          <WeedoFactsNativeScanBridge />
+          <WeedoFactsLookup />
         </section>
 
-        <WeedoFactsNativeScanBridge />
-        <WeedoFactsLookup />
         <WeedoFactsReconstruction />
 
-        <section className="weedoFactsRoadmap">
-          <h2>One simple resolution path</h2>
-          <ol>
-            <li><strong>Scan:</strong> classify the QR, UPC, Retail ID, lab URL, batch, or other identifier.</li>
-            <li><strong>Match:</strong> resolve it to GeoWeedo's canonical product and, when evidence supports it, the exact batch.</li>
-            <li><strong>Know:</strong> normalize cannabinoids, terpenes, compliance tests, lab, producer, dates, and source provenance.</li>
-            <li><strong>Find:</strong> separate exact-batch availability from same-product and possible menu matches.</li>
-          </ol>
+        <section className="weedoFactsRoadmap weedoScannerFlow">
+          <span className="weedoFactsKicker">HOW IT WORKS</span>
+          <div className="weedoScannerFlowSteps">
+            <div><b>01</b><strong>Scan</strong><small>QR, barcode, UID, batch or COA</small></div>
+            <div><b>02</b><strong>Match</strong><small>Resolve the canonical product and exact batch</small></div>
+            <div><b>03</b><strong>Know</strong><small>Read cannabinoids, terpenes and lab evidence</small></div>
+            <div><b>04</b><strong>Find</strong><small>See current dispensary listings</small></div>
+          </div>
         </section>
       </div>
     </main>
