@@ -5,6 +5,7 @@ import { addDispensaryMenuItem, ensureWeedoMenuSchema, listDispensaryMenu } from
 import { listProductCategories } from '@/lib/productCategories';
 import { getDatabase } from '@/lib/sqlite';
 import { ensureWeedoCoreSchema } from '@/lib/weedoCore';
+import { resolveCanonicalProductId } from '@/lib/productMaintenance';
 
 export const runtime = 'nodejs';
 
@@ -147,7 +148,8 @@ export async function POST(request: NextRequest) {
     ensureWeedoCoreSchema();
     const db = getDatabase();
     ensureOwnerScanColumns(db);
-    const productId = cleanText(body?.productId, 180) || null;
+    const suppliedProductId = cleanText(body?.productId, 180) || null;
+    const productId = suppliedProductId ? resolveCanonicalProductId(suppliedProductId, db) : null;
     const scanValue = cleanText(body?.scanValue, 512);
     const scanType = scanValue ? normalizedScanType(body?.identifierType, scanValue) : null;
     if (scanValue) {
@@ -160,6 +162,7 @@ export async function POST(request: NextRequest) {
         LIMIT 1
       `).get(locationId, scanType, scanValue) as any;
       if (duplicate?.id) {
+        if (productId) setOwnerProductLinkState(db, String(duplicate.id), access.user.id, productId, true);
         const item = listDispensaryMenu(locationId).find(row => row.id === duplicate.id) || null;
         return NextResponse.json({ ok: true, alreadyExists: true, item });
       }
@@ -214,7 +217,8 @@ export async function PATCH(request: NextRequest) {
 
   const itemName = cleanText(body?.itemName, 240);
   if (!itemName) return NextResponse.json({ error: 'Product name is required.' }, { status: 400 });
-  const productId = cleanText(body?.productId, 180) || null;
+  const suppliedProductId = cleanText(body?.productId, 180) || null;
+  const productId = suppliedProductId ? resolveCanonicalProductId(suppliedProductId, db) : null;
   let categoryId = cleanText(body?.categoryId, 120) || null;
   let categorySource = 'owner';
   if (productId) {
