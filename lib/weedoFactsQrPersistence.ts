@@ -62,6 +62,18 @@ function clean(value: unknown) {
   return text || null;
 }
 
+function injectMissingProductBrand(productId: string | null | undefined, brandName: unknown) {
+  const id = clean(productId);
+  const brand = clean(brandName);
+  if (!id || !brand) return;
+  const db = ensureSchema();
+  const product = db.prepare('SELECT id,brand_name,product_name,normalized_name FROM cannabis_products WHERE id=? LIMIT 1').get(id) as any;
+  if (!product || clean(product.brand_name)) return;
+  const normalized = `${brand} ${String(product.product_name || '')}`.trim().toLowerCase();
+  db.prepare('UPDATE cannabis_products SET brand_name=?,normalized_name=?,updated_at=? WHERE id=?')
+    .run(brand, normalized, new Date().toISOString(), id);
+}
+
 function qrHost(value: string) {
   try { return new URL(value).hostname.toLowerCase(); } catch { return null; }
 }
@@ -203,6 +215,8 @@ export function persistQrScan(input: {
       now, now,
     );
   }
+
+  injectMissingProductBrand(input.productId, input.brandName);
 
   const row = db.prepare(`
     SELECT id,qr_value,resolver,product_id,batch_id,first_seen_at,last_seen_at,scan_count
