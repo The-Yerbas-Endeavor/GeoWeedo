@@ -259,7 +259,7 @@ export default function WeedoFactsReconstruction() {
   const candidates = Array.isArray(result?.candidates) ? result.candidates.slice(0, 5) : [];
 
   return (
-    <details className="weedoFactsReconstruction" open={Boolean(message || error || labelText || result) || undefined}>
+    <details className="weedoFactsReconstruction">
       <summary className="weedoFactsRecoverySummary">
         <span>
           <small>NO MATCH?</small>
