@@ -23,3 +23,29 @@
  aside[aria-label="Classic GeoWeedo sponsor"] small{display:none!important}
  aside[aria-label="Classic GeoWeedo sponsor"]>div:first-of-type>div:last-child a{padding:6px 7px!important;font-size:9px!important}
 }
+
+
+/* Classic game-complete revisit list */
+.classic-revisit{margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.09)}
+.classic-revisit-head{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:10px}
+.classic-revisit-head h2{margin:3px 0 0;font-size:18px}
+.classic-revisit-head>small{max-width:250px;color:#9aa69d;font-size:11px;text-align:right;line-height:1.35}
+.classic-revisit-list{display:grid;gap:7px}
+.classic-revisit-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 11px;border:1px solid rgba(255,255,255,.09);border-radius:11px;background:rgba(255,255,255,.025);color:var(--text);text-decoration:none;transition:border-color .15s ease,background .15s ease,transform .15s ease}
+.classic-revisit-row:hover{border-color:rgba(103,214,110,.42);background:rgba(103,214,110,.06);transform:translateY(-1px)}
+.classic-revisit-round{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:rgba(103,214,110,.1);color:#67d66e;font-size:11px;font-weight:900}
+.classic-revisit-copy{min-width:0}
+.classic-revisit-copy strong,.classic-revisit-copy small{display:block}
+.classic-revisit-copy strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.classic-revisit-copy small{margin-top:2px;color:#9aa69d;font-size:10px}
+.classic-revisit-score{color:#cbd5cd;font-size:11px;white-space:nowrap}
+.classic-revisit-row>b{color:#67d66e;font-size:11px;white-space:nowrap}
+@media(max-width:640px){
+ .result-card{width:min(600px,100%)}
+ .classic-revisit-head{align-items:start;flex-direction:column;gap:4px}
+ .classic-revisit-head>small{max-width:none;text-align:left}
+ .classic-revisit-row{grid-template-columns:30px minmax(0,1fr) auto;padding:9px}
+ .classic-revisit-round{width:28px;height:28px}
+ .classic-revisit-score{grid-column:2;color:#9aa69d}
+ .classic-revisit-row>b{grid-column:3;grid-row:1 / span 2}
+}
