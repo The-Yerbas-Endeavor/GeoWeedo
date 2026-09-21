@@ -10,10 +10,10 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const record = getFactsRecordForBatchId(id);
-  if (!record) return { title: 'Batch not found · Weedo Facts' };
+  if (!record) return { title: 'Batch not found · GeoWeedo Facts' };
   return {
-    title: `${record.productName} · Batch ${record.batchNumber || id} · Weedo Facts`,
-    description: `Exact-batch GeoWeedo Facts for ${record.brandName ? `${record.brandName} ` : ''}${record.productName}.`,
+    title: `${record.productName} · Batch ${record.batchNumber || id} · GeoWeedo Facts`,
+    description: `Exact-batch GeoGeoWeedo Facts for ${record.brandName ? `${record.brandName} ` : ''}${record.productName}.`,
     alternates: { canonical: `/facts/batch/${encodeURIComponent(id)}` },
   };
 }
