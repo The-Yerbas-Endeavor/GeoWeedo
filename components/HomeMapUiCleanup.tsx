@@ -13,11 +13,20 @@ function openBrowsePanel(){
   const tryOpen=()=>{
     const panel=document.querySelector<HTMLElement>('.map-first-home .map-browser-panel');
     if(panel){
-      panel.classList.remove('map-browser-panel-search-minimized');
+      panel.dataset.userExpanded='1';
+      panel.classList.remove('map-browser-panel-search-minimized','map-browser-panel-minimized');
       panel.setAttribute('aria-label','Browse dispensaries');
+      if(window.innerWidth>650){
+        panel.classList.add('map-browser-panel-centered');
+        panel.style.left='50%';
+        panel.style.top='50%';
+        panel.style.right='auto';
+        panel.style.bottom='auto';
+        panel.style.transform='translate(-50%,-50%)';
+      }
       return;
     }
-    window.dispatchEvent(new CustomEvent('geoweedo:open-browse-panel'));
+    window.dispatchEvent(new CustomEvent('geoweedo:open-browse-panel',{detail:{source:'ui-cleanup'}}));
     attempts+=1;if(attempts<20)window.setTimeout(tryOpen,50);
   };
   tryOpen();
