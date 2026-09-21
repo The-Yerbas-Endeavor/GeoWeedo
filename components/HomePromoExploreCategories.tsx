@@ -62,9 +62,7 @@ export default function HomePromoExploreCategories() {
   if (!target) return null;
 
   const openSearch = () => {
-    const shell = target.closest<HTMLElement>('.home-promo-shell');
-    const originalSearch = shell?.querySelector<HTMLButtonElement>('button[aria-label="Findo GeoWeedo on the dispensary map"]');
-    originalSearch?.click();
+    window.dispatchEvent(new CustomEvent('geoweedo:open-browse-panel', { detail: { source: 'home-explore-search' } }));
   };
 
   return createPortal(
