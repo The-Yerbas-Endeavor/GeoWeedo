@@ -254,3 +254,216 @@
     white-space:normal;
   }
 }
+
+
+/* GeoWeedo account Login & Security */
+.account-security-shell{
+  width:min(1050px,calc(100% - 44px));
+  margin:0 auto;
+  padding:28px 0 72px;
+  color:#eef6f0;
+}
+.account-security-hero{
+  margin-bottom:18px;
+}
+.account-security-hero h2{
+  margin:6px 0 8px;
+  font-size:clamp(1.8rem,4vw,2.7rem);
+}
+.account-security-hero p{
+  margin:0;
+  max-width:720px;
+  color:#9facA1;
+  line-height:1.55;
+}
+.account-security-status{
+  margin:0 0 16px!important;
+}
+.account-security-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+}
+.account-security-card{
+  min-width:0;
+  display:grid;
+  gap:12px;
+  padding:18px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  background:#101713;
+}
+.account-security-card-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+}
+.account-security-card-head span,
+.account-security-signout>div>span{
+  display:block;
+  color:#8ee36d;
+  font-size:.68rem;
+  font-weight:950;
+  letter-spacing:.14em;
+}
+.account-security-card h3{
+  margin:4px 0 0;
+  font-size:1.25rem;
+}
+.account-security-card label{
+  display:grid;
+  gap:6px;
+  min-width:0;
+  color:#dce6de;
+  font-size:.8rem;
+  font-weight:800;
+}
+.account-security-card input{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  min-height:44px;
+  padding:10px 11px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;
+  background:#0b120d;
+  color:#f3f7f4;
+  font-size:16px;
+}
+.account-security-card button,
+.account-security-link{
+  width:fit-content;
+}
+.account-security-facts{
+  display:grid;
+  gap:0;
+  margin:4px 0 0;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.account-security-facts div{
+  display:grid;
+  grid-template-columns:130px minmax(0,1fr);
+  gap:12px;
+  padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.account-security-facts dt{
+  color:#8f9c92;
+  font-size:12px;
+}
+.account-security-facts dd{
+  margin:0;
+  text-align:right;
+  font-size:12px;
+  color:#e2eae4;
+}
+.account-security-facts .wrap-value{
+  overflow-wrap:anywhere;
+}
+.account-security-sessions{
+  grid-column:1/-1;
+}
+.account-security-session-list{
+  display:grid;
+  gap:8px;
+}
+.account-security-session-list article{
+  padding:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:11px;
+  background:rgba(255,255,255,.02);
+}
+.account-security-session-list article.current{
+  border-color:rgba(126,217,87,.32);
+  background:rgba(126,217,87,.055);
+}
+.account-security-session-list article>div{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.account-security-session-list article span{
+  padding:3px 7px;
+  border-radius:999px;
+  background:rgba(126,217,87,.12);
+  color:#9ff782;
+  font-size:10px;
+  font-weight:900;
+}
+.account-security-session-list small{
+  display:block;
+  margin-top:5px;
+  color:#87958a;
+}
+.account-security-session-list details{
+  margin-top:7px;
+  color:#8f9c92;
+  font-size:11px;
+}
+.account-security-session-list code{
+  display:block;
+  margin-top:5px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  color:#aeb9b0;
+}
+.account-security-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:40px;
+  padding:8px 12px;
+  text-decoration:none;
+}
+.account-security-signout{
+  grid-column:1/-1;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+}
+.account-security-signout h3{margin:4px 0}
+.account-security-signout .account-note{margin:0}
+
+@media(max-width:760px){
+  .account-security-shell{
+    width:min(100% - 20px,1050px);
+    padding-top:20px;
+  }
+  .account-security-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .account-security-sessions,
+  .account-security-signout{
+    grid-column:auto;
+  }
+  .account-security-card{
+    padding:14px;
+  }
+  .account-security-card-head,
+  .account-security-signout{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .account-security-card button,
+  .account-security-link,
+  .account-security-signout button{
+    width:100%;
+    min-height:44px;
+  }
+  .account-security-facts div{
+    grid-template-columns:minmax(0,1fr);
+    gap:3px;
+  }
+  .account-security-facts dd{
+    text-align:left;
+  }
+  .account-security-session-list article>div{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:6px;
+  }
+}
