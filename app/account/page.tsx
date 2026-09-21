@@ -21,7 +21,7 @@ function clearPendingGame(){try{sessionStorage.removeItem(PENDING_GAME_KEY);}cat
 
 export default function AccountPage(){
   const[mode,setMode]=useState<'email'|'register'>('email');
-  const[handle,setHandle]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[accountPassword,setAccountPassword]=useState('');
+  const[handle,setHandle]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState('');
   const[status,setStatus]=useState('Checking your GeoWeedo account…'),[summary,setSummary]=useState<Summary|null>(null),[busy,setBusy]=useState(false);
   const[captchaQuestion,setCaptchaQuestion]=useState(''),[captchaChallenge,setCaptchaChallenge]=useState(''),[captchaAnswer,setCaptchaAnswer]=useState(''),[website,setWebsite]=useState('');
   const claimInFlight=useRef(false);
@@ -42,8 +42,6 @@ export default function AccountPage(){
   useEffect(()=>{if(mode==='register'&&!summary)void loadCaptcha();},[mode,summary]);
   async function emailLogin(){setBusy(true);try{const r=await fetch('/api/account/email-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:email,password})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Login failed.');setPassword('');await loadSummary();if(!(await claimPendingGame()))setStatus('Signed in successfully.');}catch(e){setStatus(e instanceof Error?e.message:'Login failed.');}finally{setBusy(false);}}
   async function register(){setBusy(true);try{const r=await fetch('/api/account/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:handle,email,password,captchaChallenge,captchaAnswer,website})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Account creation failed.');setPassword('');setCaptchaAnswer('');await loadSummary();if(!(await claimPendingGame()))setStatus('GeoWeedo account created and signed in.');}catch(e){setStatus(e instanceof Error?e.message:'Account creation failed.');await loadCaptcha();}finally{setBusy(false);}}
-  async function attachCredentials(){setBusy(true);try{const r=await fetch('/api/account/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:accountPassword})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update login credentials.');setAccountPassword('');await loadSummary();setStatus(d.replaced?'Email/password login updated.':'Email/password login added.');}catch(e){setStatus(e instanceof Error?e.message:'Could not update login credentials.');}finally{setBusy(false);}}
-  async function logout(){await fetch('/api/account/logout',{method:'POST'});setSummary(null);setPassword('');setAccountPassword('');setStatus('Signed out.');}
 
   return <main className="info-shell">
     <SiteHeader/>
@@ -74,7 +72,7 @@ export default function AccountPage(){
               <small style={{color:'#8fe36e',fontWeight:800}}>View analytics →</small>
             </a>
 
-            <a href="/account/shop#products" style={{display:'grid',gap:8,minHeight:180,padding:15,border:'1px solid rgba(255,255,255,.1)',borderRadius:14,background:'rgba(255,255,255,.025)',color:'inherit',textDecoration:'none'}}>
+            <a href="/account/products" style={{display:'grid',gap:8,minHeight:180,padding:15,border:'1px solid rgba(255,255,255,.1)',borderRadius:14,background:'rgba(255,255,255,.025)',color:'inherit',textDecoration:'none'}}>
               <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'start'}}><span className="eyebrow">PRODUCTS & MENU</span><strong>{summary.ownership.dashboard.products.activeItems.toLocaleString()} active</strong></div>
               <div><strong style={{fontSize:'1.2rem'}}>Manage products</strong><p className="account-note" style={{margin:'5px 0 0'}}>Add, scan, edit, remove, price, and update availability for this shop.</p></div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:'auto'}}>
@@ -92,8 +90,10 @@ export default function AccountPage(){
           </div>:<p className="account-note" style={{marginTop:14}}>Your verified shop is still being connected to its public dispensary record. Open Shop to review its status.</p>}
           {summary.ownership.locations.length>1?<small className="account-note" style={{display:'block',marginTop:12}}>Showing {summary.ownership.dashboard?.locationName||'your primary shop'}. You manage {summary.ownership.locations.length} verified locations; use Shop to switch locations.</small>:null}
         </div>}
-        <div className="account-section"><h2>Login & security</h2><p className="account-note">Manage the email and password used for your GeoWeedo account.</p><label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label>{summary.user.emailLoginEnabled?'New password':'Password'}<input type="password" autoComplete="new-password" value={accountPassword} onChange={e=>setAccountPassword(e.target.value)} placeholder="At least 8 characters"/></label><button className="primary" disabled={busy||!email||accountPassword.length<8} onClick={attachCredentials}>{summary.user.emailLoginEnabled?'Update email/password':'Add email/password login'}</button></div>
-        <button className="secondary" onClick={logout}>Sign out</button>
+        <div className="account-section" style={{display:'flex',justifyContent:'space-between',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+          <div><h2 style={{marginBottom:4}}>Account settings</h2><p className="account-note" style={{margin:0}}>User name, email, password, signed-in devices, and session controls now live under Login & Security.</p></div>
+          <a className="primary" href="/account/security" style={{display:'inline-block',textDecoration:'none'}}>Login & Security</a>
+        </div>
       </>}
     </section>
   </main>;
