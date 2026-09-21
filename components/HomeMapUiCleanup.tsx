@@ -17,9 +17,7 @@ function openBrowsePanel(){
       panel.setAttribute('aria-label','Browse dispensaries');
       return;
     }
-    const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.map-first-home .map-browser-tools button'));
-    const browseButton=buttons.find(button=>/^Browse list\s*\(/i.test(button.textContent?.trim()||''))||buttons.find(button=>/^List\s*\(/i.test(button.textContent?.trim()||''));
-    if(browseButton){browseButton.click();window.setTimeout(tryOpen,40);return;}
+    window.dispatchEvent(new CustomEvent('geoweedo:open-browse-panel'));
     attempts+=1;if(attempts<20)window.setTimeout(tryOpen,50);
   };
   tryOpen();
@@ -142,7 +140,7 @@ export default function HomeMapUiCleanup(){
     };
     const initializePromo=()=>{if(promoInitialized)return;const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){promoInitialized=true;return;}const collapsed=document.querySelector<HTMLButtonElement>('.map-first-home button[aria-label="Show game intro"]');if(!collapsed)return;promoInitialized=true;collapsed.click();};
     const bind=()=>{initializeBrowsePanel();initializePromo();zoomHomeMapOnce();syncBrowseOpenState();const card=document.querySelector<HTMLElement>('.map-first-home .home-play-card-promo');if(card){removeLegacyPromoSearch(card);bindPromoDrag(card);}const mapSearch=internalMapSearch();if(mapSearch)bindMapSearch(mapSearch);syncSearchPanels();};
-    const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo GeoWeedo on the dispensary map"]'))window.setTimeout(activateFindo,0);const browseButton=target?.closest<HTMLButtonElement>('.map-first-home .map-browser-tools button');if(browseButton&&/^(Browse list|List)\b/i.test(browseButton.textContent?.trim()||'')){minimizeGameplayCard();centerBrowsePanel();}const head=target?.closest<HTMLElement>('.map-first-home .map-browser-panel-head');if(head&&!target?.closest('.map-browser-panel-head>button')){const panel=head.closest<HTMLElement>('.map-browser-panel');if(panel){panel.dataset.userExpanded='1';panel.classList.remove('map-browser-panel-search-minimized');panel.setAttribute('aria-label','Browse dispensaries');}}};
+    const onClick=(event:MouseEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('.map-first-home button[aria-label="Findo GeoWeedo on the dispensary map"]'))window.setTimeout(activateFindo,0);const head=target?.closest<HTMLElement>('.map-first-home .map-browser-panel-head');if(head&&!target?.closest('.map-browser-panel-head>button')){const panel=head.closest<HTMLElement>('.map-browser-panel');if(panel){panel.dataset.userExpanded='1';panel.classList.remove('map-browser-panel-search-minimized');panel.setAttribute('aria-label','Browse dispensaries');}}};
     const onChange=(event:Event)=>{const target=event.target;if(target instanceof HTMLSelectElement&&target.matches('.map-first-home .map-browser-tools select[aria-label="Filter by state"]')&&target.value!=='all')minimizeGameplayCard();};
     const onFocusIn=(event:FocusEvent)=>{const target=event.target;if(!isMobileHome()||!(target instanceof HTMLInputElement)||!target.matches('.map-first-home .map-unified-search-input'))return;minimizeGameplayCard();};
     document.addEventListener('click',onClick);document.addEventListener('change',onChange);document.addEventListener('focusin',onFocusIn);
