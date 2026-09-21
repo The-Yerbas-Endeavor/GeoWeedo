@@ -7,7 +7,9 @@ set -Eeuo pipefail
 # - Hard-block GPTBot before requests ever reach Next.js.
 # - Keep OAI-SearchBot, Googlebot and Bingbot unthrottled for discovery.
 # - Rate-limit other obvious crawler/scraper user agents instead of blocking them.
-# - Leave ordinary browsers untouched.
+# - Add a generous per-IP ceiling and connection cap as a fallback against
+#   browser-spoofing scrapers and accidental request storms.
+# - Keep ordinary browser use well below those ceilings.
 # - Make every nginx change backup-safe and validate with nginx -t before reload.
 
 NGINX_HOST=${NGINX_HOST:-geoweedo.com}
@@ -69,6 +71,12 @@ map $http_user_agent $geoweedo_bot_limit_key {
 # One request/second per crawler IP with a small burst is enough for indexing
 # without letting a crawler consume a small VPS.
 limit_req_zone $geoweedo_bot_limit_key zone=geoweedo_bot_limit:10m rate=1r/s;
+
+# Safety net for clients that disguise themselves as ordinary browsers.
+# A real browser may briefly burst while loading JS/CSS, so keep this much more
+# generous than the crawler-specific limiter.
+limit_req_zone $binary_remote_addr zone=geoweedo_per_ip:10m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=geoweedo_conn:10m;
 EOF
 sudo install -m 0644 "$TMPDIR/global.conf" "$GLOBAL_CONF"
 
@@ -81,7 +89,13 @@ if ($geoweedo_block_bot) {
 
 # Applies only when $geoweedo_bot_limit_key is non-empty.
 limit_req zone=geoweedo_bot_limit burst=5 nodelay;
+
+# General abuse ceiling. Normal page loads can burst, but a single address
+# cannot sustain an unlimited request or connection flood into Next.js.
+limit_req zone=geoweedo_per_ip burst=40 nodelay;
+limit_conn geoweedo_conn 20;
 limit_req_status 429;
+limit_conn_status 429;
 EOF
 sudo install -m 0644 "$TMPDIR/server.conf" "$SERVER_SNIPPET"
 
@@ -130,7 +144,9 @@ printf '%s\n' \
   "GPTBot: blocked with HTTP 403" \
   "OAI-SearchBot / Googlebot / Bingbot: unthrottled" \
   "Other obvious bots/crawlers: 1 request/sec per IP, burst 5" \
-  "Normal browsers: unaffected" \
+  "All clients safety ceiling: 10 requests/sec per IP, burst 40" \
+  "Concurrent connection cap: 20 per IP" \
+  "Normal browsers: expected to remain below the safety ceilings" \
   "" \
   "Verify with:" \
   "  curl -I -A 'GPTBot/1.4' https://$NGINX_HOST/" \
