@@ -200,7 +200,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                         ? <span className="productBrowseAvailable">Found at {product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'dispensary listing' : 'dispensary listings'}</span>
                         : <span className="productBrowseUnavailable">No current menu match</span>}
                     </div>
-                    <span className="productBrowseOpen">View Weedo Facts →</span>
+                    <span className="productBrowseOpen">View GeoWeedo Facts →</span>
                   </a>
                 );
               })}
