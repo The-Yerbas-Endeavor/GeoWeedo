@@ -177,6 +177,7 @@ export function persistQrScan(input: {
   const qrValue = String(input.qrValue || '').trim();
   if (!qrValue) throw new Error('QR value is required for persistence.');
   const now = new Date().toISOString();
+  const resolvedBrand = clean(input.brandName) || inferEmbeddedBrand(input.productName);
   const payload = input.resolvedPayload === undefined ? null : JSON.stringify(input.resolvedPayload);
   const existing = db.prepare('SELECT id FROM cannabis_qr_scans WHERE qr_value=? LIMIT 1').get(qrValue) as any;
   const countScan = input.countScan !== false;
@@ -207,7 +208,7 @@ export function persistQrScan(input: {
     `).run(
       qrHost(qrValue), input.resolver,
       input.productId || null, input.batchId || null, input.sourceUrl || null,
-      input.externalIdentifier || null, input.title || null, input.brandName || null,
+      input.externalIdentifier || null, input.title || null, resolvedBrand,
       input.productName || null, input.productType || null,
       input.producerName || null, input.producerLicenseNumber || null,
       input.labName || null, input.labLicenseNumber || null,
@@ -226,7 +227,7 @@ export function persistQrScan(input: {
     `).run(
       id, qrValue, qrHost(qrValue), input.resolver,
       input.productId || null, input.batchId || null, input.sourceUrl || null,
-      input.externalIdentifier || null, input.title || null, input.brandName || null,
+      input.externalIdentifier || null, input.title || null, resolvedBrand,
       input.productName || null, input.productType || null,
       input.producerName || null, input.producerLicenseNumber || null,
       input.labName || null, input.labLicenseNumber || null,
@@ -235,7 +236,6 @@ export function persistQrScan(input: {
     );
   }
 
-  const resolvedBrand = clean(input.brandName) || inferEmbeddedBrand(input.productName);
   injectMissingProductBrand(input.productId, resolvedBrand);
 
   const row = db.prepare(`
