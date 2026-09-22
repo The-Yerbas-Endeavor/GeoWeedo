@@ -137,9 +137,28 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   const scanBrandSql = hasScanBrands
     ? `(SELECT NULLIF(TRIM(qb.brand_name),'') FROM cannabis_qr_scans qb WHERE qb.product_id=p.id AND qb.brand_name IS NOT NULL AND TRIM(qb.brand_name)<>'' ORDER BY qb.last_seen_at DESC LIMIT 1)`
     : 'NULL';
-  // Public brand filtering must use explicit source/scanner brand evidence only.
-  // Product titles are too inconsistent to safely infer brands at browse time.
-  const effectiveBrandSql = `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql})`;
+
+  // The small evidence-driven view can safely use conservative display-only
+  // title inference. Do not persist these guesses and do not use them across
+  // the full 59k reference catalog.
+  const oneWordFormCases = [' cured resin vape',' live resin vape',' resin vape',' rosin vape',' vape cartridge',' vape cart',' disposable vape']
+    .map(marker => {
+      const pos = `instr(lower(p.product_name),'${marker}')`;
+      const prefix = `trim(substr(p.product_name,1,${pos}-1))`;
+      return `WHEN ${pos} BETWEEN 3 AND 33 AND instr(${prefix},' ')=0 THEN ${prefix}`;
+    }).join(' ');
+  const inferredEvidenceBrandSql = `CASE
+    WHEN substr(trim(p.product_name),1,1)='[' AND instr(p.product_name,']') BETWEEN 3 AND 62
+      THEN trim(substr(p.product_name,2,instr(p.product_name,']')-2))
+    WHEN instr(p.product_name,' | ') BETWEEN 3 AND 61
+      THEN trim(substr(p.product_name,1,instr(p.product_name,' | ')-1))
+    ${oneWordFormCases}
+    ELSE NULL END`;
+  const useEvidenceBrandInference = filters.scope !== 'all';
+  const effectiveBrandSql = useEvidenceBrandInference
+    ? `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql},${inferredEvidenceBrandSql})`
+    : `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql})`;
+
   const effectiveProducerSql = `(
     SELECT NULLIF(TRIM(bp.producer_name),'')
     FROM cannabis_batches bp
