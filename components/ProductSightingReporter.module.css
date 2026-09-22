@@ -1,0 +1,22 @@
+.shell{margin-top:16px;border:1px solid rgba(103,214,110,.18);border-radius:13px;background:rgba(103,214,110,.035);overflow:visible}
+.shell summary{padding:12px 14px;color:#8be891;font-size:12px;font-weight:900;cursor:pointer;list-style-position:inside}
+.shell form{padding:0 14px 14px}
+.shell form>p{margin:0 0 12px;color:#94a097;font-size:11px;line-height:1.5}
+.search{position:relative}
+.search label,.price{display:grid;gap:6px;color:#aab5ad;font-size:10px;font-weight:800}
+.search input,.price input{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:#0d120f;color:#f4f7f4;padding:10px 11px;outline:none}
+.search input:focus,.price input:focus{border-color:rgba(103,214,110,.5);box-shadow:0 0 0 3px rgba(103,214,110,.07)}
+.results{position:absolute;z-index:20;left:0;right:0;top:100%;max-height:240px;overflow:auto;border:1px solid rgba(255,255,255,.13);border-radius:10px;background:#111713;box-shadow:0 14px 32px rgba(0,0,0,.35)}
+.results button{width:100%;display:grid;gap:2px;padding:9px 11px;border:0;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;color:#eef5ef;text-align:left;cursor:pointer}
+.results button:hover{background:rgba(103,214,110,.07)}
+.results strong{font-size:11px}.results span{color:#86938a;font-size:9px}
+.selected{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;border:1px solid rgba(103,214,110,.17);border-radius:10px;background:#0d120f}
+.selected>div{display:grid;gap:2px}.selected strong{font-size:12px}.selected span{color:#87948a;font-size:9px}
+.selected button{border:0;background:transparent;color:#8be891;font-size:10px;font-weight:800;cursor:pointer}
+.price{margin-top:10px;max-width:180px}.price span{color:#6f7b72;font-weight:600}
+.save{margin-top:11px;border:0;border-radius:9px;background:#67d66e;color:#071008;padding:10px 13px;font-size:11px;font-weight:900;cursor:pointer}
+.save:disabled{opacity:.5;cursor:not-allowed}
+.error,.success{margin:10px 0 0!important;padding:8px 9px;border-radius:8px;font-size:10px!important}
+.error{border:1px solid rgba(233,106,106,.25);background:rgba(233,106,106,.06);color:#ffc4c4!important}
+.error a{color:#fff}.success{border:1px solid rgba(103,214,110,.23);background:rgba(103,214,110,.06);color:#a7efac!important}
+@media(max-width:640px){.price{max-width:none}.selected{align-items:flex-start}}
