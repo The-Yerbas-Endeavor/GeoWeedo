@@ -6,7 +6,7 @@ import OwnerProductBarcodeScanner from '@/components/OwnerProductBarcodeScanner'
 type Category={id:string;name:string;slug:string};
 type MenuItem={
   id:string;product_id?:string|null;item_name:string;brand_name?:string|null;package_size?:string|null;variant?:string|null;
-  price_cents?:number|null;inventory_status?:string|null;canonical_category_id?:string|null;canonical_category_name?:string|null;
+  price_cents?:number|null;inventory_status?:string|null;source_updated_at?:string|null;source_type?:string|null;canonical_category_id?:string|null;canonical_category_name?:string|null;
   linked_product_name?:string|null;linked_brand_name?:string|null;owner_scan_type?:string|null;owner_scan_value?:string|null;
 };
 type ProductHit={id:string;productName:string;brandName?:string|null;productType?:string|null;categoryId?:string|null;categoryName?:string|null};
@@ -16,6 +16,7 @@ const EMPTY:FormState={itemName:'',brandName:'',categoryId:'',packageSize:'',var
 
 function money(cents?:number|null){return cents==null?'—':`$${(cents/100).toFixed(2)}`;}
 function priceToCents(value:string){const n=Number(value);return Number.isFinite(n)&&n>=0?Math.round(n*100):null;}
+function availabilityAge(value?:string|null){if(!value)return'not confirmed yet';const time=Date.parse(value);if(!Number.isFinite(time))return'freshness unknown';const days=Math.max(0,Math.floor((Date.now()-time)/86400000));if(days===0)return'confirmed today';if(days===1)return'confirmed yesterday';return`confirmed ${days}d ago`;}
 
 export default function OwnerProductManager({locationId}:{locationId:string}){
   const[items,setItems]=useState<MenuItem[]>([]),[categories,setCategories]=useState<Category[]>([]),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
@@ -137,7 +138,7 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
       <div className="owner-product-menu-column">
         <div className="owner-product-menu-head"><strong>Current menu ({items.length})</strong><div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button type="button" disabled={bulkBusy||items.length===0} onClick={()=>void bulkAction('confirm-current')}>{bulkBusy?'Updating…':'✓ Confirm current products'}</button><button type="button" disabled={bulkBusy||items.length===0} onClick={()=>void bulkAction('mark-all-unavailable')}>Mark all unavailable</button><button type="button" className="owner-primary owner-product-add-button" onClick={reset}>+ Add product</button></div></div>
         {loading?<small>Loading products…</small>:items.length===0?<div style={{border:'1px dashed var(--border)',borderRadius:12,padding:16,color:'var(--muted)'}}>No products yet. Add the first product for this shop.</div>:items.map(item=><div key={item.id} className={`owner-product-card${editingId===item.id?' is-editing':''}`}>
-          <div className="owner-product-card-copy"><strong>{item.item_name}</strong><small>{[item.brand_name,item.canonical_category_name,item.package_size,item.variant].filter(Boolean).join(' · ')||'Owner-reported product'}</small><div className="owner-product-card-meta"><strong>{money(item.price_cents)}</strong> · {(item.inventory_status||'unknown').replaceAll('_',' ')} {item.product_id&&<span>GeoWeedo Product linked · <a href={`/facts/product/${encodeURIComponent(item.product_id)}`} target="_blank" rel="noreferrer">View Facts ↗</a></span>}</div></div>
+          <div className="owner-product-card-copy"><strong>{item.item_name}</strong><small>{[item.brand_name,item.canonical_category_name,item.package_size,item.variant].filter(Boolean).join(' · ')||'Owner-reported product'}</small><div className="owner-product-card-meta"><strong>{money(item.price_cents)}</strong> · {(item.inventory_status||'unknown').replaceAll('_',' ')} · <span>{availabilityAge(item.source_updated_at)}</span> {item.product_id&&<span>GeoWeedo Product linked · <a href={`/facts/product/${encodeURIComponent(item.product_id)}`} target="_blank" rel="noreferrer">View product ↗</a></span>}</div></div>
           <div className="owner-product-card-actions"><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item)}>Remove</button></div>
         </div>)}
       </div>
