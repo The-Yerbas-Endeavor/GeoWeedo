@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import ProductSightingReporter from '@/components/ProductSightingReporter';
 import styles from './WeedoFactsNearby.module.css';
 
 type Confidence = 'exact_batch' | 'same_product' | 'possible_match';
@@ -16,6 +17,11 @@ type AvailabilityItem = {
   inventoryStatus: string;
   sourceUrl: string | null;
   sourceUpdatedAt: string | null;
+  sourceType?: string;
+  evidenceType?: 'owner_verified' | 'current_listed' | 'scanner_sighting' | 'user_sighting' | 'brand_distribution' | 'historical';
+  evidenceLabel?: string;
+  observedAt?: string | null;
+  historical?: boolean;
   batchNumber: string | null;
   verified?: boolean;
   dispensary: {
@@ -53,15 +59,15 @@ function money(cents: number | null, currency: string) {
 }
 
 function ageLabel(value: string | null) {
-  if (!value) return 'Menu freshness unknown';
+  if (!value) return 'Freshness unknown';
   const time = Date.parse(value);
-  if (!Number.isFinite(time)) return 'Menu freshness unknown';
+  if (!Number.isFinite(time)) return 'Freshness unknown';
   const minutes = Math.max(0, Math.round((Date.now() - time) / 60000));
-  if (minutes < 2) return 'Menu updated just now';
-  if (minutes < 60) return `Menu updated ${minutes}m ago`;
+  if (minutes < 2) return 'Observed just now';
+  if (minutes < 60) return `Observed ${minutes}m ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `Menu updated ${hours}h ago`;
-  return `Menu updated ${Math.round(hours / 24)}d ago`;
+  if (hours < 48) return `Observed ${hours}h ago`;
+  return `Observed ${Math.round(hours / 24)}d ago`;
 }
 
 function confidenceLabel(value: Confidence) {
@@ -92,7 +98,7 @@ function sourceTime(value: string | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export default function WeedoFactsNearby({ productId, batchId, productName }: { productId: string; batchId?: string | null; productName?: string | null }) {
+export default function WeedoFactsNearby({ productId, batchId, productName, reportSource = 'user' }: { productId: string; batchId?: string | null; productName?: string | null; reportSource?: 'scanner' | 'user' }) {
   const [zip, setZip] = useState('');
   const [origin, setOrigin] = useState<Coordinates | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
@@ -100,6 +106,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [error, setError] = useState('');
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +128,16 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
       .finally(() => { if (!cancelled) setLoadingResults(false); });
 
     return () => { cancelled = true; };
-  }, [productId, batchId]);
+  }, [productId, batchId, refreshToken]);
+
+  useEffect(() => {
+    const onUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ productId?: string }>).detail;
+      if (!detail?.productId || detail.productId === productId) setRefreshToken(value => value + 1);
+    };
+    window.addEventListener('geoweedo:availability-updated', onUpdated as EventListener);
+    return () => window.removeEventListener('geoweedo:availability-updated', onUpdated as EventListener);
+  }, [productId]);
 
   const storeItems = useMemo(() => {
     const grouped = new Map<string, { item: AvailabilityItem; count: number }>();
@@ -225,14 +241,14 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
       <div>
         <span>FIND THIS PRODUCT</span>
         <h3>{productLabel ? `Find ${productLabel}` : 'Find this product'}</h3>
-        <p>GeoWeedo lists every current dispensary menu linked to this product. Use your location or ZIP code to sort those stores from closest to farthest.</p>
+        <p>GeoWeedo combines dispensary confirmations, recent public listings, package scans, and user sightings. Older evidence stays visible as history instead of being presented as live inventory.</p>
       </div>
     </div>
 
-    {loadingResults ? <p className={styles.status}>Checking dispensary menus…</p> : null}
+    {loadingResults ? <p className={styles.status}>Checking availability evidence…</p> : null}
 
     {!loadingResults && !error && storeCount ? <div className={styles.summary}>
-      <strong>{storeCount.toLocaleString()} {storeCount === 1 ? 'dispensary' : 'dispensaries'} listing this product</strong>
+      <strong>{storeCount.toLocaleString()} {storeCount === 1 ? 'dispensary' : 'dispensaries'} with product evidence</strong>
       <span>{origin ? `Sorted closest to ${locationLabel || 'your selected location'}` : 'Use location or ZIP to sort by distance'}</span>
     </div> : null}
 
@@ -253,7 +269,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
         {ranked.map(item => {
           const price = money(item.priceCents, item.currency);
           const place = [item.dispensary.city, item.dispensary.region].filter(Boolean).join(', ') || 'Location details pending';
-          return <article className={styles.result} key={item.dispensary.id}>
+          return <article className={`${styles.result} ${item.historical ? styles.historical : ''}`} key={item.dispensary.id}>
             <div className={styles.resultTop}>
               <div>
                 <strong>{item.dispensary.name}</strong>
@@ -262,6 +278,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
               {origin ? <b className={item.distanceMiles === null ? styles.distanceUnknown : undefined}>{item.distanceMiles === null ? 'Distance unavailable' : item.distanceMiles < 10 ? `${item.distanceMiles.toFixed(1)} mi` : `${Math.round(item.distanceMiles)} mi`}</b> : null}
             </div>
             <div className={styles.badgeRow}>
+              {item.evidenceLabel ? <span className={styles.evidence}>{item.evidenceLabel}</span> : null}
               <span className={`${styles.confidence} ${styles[item.availabilityConfidence]}`}>{confidenceLabel(item.availabilityConfidence)}</span>
               <span className={styles.inventory}>{inventoryLabel(item.inventoryStatus)}</span>
             </div>
@@ -272,7 +289,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
             </div>
             {item.availabilityConfidence === 'exact_batch' && item.batchNumber ? <div className={styles.batch}>Batch / lot: <strong>{item.batchNumber}</strong></div> : null}
             <div className={styles.footer}>
-              <span>{ageLabel(item.sourceUpdatedAt)}</span>
+              <span>{ageLabel(item.observedAt || item.sourceUpdatedAt)}</span>
               <div>
                 <Link href={`/dispensary/${encodeURIComponent(item.dispensary.id)}`}>Dispensary details →</Link>
                 {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Menu source ↗</a> : null}
@@ -281,9 +298,11 @@ export default function WeedoFactsNearby({ productId, batchId, productName }: { 
           </article>;
         })}
       </div> : <div className={styles.empty}>
-        <strong>No current dispensary menu listing is linked yet.</strong>
-        <p>GeoWeedo has confirmed facts for this product, but no active dispensary menu is currently correlated to the product. Location and ZIP sorting become available automatically as soon as a listing is linked.</p>
+        <strong>No availability evidence yet.</strong>
+        <p>GeoWeedo knows the product, but nobody has linked it to a dispensary yet. An owner confirmation, public menu observation, package scan, or user sighting can create that connection.</p>
       </div>}
     </> : null}
+
+    <ProductSightingReporter productId={productId} batchId={batchId} source={reportSource} />
   </section>;
 }
