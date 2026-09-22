@@ -6,7 +6,6 @@ import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import { resolveCanonicalProductId } from '@/lib/productMaintenance';
 import { getFactsRecordForBatchId } from '@/lib/weedoCore';
 import productStyles from '../../../product/[id]/product.module.css';
-import factsStyles from '../../facts.module.css';
 import '../../../weedo-facts/weedo-facts.css';
 import '../../../weedo-facts/contrast-fix.css';
 import '../../../weedo-facts/nutrition-label.css';
