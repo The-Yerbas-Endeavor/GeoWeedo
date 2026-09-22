@@ -108,7 +108,7 @@ function commandForSource() {
   }
   return {
     executable: 'python3',
-    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '10000'],
+    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '2500'],
   };
 }
 
@@ -180,6 +180,8 @@ function runChunk() {
     env: {
       ...process.env,
       PYTHONUNBUFFERED: '1',
+      CANNLYTICS_COMMIT_EVERY: '50',
+      CANNLYTICS_YIELD_MS: '100',
     },
     stdio: ['ignore', log, log],
   });
@@ -200,9 +202,9 @@ function runChunk() {
     }
     if (sourceId === 'cannlytics' && code === 75) {
       const checkpointAt = new Date().toISOString();
-      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 15s before next chunk ---\n`);
+      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 20s before next chunk ---\n`);
       heartbeatSourceUpdate(sourceId);
-      setTimeout(runChunk, 15_000);
+      setTimeout(runChunk, 20_000);
       return;
     }
     finish(code ?? 1);
