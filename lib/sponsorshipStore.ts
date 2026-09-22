@@ -13,6 +13,8 @@ export type SponsorEventType =
   | 'game_impression'
   | 'game_completed';
 
+let sponsorshipSchemaReady = false;
+
 export type FeaturedEntitlement = {
   id: string;
   dispensaryId: string;
@@ -27,8 +29,39 @@ export type FeaturedEntitlement = {
   updatedAt: string;
 };
 
+function sponsorshipSchemaExists(db: ReturnType<typeof getDatabase>) {
+  try {
+    const required = [
+      'sponsor_businesses',
+      'sponsor_business_locations',
+      'sponsor_plans',
+      'sponsor_subscriptions',
+      'sponsor_entitlements',
+      'sponsor_payments',
+      'sponsor_events',
+      'sponsor_requests',
+    ];
+    const placeholders = required.map(() => '?').join(',');
+    const rows = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name IN (${placeholders})`).all(...required) as Array<{ name?: string }>;
+    if (new Set(rows.map(row => String(row.name || ''))).size !== required.length) return false;
+    return Boolean(db.prepare("SELECT 1 AS ok FROM sponsor_plans WHERE code='featured' LIMIT 1").get());
+  } catch {
+    return false;
+  }
+}
+
 export function ensureSponsorshipSchema() {
+  if (sponsorshipSchemaReady) return;
   const db = getDatabase();
+
+  // Public map reads hit sponsorship data on every request. If the schema and
+  // seed plan already exist, keep this path strictly read-only so staging and
+  // production can share the WAL database without fighting over schema locks.
+  if (sponsorshipSchemaExists(db)) {
+    sponsorshipSchemaReady = true;
+    return;
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS sponsor_businesses (
       id TEXT PRIMARY KEY,
@@ -150,6 +183,7 @@ export function ensureSponsorshipSchema() {
   db.prepare(`INSERT INTO sponsor_plans(id,code,name,currency,monthly_price_cents,annual_price_cents,active,created_at,updated_at)
     VALUES('plan-featured','featured','GeoWeedo Featured','USD',3900,39000,1,?,?)
     ON CONFLICT(code) DO UPDATE SET name=excluded.name,currency='USD',monthly_price_cents=excluded.monthly_price_cents,annual_price_cents=excluded.annual_price_cents,active=1,updated_at=excluded.updated_at`).run(now, now);
+  sponsorshipSchemaReady = true;
 }
 
 function businessForVerifiedOwner(userId: string, dispensaryId: string) {
@@ -199,7 +233,8 @@ export function listFeaturedEntitlements(): FeaturedEntitlement[] {
 export function activeFeaturedMap() {
   ensureSponsorshipSchema();
   const now = new Date().toISOString();
-  expireEndedFeaturedEntitlements(now);
+  // Date bounds already exclude expired entitlements. Do not issue an UPDATE
+  // from this public read path; that made ordinary homepage requests writers.
   const rows = getDatabase().prepare(`SELECT * FROM sponsor_entitlements WHERE entitlement_type='featured_listing' AND status='active' AND starts_at<=? AND ends_at>? ORDER BY created_at DESC`).all(now, now) as any[];
   const map = new Map<string, any>();
   for (const row of rows) if (!map.has(String(row.dispensary_id))) map.set(String(row.dispensary_id), row);
