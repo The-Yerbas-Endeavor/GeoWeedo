@@ -93,6 +93,26 @@ function confidenceRank(value: Confidence) {
   return 2;
 }
 
+function evidenceRank(value: AvailabilityItem['evidenceType']) {
+  if (value === 'owner_verified') return 0;
+  if (value === 'current_listed') return 1;
+  if (value === 'scanner_sighting') return 2;
+  if (value === 'user_sighting') return 3;
+  if (value === 'brand_distribution') return 4;
+  if (value === 'historical') return 6;
+  return 5;
+}
+
+function evidenceNote(item: AvailabilityItem) {
+  if (item.evidenceType === 'owner_verified') return 'The dispensary or verified owner confirmed this product.';
+  if (item.evidenceType === 'current_listed') return 'GeoWeedo recently observed this product on a dispensary menu.';
+  if (item.evidenceType === 'scanner_sighting') return 'A GeoWeedo user recently scanned this product at this dispensary.';
+  if (item.evidenceType === 'user_sighting') return 'A GeoWeedo user recently reported seeing this product here.';
+  if (item.evidenceType === 'brand_distribution') return 'The brand reported that this dispensary carries the product.';
+  if (item.evidenceType === 'historical') return 'This is older evidence and should not be treated as current inventory.';
+  return confidenceNote(item.availabilityConfidence);
+}
+
 function sourceTime(value: string | null) {
   const parsed = value ? Date.parse(value) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : 0;
@@ -151,12 +171,17 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
       }
 
       current.count += 1;
+      const currentHistorical = Boolean(current.item.historical);
+      const nextHistorical = Boolean(item.historical);
+      const currentEvidence = evidenceRank(current.item.evidenceType);
+      const nextEvidence = evidenceRank(item.evidenceType);
       const currentRank = confidenceRank(current.item.availabilityConfidence);
       const nextRank = confidenceRank(item.availabilityConfidence);
       const stronger =
-        nextRank < currentRank ||
-        (nextRank === currentRank && Boolean(item.verified) && !Boolean(current.item.verified)) ||
-        (nextRank === currentRank && Boolean(item.verified) === Boolean(current.item.verified) && sourceTime(item.sourceUpdatedAt) > sourceTime(current.item.sourceUpdatedAt));
+        (currentHistorical && !nextHistorical) ||
+        (currentHistorical === nextHistorical && nextEvidence < currentEvidence) ||
+        (currentHistorical === nextHistorical && nextEvidence === currentEvidence && nextRank < currentRank) ||
+        (currentHistorical === nextHistorical && nextEvidence === currentEvidence && nextRank === currentRank && sourceTime(item.sourceUpdatedAt) > sourceTime(current.item.sourceUpdatedAt));
 
       if (stronger) current.item = item;
     }
@@ -175,12 +200,15 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
     });
 
     return rows.sort((a, b) => {
+      if (Boolean(a.historical) !== Boolean(b.historical)) return Number(Boolean(a.historical)) - Number(Boolean(b.historical));
       if (origin) {
         if (a.distanceMiles !== null && b.distanceMiles !== null) return a.distanceMiles - b.distanceMiles;
         if (a.distanceMiles !== null) return -1;
         if (b.distanceMiles !== null) return 1;
       }
 
+      const evidence = evidenceRank(a.evidenceType) - evidenceRank(b.evidenceType);
+      if (evidence) return evidence;
       const confidence = confidenceRank(a.availabilityConfidence) - confidenceRank(b.availabilityConfidence);
       if (confidence) return confidence;
       return a.dispensary.name.localeCompare(b.dispensary.name);
@@ -235,6 +263,8 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
 
   const productLabel = String(productName || '').trim();
   const storeCount = ranked.length;
+  const currentCount = ranked.filter(item => !item.historical).length;
+  const historicalCount = storeCount - currentCount;
 
   return <section className={styles.shell}>
     <div className={styles.head}>
@@ -248,8 +278,8 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
     {loadingResults ? <p className={styles.status}>Checking availability evidence…</p> : null}
 
     {!loadingResults && !error && storeCount ? <div className={styles.summary}>
-      <strong>{storeCount.toLocaleString()} {storeCount === 1 ? 'dispensary' : 'dispensaries'} with product evidence</strong>
-      <span>{origin ? `Sorted closest to ${locationLabel || 'your selected location'}` : 'Use location or ZIP to sort by distance'}</span>
+      <strong>{currentCount.toLocaleString()} current {currentCount === 1 ? 'location' : 'locations'}</strong>
+      <span>{historicalCount ? `${historicalCount.toLocaleString()} historical · ` : ''}{origin ? `sorted closest to ${locationLabel || 'your selected location'}` : 'use location or ZIP to sort by distance'}</span>
     </div> : null}
 
     <div className={styles.locationControls}>
@@ -282,7 +312,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
               <span className={`${styles.confidence} ${styles[item.availabilityConfidence]}`}>{confidenceLabel(item.availabilityConfidence)}</span>
               <span className={styles.inventory}>{inventoryLabel(item.inventoryStatus)}</span>
             </div>
-            <p className={styles.confidenceNote}>{confidenceNote(item.availabilityConfidence)}</p>
+            <p className={styles.confidenceNote}>{evidenceNote(item)}</p>
             <div className={styles.menuLine}>
               <span>{[item.brandName, item.itemName, item.packageSize].filter(Boolean).join(' · ')}</span>
               {price ? <strong>{price}</strong> : null}
@@ -292,7 +322,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
               <span>{ageLabel(item.observedAt || item.sourceUpdatedAt)}</span>
               <div>
                 <Link href={`/dispensary/${encodeURIComponent(item.dispensary.id)}`}>Dispensary details →</Link>
-                {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Menu source ↗</a> : null}
+                {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Source ↗</a> : null}
               </div>
             </div>
           </article>;
