@@ -57,11 +57,8 @@ def infer_brand_from_product_name(product_name):
     if bracket:
         return clean(bracket.group(1))
 
-    # TCO | minis | Spray Paint | ...
-    if " | " in text:
-        prefix = clean(text.split(" | ", 1)[0])
-        if prefix and len(prefix) <= 60:
-            return prefix
+    # Generic pipe-delimited product titles are ambiguous. The first field is
+    # often package/form data rather than a brand, so do not infer from it.
 
     # Shaman Cured Resin Vape - ...
     # Keep intentionally strict: only one-word prefixes before known forms.
@@ -226,6 +223,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Maximum missing-brand products to inspect.")
     parser.add_argument("--no-backup", action="store_true", help="Skip the automatic SQLite backup in --apply mode.")
     parser.add_argument("--show", type=int, default=50, help="Number of recovered rows to preview.")
+    parser.add_argument("--allow-title-inference", action="store_true",
+                        help="Also use conservative product-title inference. Off by default.")
     args = parser.parse_args()
 
     if not DB_PATH.exists():
@@ -254,9 +253,13 @@ def main():
         cannlytics_count = load_cannlytics_brands(db, found, sources)
         print(f"Cannlytics provenance: {cannlytics_count:,} recovered ({time.monotonic()-phase:.1f}s)", flush=True)
 
-        phase = time.monotonic()
-        title_count = load_title_brands(db, found, sources)
-        print(f"Product-title inference: {title_count:,} recovered ({time.monotonic()-phase:.1f}s)", flush=True)
+        title_count = 0
+        if args.allow_title_inference:
+            phase = time.monotonic()
+            title_count = load_title_brands(db, found, sources)
+            print(f"Product-title inference: {title_count:,} recovered ({time.monotonic()-phase:.1f}s)", flush=True)
+        else:
+            print("Product-title inference: disabled (use --allow-title-inference to preview it)", flush=True)
 
         print(f"\nRecoverable brands: {len(found):,} / {target_count:,}")
         print(
@@ -292,6 +295,10 @@ def main():
         if not found:
             print(f"\nNothing to apply. Finished in {elapsed(started)}.")
             return 0
+
+        # CREATE TEMP + INSERT may leave sqlite3 in an implicit transaction.
+        # Close that read/setup transaction before the explicit write transaction.
+        db.commit()
 
         if not args.no_backup:
             phase = time.monotonic()
