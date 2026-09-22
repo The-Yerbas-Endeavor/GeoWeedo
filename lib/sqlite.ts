@@ -507,17 +507,62 @@ function initializeSchema(db: DatabaseSync) {
   `).run(new Date().toISOString());
 }
 
+function coreSchemaReady(db: DatabaseSync) {
+  try {
+    const migration = db.prepare("SELECT 1 AS ok FROM schema_migrations WHERE version=1 LIMIT 1").get() as { ok?: number } | undefined;
+    if (!migration?.ok) return false;
+
+    const required = new Map<string, string[]>([
+      ['dispensaries', ['postal_code', 'phone', 'license_number', 'gameplay_enabled']],
+      ['dispensary_candidates', ['postal_code', 'phone', 'license_status', 'license_type']],
+    ]);
+    for (const [table, columns] of required) {
+      const actual = new Set(
+        (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>)
+          .map(row => String(row.name || ''))
+          .filter(Boolean),
+      );
+      if (columns.some(column => !actual.has(column))) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getDatabase() {
   if (database) return database;
 
   mkdirSync(runtimeDir, { recursive: true });
-  database = new DatabaseSync(databasePath);
-  database.exec('PRAGMA journal_mode = WAL;');
-  database.exec('PRAGMA foreign_keys = ON;');
-  database.exec('PRAGMA busy_timeout = 5000;');
-  database.exec('PRAGMA synchronous = NORMAL;');
-  initializeSchema(database);
-  return database;
+  const next = new DatabaseSync(databasePath);
+  try {
+    // Set the wait policy before any PRAGMA that may need a database lock.
+    // This matters during zero-downtime deploys, where live and staging share
+    // the same WAL database for a short period.
+    const configuredTimeout = Number(process.env.GEOWEEDO_DB_BUSY_TIMEOUT_MS || 30000);
+    const busyTimeoutMs = Number.isFinite(configuredTimeout)
+      ? Math.max(5000, Math.min(120000, Math.floor(configuredTimeout)))
+      : 30000;
+    next.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`);
+    next.exec('PRAGMA foreign_keys = ON;');
+    next.exec('PRAGMA synchronous = NORMAL;');
+
+    const mode = next.prepare('PRAGMA journal_mode').get() as { journal_mode?: string } | undefined;
+    if (String(mode?.journal_mode || '').toLowerCase() !== 'wal') {
+      next.exec('PRAGMA journal_mode = WAL;');
+    }
+
+    // Do not replay hundreds of CREATE TABLE/INDEX statements on every new
+    // Next.js process. Production is already initialized, and replaying DDL
+    // can contend with an active writer during staging startup.
+    if (!coreSchemaReady(next)) initializeSchema(next);
+
+    database = next;
+    return database;
+  } catch (error) {
+    try { next.close(); } catch {}
+    throw error;
+  }
 }
 
 export function getDatabasePath() {
