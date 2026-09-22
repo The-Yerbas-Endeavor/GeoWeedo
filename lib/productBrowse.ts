@@ -105,9 +105,16 @@ function productSortSql(value: unknown, brandSql = 'p.brand_name', producerSql =
     case 'name-asc': return `p.product_name COLLATE NOCASE ASC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
     case 'name-desc': return `p.product_name COLLATE NOCASE DESC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
     case 'brand-asc': return `COALESCE(NULLIF(TRIM(${brandSql}),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
+    case 'brand-desc': return `COALESCE(NULLIF(TRIM(${brandSql}),''),'') COLLATE NOCASE DESC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
     case 'producer-asc': return `COALESCE(NULLIF(TRIM(${producerSql}),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
-    case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'producer-desc': return `COALESCE(NULLIF(TRIM(${producerSql}),''),'') COLLATE NOCASE DESC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
+    case 'scans-desc': return 'scan_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'scans-asc': return 'scan_count ASC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'batches-desc': return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'batches-asc': return 'verified_batch_count ASC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'listings-desc': return 'menu_listing_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'listings-asc': return 'menu_listing_count ASC,p.product_name COLLATE NOCASE ASC,p.id ASC';
+    case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'category':
     default: return `COALESCE(c.sort_order,999) ASC,c.name COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,${brandSql} COLLATE NOCASE ASC,latest_record DESC`;
   }
