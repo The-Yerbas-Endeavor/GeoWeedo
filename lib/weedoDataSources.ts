@@ -20,10 +20,10 @@ export const WEEDO_DATA_SOURCES = [
   },
   {
     id: 'cannlytics' as const,
-    label: 'Cannlytics Cannabis Results',
-    kind: 'Public laboratory / regulatory dataset',
+    label: 'Cannlytics Product & Lab Data',
+    kind: 'Cannlytics Cannabis Results dataset',
     sourceUrl: 'https://huggingface.co/datasets/cannlytics/cannabis_results',
-    description: 'Import and refresh Cannlytics lab-result datasets one state at a time. Large states are checkpointed and resumable; existing records are hash-checked and stronger direct-lab evidence is preserved.',
+    description: 'Official GeoWeedo Cannlytics importer. Refresh product, batch/COA, cannabinoid, terpene and compliance data one state at a time from the Cannlytics Cannabis Results dataset. Large states are checkpointed and resumable; stronger direct-lab evidence is preserved.',
   },
   {
     id: 'kannapedia' as const,
@@ -245,7 +245,7 @@ export function getSourceSummaries() {
     try { lastSummary = row.last_summary_json ? JSON.parse(row.last_summary_json) : null; } catch {}
     const heartbeat = runningHeartbeatState(row);
     return {
-      id:row.id,label:row.label,kind:row.source_kind,sourceUrl:row.source_url,description:definition?.description || '',
+      id:row.id,label:definition?.label || row.label,kind:definition?.kind || row.source_kind,sourceUrl:definition?.sourceUrl || row.source_url,description:definition?.description || '',
       state:(heartbeat.stale ? 'error' : row.state) as WeedoDataSourceState,lastStartedAt:row.last_started_at,lastCompletedAt:row.last_completed_at,
       lastError:heartbeat.stale ? 'The previous update stopped reporting progress. It is safe to resume from the last Cannlytics checkpoint.' : row.last_error,
       lastHeartbeatAt:row.updated_at,...heartbeat,lastSummary,...counts,
