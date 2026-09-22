@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
 
     const hasContribution = Boolean(
       coaUploadId || body?.dispensaryId || body?.menu || body?.sourceUrl || body?.coaUrl || body?.notes ||
+      (existing && !existing.brandName && body?.brandName) ||
       (!existing && (body?.productName || body?.brandName || body?.batchNumber || body?.uid || parsedCoa?.productName || parsedCoa?.batchNumber || parsedCoa?.uid))
     );
 
