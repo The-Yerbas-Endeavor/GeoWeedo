@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import WeedoFactsBatchHistory from '@/components/WeedoFactsBatchHistory';
 import WeedoFactsHeadlineTotals, { filterHeadlineTotals } from '@/components/WeedoFactsHeadlineTotals';
+import WeedoFactsNearby from '@/components/WeedoFactsNearby';
 
 type LookupResult = any;
 type IdentifierType = 'qr' | 'upc' | 'uid' | 'batch' | 'coa' | 'unknown';
@@ -472,6 +473,7 @@ function FactsCard({ record }: { record: any }) {
       <section><h3>Batch information</h3><div className="weedoFactsRows">{record.batchNumber ? <Fact label="Batch / lot" value={record.batchNumber} /> : null}{record.uid ? <Fact label="California UID" value={record.uid} /> : null}{record.coaNumber ? <Fact label="COA" value={record.coaNumber} /> : null}{record.testedAt ? <Fact label="Tested" value={new Date(record.testedAt).toLocaleDateString()} /> : null}{record.labName ? <Fact label="Laboratory" value={record.labName} /> : null}{record.producerName ? <Fact label="Producer / manufacturer" value={record.producerName} /> : null}</div></section>
       {record.coaUrl ? <a className="weedoFactsCoaLink" href={record.coaUrl} target="_blank" rel="noreferrer">View original COA ↗</a> : record.source?.url ? <a className="weedoFactsCoaLink" href={record.source.url} target="_blank" rel="noreferrer">View source ↗</a> : null}
       {record.productId ? <WeedoFactsBatchHistory productId={record.productId} currentBatchId={record.batchId} /> : null}
+      {record.productId ? <WeedoFactsNearby productId={record.productId} batchId={record.batchId} productName={record.productName} reportSource="scanner" /> : null}
     </article>
   );
 }
