@@ -92,9 +92,10 @@ export default function WeedoFactsAdminPage() {
     }
   }
 
-  async function review(submissionId: string, action: 'approve_exact_batch' | 'needs_info' | 'reject') {
-    const notes = window.prompt(action === 'approve_exact_batch' ? 'Optional approval notes:' : 'Review notes:', '') ?? '';
-    if (action !== 'approve_exact_batch' && !notes.trim()) return;
+  async function review(submissionId: string, action: 'approve_exact_batch' | 'approve_product_brand' | 'needs_info' | 'reject') {
+    const approving = action === 'approve_exact_batch' || action === 'approve_product_brand';
+    const notes = window.prompt(approving ? 'Optional approval notes:' : 'Review notes:', '') ?? '';
+    if (!approving && !notes.trim()) return;
     setBusy(submissionId);
     setError('');
     try {
@@ -236,6 +237,7 @@ export default function WeedoFactsAdminPage() {
           {item.coa ? <div className={styles.pdfRow}><a href={`/api/admin/weedo-facts/coa-reviews/${encodeURIComponent(item.id)}/pdf`} target="_blank" rel="noreferrer">View private COA PDF →</a></div> : null}
 
           <div className={styles.actions}>
+            {!item.coa && item.product_id && item.brand_name ? <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} className={styles.approve} onClick={() => review(item.id,'approve_product_brand')}>✓ Approve product brand</button> : null}
             <button disabled={busy===item.id || !item.coa || !['pending','needs_info'].includes(item.status) || preview.hasPotentialConflict} className={styles.approve} onClick={() => review(item.id,'approve_exact_batch')}>✓ Approve exact batch</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} onClick={() => review(item.id,'needs_info')}>Needs info</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} className={styles.reject} onClick={() => review(item.id,'reject')}>Reject</button>
