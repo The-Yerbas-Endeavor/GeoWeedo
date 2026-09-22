@@ -73,42 +73,10 @@ BRAND_KEYS = (
 )
 
 
-def infer_brand_from_product_name(product_name):
-    """Conservative fallback for source rows that embed a brand in the title."""
-    text = clean(product_name)
-    if not text:
-        return None
-
-    # Common menu/catalog formats: "TCO | minis | ..." and
-    # "[Turn Down] - BB turnONE - ...".
-    bracket = re.match(r"^\[([^\]]{2,60})\]\s*(?:[-|:])", text)
-    if bracket:
-        return clean(bracket.group(1))
-    if " | " in text:
-        prefix = clean(text.split(" | ", 1)[0])
-        if prefix and len(prefix) <= 60:
-            return prefix
-
-    # Some lab/menu titles prefix a one-word brand before the product form,
-    # e.g. "Shaman Cured Resin Vape - ...". Keep this intentionally strict
-    # so cultivar/product names are not broadly relabeled as brands.
-    forms = (
-        "cured resin vape", "live resin vape", "resin vape", "rosin vape",
-        "vape cartridge", "vape cart", "disposable vape",
-    )
-    lowered = text.lower()
-    for form in forms:
-        marker = f" {form}"
-        pos = lowered.find(marker)
-        if 1 < pos <= 32:
-            prefix = clean(text[:pos])
-            if prefix and " " not in prefix and re.fullmatch(r"[A-Za-z0-9&.'-]{2,32}", prefix):
-                return prefix
-    return None
-
-
 def product_brand(row, product_name):
-    return pick(row, *BRAND_KEYS) or infer_brand_from_product_name(product_name)
+    # Only use explicit source fields. Product-title token positions vary too
+    # much between state datasets to safely promote them to brand identity.
+    return pick(row, *BRAND_KEYS)
 
 
 def number(value):
