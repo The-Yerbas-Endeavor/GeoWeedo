@@ -14,16 +14,32 @@ export default function RewardsPage() {
   const perfectReward = calculateGameReward(MAX_GAME_SCORE, policy);
 
   return (
-    <main className="info-shell">
+    <main className="info-shell rewards-page">
       <SiteHeader />
-      <section className="info-hero">
+      <section className="info-hero rewards-hero">
         <span className="eyebrow">YERB REWARDS</span>
-        <h1>Play well. Earn Yerbas.</h1>
+        <h1>Play GeoWeedo. Earn YERB.</h1>
         <p>
           {policy.enabled
-            ? 'Verified, skill-based GeoWeedo gameplay can earn YERB without requiring an entry fee. Rewards are tied to score, then checked against the current game and daily limits before payout.'
+            ? 'Eligible skill-based GeoWeedo gameplay can earn YERB. Rewards are tied to score and checked against the current per-game and daily limits before payout.'
             : 'Gameplay YERB rewards are currently paused by GeoWeedo Admin. Your game scores are still recorded normally while rewards are paused.'}
         </p>
+      </section>
+
+      <section className="yerb-about" aria-labelledby="what-is-yerb">
+        <div className="yerb-about-copy">
+          <span className="eyebrow">ABOUT THE REWARD</span>
+          <h2 id="what-is-yerb">What is YERB?</h2>
+          <p>
+            YERB is the native cryptocurrency of the Yerbas blockchain. GeoWeedo uses YERB as an optional gameplay reward currency, while the Yerbas network, wallet software, explorer, and source code operate independently of GeoWeedo.
+          </p>
+        </div>
+        <div className="yerb-resource-links" aria-label="Yerbas resources">
+          <a href="https://yerbas.org/" target="_blank" rel="noreferrer"><strong>Yerbas</strong><span>Project website ↗</span></a>
+          <a href="https://docs.yerbas.org/" target="_blank" rel="noreferrer"><strong>Documentation</strong><span>Wallets, nodes &amp; guides ↗</span></a>
+          <a href="https://explorer.yerbas.org/" target="_blank" rel="noreferrer"><strong>Block Explorer</strong><span>Network &amp; transaction data ↗</span></a>
+          <a href="https://github.com/The-Yerbas-Endeavor/yerbas" target="_blank" rel="noreferrer"><strong>Source Code</strong><span>Yerbas Core on GitHub ↗</span></a>
+        </div>
       </section>
 
       <section className="reward-callout" aria-label="Current gameplay reward policy">
