@@ -145,26 +145,64 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     ? `(SELECT NULLIF(TRIM(qb.brand_name),'') FROM cannabis_qr_scans qb WHERE qb.product_id=p.id AND qb.brand_name IS NOT NULL AND TRIM(qb.brand_name)<>'' ORDER BY qb.last_seen_at DESC LIMIT 1)`
     : 'NULL';
 
-  // The small evidence-driven view can safely use conservative display-only
-  // title inference. Do not persist these guesses and do not use them across
-  // the full 59k reference catalog.
+  // Brand display falls back to conservative title parsing when neither the
+  // canonical product nor a scanner observation has an explicit brand. This is
+  // display/filter-only: inferred values are never persisted to cannabis_products.
+  //
+  // Cannlytics titles commonly use either:
+  //   Brand | format | cultivar ...
+  // or:
+  //   package/format | Brand | cultivar ...
+  // Handle both while rejecting obvious package/product descriptors.
   const oneWordFormCases = [' cured resin vape',' live resin vape',' resin vape',' rosin vape',' vape cartridge',' vape cart',' disposable vape']
     .map(marker => {
       const pos = `instr(lower(p.product_name),'${marker}')`;
       const prefix = `trim(substr(p.product_name,1,${pos}-1))`;
       return `WHEN ${pos} BETWEEN 3 AND 33 AND instr(${prefix},' ')=0 THEN ${prefix}`;
     }).join(' ');
-  const inferredEvidenceBrandSql = `CASE
+
+  const firstPipePos = `instr(p.product_name,' | ')`;
+  const firstPipeSegment = `trim(substr(p.product_name,1,${firstPipePos}-1))`;
+  const remainderAfterFirstPipe = `substr(p.product_name,${firstPipePos}+3)`;
+  const secondPipePos = `instr(${remainderAfterFirstPipe},' | ')`;
+  const secondPipeSegment = `trim(CASE WHEN ${secondPipePos}>0 THEN substr(${remainderAfterFirstPipe},1,${secondPipePos}-1) ELSE ${remainderAfterFirstPipe} END)`;
+  const firstPipeLower = `lower(${firstPipeSegment})`;
+  const firstLooksLikeDescriptor = `(
+    ${firstPipeSegment} GLOB '[0-9]*'
+    OR ${firstPipeLower} LIKE '%preroll%'
+    OR ${firstPipeLower} LIKE '%pre-roll%'
+    OR ${firstPipeLower} LIKE '%flower%'
+    OR ${firstPipeLower} LIKE '%vape%'
+    OR ${firstPipeLower} LIKE '%resin%'
+    OR ${firstPipeLower} LIKE '%rosin%'
+    OR ${firstPipeLower} LIKE '%concentrate%'
+    OR ${firstPipeLower} LIKE '%diamond%'
+    OR ${firstPipeLower} LIKE '%gumm%'
+    OR ${firstPipeLower} LIKE '%edible%'
+    OR ${firstPipeLower} LIKE '%cartridge%'
+    OR ${firstPipeLower} LIKE '%extract%'
+    OR ${firstPipeLower} LIKE '%wax%'
+    OR ${firstPipeLower} LIKE '%shatter%'
+    OR ${firstPipeLower} LIKE '%infused%'
+    OR ${firstPipeLower} LIKE '%tincture%'
+    OR ${firstPipeLower} LIKE '%capsule%'
+  )`;
+
+  const inferredDisplayBrandSql = `CASE
     WHEN substr(trim(p.product_name),1,1)='[' AND instr(p.product_name,']') BETWEEN 3 AND 62
       THEN trim(substr(p.product_name,2,instr(p.product_name,']')-2))
-    WHEN instr(p.product_name,' | ') BETWEEN 3 AND 61
-      THEN trim(substr(p.product_name,1,instr(p.product_name,' | ')-1))
+    WHEN ${firstPipePos} BETWEEN 3 AND 80
+      AND ${firstLooksLikeDescriptor}
+      AND length(${secondPipeSegment}) BETWEEN 2 AND 60
+      THEN ${secondPipeSegment}
+    WHEN ${firstPipePos} BETWEEN 3 AND 61
+      AND NOT ${firstLooksLikeDescriptor}
+      AND substr(${firstPipeSegment},1,1) NOT IN ('"', '''')
+      THEN ${firstPipeSegment}
     ${oneWordFormCases}
     ELSE NULL END`;
-  const useEvidenceBrandInference = filters.scope !== 'all';
-  const effectiveBrandSql = useEvidenceBrandInference
-    ? `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql},${inferredEvidenceBrandSql})`
-    : `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql})`;
+
+  const effectiveBrandSql = `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql},${inferredDisplayBrandSql})`;
 
   const effectiveProducerSql = `(
     SELECT NULLIF(TRIM(bp.producer_name),'')
