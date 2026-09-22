@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/sqlite';
 import { ensureWeedoMenuSchema } from '@/lib/weedoMenus';
+import { listProductAvailabilityObservations } from '@/lib/productAvailabilityObservations';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -182,6 +183,94 @@ export async function GET(request: NextRequest) {
       sourceUpdatedAt: row.source_updated_at || null,
       batchNumber: row.batch_number || null,
       score: matchScore(row, query, Boolean(productId)),
+    });
+  }
+
+  const observationRows = productId
+    ? listProductAvailabilityObservations(productId).filter(item => !item.historical)
+    : (() => {
+        const table = db.prepare("SELECT 1 ok FROM sqlite_master WHERE type='table' AND name='product_availability_observations' LIMIT 1").get();
+        if (!table) return [];
+        const searchableObservation = `LOWER(COALESCE(p.product_name,'') || ' ' || COALESCE(p.brand_name,''))`;
+        const conditions = terms.map(() => `${searchableObservation} LIKE ?`).join(' AND ');
+        const now = new Date().toISOString();
+        return (db.prepare(`
+          SELECT o.id,o.product_id,o.batch_id,o.source_type,o.price_cents,o.currency,o.availability_status,
+                 o.confidence,o.observed_at,o.expires_at,
+                 d.id dispensary_id,d.name dispensary_name,d.city,d.region,d.country,d.latitude,d.longitude,
+                 p.product_name,p.brand_name,p.product_type
+          FROM product_availability_observations o
+          JOIN dispensaries d ON d.id=o.dispensary_id
+          JOIN cannabis_products p ON p.id=o.product_id
+          WHERE d.active=1 AND d.verified=1
+            AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL
+            AND o.availability_status<>'unavailable'
+            AND (o.expires_at IS NULL OR o.expires_at>?)
+            AND ${conditions}
+          ORDER BY o.observed_at DESC
+          LIMIT 300
+        `).all(now,...terms.map(term => `%${term}%`)) as any[]).map(row => ({
+          id:String(row.id),
+          productId:String(row.product_id),
+          batchId:row.batch_id?String(row.batch_id):null,
+          sourceType:String(row.source_type||'user'),
+          priceCents:row.price_cents==null?null:Number(row.price_cents),
+          currency:String(row.currency||'USD'),
+          availabilityStatus:String(row.availability_status||'seen'),
+          confidence:String(row.confidence||'medium'),
+          observedAt:String(row.observed_at||''),
+          historical:false,
+          dispensary:{
+            id:String(row.dispensary_id),
+            name:String(row.dispensary_name||'Dispensary'),
+            city:row.city||null,region:row.region||null,country:row.country||null,
+            latitude:Number(row.latitude),longitude:Number(row.longitude),
+          },
+          productName:String(row.product_name||'Product'),
+          brandName:row.brand_name||null,
+          productType:row.product_type||null,
+        }));
+      })();
+
+  for (const observation of observationRows as any[]) {
+    const lat=Number(observation.dispensary?.latitude),lng=Number(observation.dispensary?.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;
+    let entry=grouped.get(observation.dispensary.id);
+    if(!entry){
+      entry={
+        id:String(observation.dispensary.id),
+        name:String(observation.dispensary.name||'Dispensary'),
+        city:observation.dispensary.city||null,
+        region:observation.dispensary.region||null,
+        country:observation.dispensary.country||null,
+        latitude:lat,longitude:lng,matches:[],
+      };
+      grouped.set(observation.dispensary.id,entry);
+    }
+    if(entry.matches.length>=MAX_MATCHES_PER_DISPENSARY)continue;
+    const observedProductName=product?.product_name||observation.productName||'Product sighting';
+    const observedBrand=product?.brand_name||observation.brandName||null;
+    entry.matches.push({
+      menuItemId:String(observation.id),
+      productId:observation.productId||productId||null,
+      batchId:observation.batchId||null,
+      itemName:String(observedProductName),
+      brandName:observedBrand,
+      category:product?.category_name||observation.productType||null,
+      categoryId:product?.category_id||null,
+      categorySlug:product?.category_slug||'other',
+      sourceCategory:null,
+      variant:null,
+      packageSize:product?.net_contents||null,
+      priceCents:observation.priceCents??null,
+      currency:observation.currency||'USD',
+      inventoryStatus:observation.availabilityStatus||'seen',
+      verified:observation.confidence==='high',
+      sourceUrl:null,
+      sourceUpdatedAt:observation.observedAt||null,
+      batchNumber:null,
+      score:productId?980:(observation.confidence==='high'?90:70),
+      evidenceType:observation.sourceType==='scanner'?'scanner_sighting':'user_sighting',
     });
   }
 
