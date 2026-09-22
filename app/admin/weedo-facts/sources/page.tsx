@@ -254,7 +254,7 @@ export default function WeedoFactsSourcesPage() {
               onClick={stopCannlytics}
             >{busy === 'cannlytics:stop' ? 'Stopping…' : 'Stop Cannlytics'}</button> : null}
           </div>
-          {source.state === 'running' && !source.heartbeatDelayed ? <p className={styles.runningNote}>The updater is reporting normally. Cannlytics checkpoints are saved between chunks; this page refreshes automatically.</p> : null}
+          {source.state === 'running' && !source.heartbeatDelayed ? <p className={styles.runningNote}>The updater is reporting normally in production-safe mode. Cannlytics uses short write batches, pauses between chunks, and this page refreshes every 15 seconds.</p> : null}
           {source.state === 'running' && source.heartbeatDelayed && !source.stale ? <p className={styles.runningNote}>Heartbeat is delayed. The worker may still be processing a long SQLite write; GeoWeedo will keep the last good status and retry automatically.</p> : null}
           {source.stale ? <p className={styles.runningNote}>The previous worker stopped reporting for more than 10 minutes. Select the state and use Resume to continue safely from its saved checkpoint.</p> : null}
         </article>;
