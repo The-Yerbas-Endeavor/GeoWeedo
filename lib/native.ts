@@ -7,6 +7,8 @@ type CapacitorRuntime = {
   isNativePlatform?: () => boolean;
   getPlatform?: () => string;
   Plugins?: Record<string, CapacitorPlugin>;
+  isPluginAvailable?: (name: string) => boolean;
+  registerPlugin?: (name: string) => CapacitorPlugin;
 };
 
 export type NativePlatform = 'android' | 'ios' | 'web' | 'native';
@@ -79,7 +81,27 @@ function runtime(): CapacitorRuntime | undefined {
 }
 
 function plugin(name: string): CapacitorPlugin | undefined {
-  return runtime()?.Plugins?.[name];
+  const capacitor = runtime();
+  if (!capacitor) return undefined;
+
+  const existing = capacitor.Plugins?.[name];
+  if (existing) return existing;
+
+  // The GeoWeedo native apps load the production website remotely. In that
+  // setup the native bridge exposes PluginHeaders, but the website bundle does
+  // not import each installed Capacitor package and therefore does not call
+  // registerPlugin() for it. Register the proxy lazily from the native header
+  // so BarcodeScanner, Torch, Camera, Network, etc. are reachable from the
+  // live web application.
+  if (capacitor.isPluginAvailable?.(name) && capacitor.registerPlugin) {
+    try {
+      return capacitor.registerPlugin(name);
+    } catch {
+      return capacitor.Plugins?.[name];
+    }
+  }
+
+  return undefined;
 }
 
 function dispatchNativeScannerState(state: NativeScannerUiState) {
