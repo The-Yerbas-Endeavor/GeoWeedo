@@ -303,7 +303,7 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
             <div className={styles.resultTop}>
               <div>
                 <strong>{item.dispensary.name}</strong>
-                <span>{place}{item.listingCount > 1 ? ` · ${item.listingCount} linked menu entries` : ''}</span>
+                <span>{place}{item.listingCount > 1 ? ` · ${item.listingCount} evidence records` : ''}</span>
               </div>
               {origin ? <b className={item.distanceMiles === null ? styles.distanceUnknown : undefined}>{item.distanceMiles === null ? 'Distance unavailable' : item.distanceMiles < 10 ? `${item.distanceMiles.toFixed(1)} mi` : `${Math.round(item.distanceMiles)} mi`}</b> : null}
             </div>
