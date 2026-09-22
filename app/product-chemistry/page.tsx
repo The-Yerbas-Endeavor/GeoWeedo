@@ -40,7 +40,7 @@ function displayType(value: string | null) {
   return value.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
-const PRODUCT_SORTS = new Set(['category', 'name-asc', 'name-desc', 'brand-asc', 'producer-asc', 'recent', 'batches-desc']);
+const PRODUCT_SORTS = new Set(['category','name-asc','name-desc','brand-asc','brand-desc','producer-asc','producer-desc','scans-desc','scans-asc','batches-desc','batches-asc','listings-desc','listings-asc','recent']);
 
 export default async function ProductChemistryPage({ searchParams }: Props) {
   const query = await searchParams;
@@ -106,6 +106,24 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     if (nextPage > 1) params.set('page', String(nextPage));
     const queryString = params.toString();
     return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
+  }
+
+  function sortHref(nextSort: string) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (brand) params.set('brand', brand);
+    if (producer) params.set('producer', producer);
+    if (productCategory) params.set('type', productCategory);
+    if (nextSort !== 'category') params.set('sort', nextSort);
+    if (view === 'all') params.set('view', 'all');
+    const queryString = params.toString();
+    return `/product-chemistry${queryString ? `?${queryString}` : ''}`;
+  }
+
+  function sortMark(asc: string, desc?: string) {
+    if (sort === asc) return ' ↑';
+    if (desc && sort === desc) return ' ↓';
+    return ' ↕';
   }
 
   return (
@@ -184,9 +202,13 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                 <option value="name-asc">Product name A–Z</option>
                 <option value="name-desc">Product name Z–A</option>
                 <option value="brand-asc">Brand A–Z</option>
+                <option value="brand-desc">Brand Z–A</option>
                 {catalog.producers.length ? <option value="producer-asc">Producer A–Z</option> : null}
-                <option value="recent">Newest lab record</option>
+                {catalog.producers.length ? <option value="producer-desc">Producer Z–A</option> : null}
+                <option value="scans-desc">Most scans</option>
                 <option value="batches-desc">Most verified batches</option>
+                <option value="listings-desc">Most dispensary listings</option>
+                <option value="recent">Newest lab record</option>
               </select>
             </label>
             <div className="productChemistryFilterActions">
@@ -196,30 +218,46 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
           </form>
 
           {catalog.products.length ? (
-            <div className="productBrowseGrid">
-              {catalog.products.map(product => {
-                const secondary = [displayType(product.canonicalProductType) || product.productType, product.netContents].filter(Boolean).join(' · ');
-                return (
-                  <a key={product.productId} className="productBrowseCard" href={`/product/${encodeURIComponent(product.productId)}`}>
-                    <div className="productBrowseCardTop">
-                      <span className="productBrowseCategory">{product.categoryName || 'Other'}</span>
-                    </div>
-                    <strong className="productBrowseName">{product.productName}</strong>
-                    <span className="productBrowseBrand">{product.brandName || (product.producerName ? `Producer: ${product.producerName}` : 'Brand not reported')}</span>
-                    {secondary ? <span className="productBrowseSecondary">{secondary}</span> : null}
-                    <div className="productBrowseEvidence">
-                      {product.scanCount > 0 ? <span>✓ Scanned{product.scanCount > 1 ? ` ${product.scanCount.toLocaleString()} times` : ''}</span> : null}
-                      {product.approvedUploadCount > 0 ? <span>✓ Approved COA upload</span> : null}
-                      {view==='all' && product.scanCount===0 && product.approvedUploadCount===0 ? <span>Reference library product</span> : null}
-                      {product.verifiedBatchCount > 0 ? <span>✓ {product.verifiedBatchCount.toLocaleString()} verified {product.verifiedBatchCount === 1 ? 'batch' : 'batches'}</span> : null}
-                      {product.menuListingCount > 0
-                        ? <span className="productBrowseAvailable">Found at {product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'dispensary listing' : 'dispensary listings'}</span>
-                        : <span className="productBrowseUnavailable">No current menu match</span>}
-                    </div>
-                    <span className="productBrowseOpen">View product →</span>
-                  </a>
-                );
-              })}
+            <div className="productBrowseTableWrap">
+              <table className="productBrowseTable">
+                <thead>
+                  <tr>
+                    <th><a className={sort==='category'?'active':''} href={sortHref('category')}>Category{sort==='category'?' ↑':' ↕'}</a></th>
+                    <th><a className={sort==='name-asc'||sort==='name-desc'?'active':''} href={sortHref(sort==='name-asc'?'name-desc':'name-asc')}>Product{sortMark('name-asc','name-desc')}</a></th>
+                    <th><a className={sort==='brand-asc'||sort==='brand-desc'?'active':''} href={sortHref(sort==='brand-asc'?'brand-desc':'brand-asc')}>Brand{sortMark('brand-asc','brand-desc')}</a></th>
+                    <th><a className={sort==='producer-asc'||sort==='producer-desc'?'active':''} href={sortHref(sort==='producer-asc'?'producer-desc':'producer-asc')}>Producer{sortMark('producer-asc','producer-desc')}</a></th>
+                    <th className="number"><a className={sort==='scans-desc'||sort==='scans-asc'?'active':''} href={sortHref(sort==='scans-desc'?'scans-asc':'scans-desc')}>Scans{sortMark('scans-asc','scans-desc')}</a></th>
+                    <th className="number"><a className={sort==='batches-desc'||sort==='batches-asc'?'active':''} href={sortHref(sort==='batches-desc'?'batches-asc':'batches-desc')}>Batches{sortMark('batches-asc','batches-desc')}</a></th>
+                    <th><a className={sort==='listings-desc'||sort==='listings-asc'?'active':''} href={sortHref(sort==='listings-desc'?'listings-asc':'listings-desc')}>Availability{sortMark('listings-asc','listings-desc')}</a></th>
+                    <th className="action">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.products.map(product => {
+                    const secondary = [displayType(product.canonicalProductType) || product.productType, product.netContents].filter(Boolean).join(' · ');
+                    return (
+                      <tr key={product.productId}>
+                        <td><span className="productBrowseCategory">{product.categoryName || 'Other'}</span></td>
+                        <td className="productCell">
+                          <a className="productBrowseName" href={`/product/${encodeURIComponent(product.productId)}`}>{product.productName}</a>
+                          {secondary ? <small>{secondary}</small> : null}
+                          {view==='all' && product.scanCount===0 && product.approvedUploadCount===0 ? <small>Reference library product</small> : null}
+                        </td>
+                        <td>{product.brandName || '—'}</td>
+                        <td>{product.producerName || '—'}</td>
+                        <td className="number">{product.scanCount ? product.scanCount.toLocaleString() : '—'}</td>
+                        <td className="number">{product.verifiedBatchCount ? product.verifiedBatchCount.toLocaleString() : '—'}</td>
+                        <td>
+                          {product.menuListingCount > 0
+                            ? <span className="productBrowseAvailable">{product.menuListingCount.toLocaleString()} {product.menuListingCount === 1 ? 'listing' : 'listings'}</span>
+                            : <span className="productBrowseUnavailable">No match</span>}
+                        </td>
+                        <td className="action"><a className="productBrowseOpen" href={`/product/${encodeURIComponent(product.productId)}`}>View →</a></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="nutritionalFactsEmptyIndex">
