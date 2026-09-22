@@ -42,6 +42,8 @@ function locationData(items:MapLocation[]){return{type:'FeatureCollection' as co
 function emptyRegionData(){return{type:'FeatureCollection' as const,features:[] as any[]};}
 function geometryBounds(geometry:any){const bounds=new LngLatBounds();const walk=(coords:any)=>{if(Array.isArray(coords)&&coords.length>=2&&typeof coords[0]==='number'&&typeof coords[1]==='number'){bounds.extend([Number(coords[0]),Number(coords[1])]);return;}if(Array.isArray(coords))coords.forEach(walk);};walk(geometry?.coordinates);return bounds;}
 function distanceMiles(a:LatLng,b:LatLng){const r=3958.7613,rad=(v:number)=>(v*Math.PI)/180,dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng),lat1=rad(a.lat),lat2=rad(b.lat),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));}
+function browseBusinessTokens(value:unknown){return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(token=>token.length>2&&!['dispensary','cannabis','cultivators','collective','wellness','store'].includes(token));}
+function nearbyFeaturedAlias(featured:MapLocation,item:MapLocation){if(!featured.sponsored||item.sponsored)return false;if(distanceMiles({lat:featured.lat,lng:featured.lng},{lat:item.lat,lng:item.lng})>0.5)return false;const fc=String(featured.city||'').trim().toLowerCase(),ic=String(item.city||'').trim().toLowerCase();if(fc&&ic&&fc!==ic)return false;const aa=new Set(browseBusinessTokens(featured.name)),bb=new Set(browseBusinessTokens(item.name));let shared=0;for(const token of aa)if(bb.has(token))shared++;return shared>=2;}
 function fitLocations(map:LibreMap,items:MapLocation[],maxZoom=5.5,panel=false){const good=items.filter(validLocation);if(!good.length)return;const b=new LngLatBounds();good.forEach(i=>b.extend([i.lng,i.lat]));if(b.isEmpty())return;const left=panel&&map.getContainer().clientWidth>760?Math.min(590,Math.max(540,Math.round(map.getContainer().clientWidth*.31))):70;map.fitBounds(b,{padding:panel?{top:70,right:70,bottom:70,left}:70,maxZoom,duration:500});}
 function isPlayable(i:MapLocation){return Boolean(i.approved&&i.imageryReady);}
 function switchBaseMap(map:LibreMap,base:BaseMap){for(const [name,c] of Object.entries(BASE_MAPS) as [BaseMap,(typeof BASE_MAPS)[BaseMap]][]){if(map.getLayer(c.layer))map.setLayoutProperty(c.layer,'visibility',name===base?'visible':'none');}map.triggerRepaint();}
@@ -146,6 +148,7 @@ export default function GuessMap({guess,actual=null,revealed=false,onGuess,locat
     const id=String(item.id||'').trim().toLowerCase();
     const coord=`${item.lat.toFixed(5)}|${item.lng.toFixed(5)}`;
     if((id&&seenIds.has(id))||seenCoords.has(coord))continue;
+    if(!item.sponsored&&unique.some(existing=>nearbyFeaturedAlias(existing,item)))continue;
     if(id)seenIds.add(id);
     seenCoords.add(coord);
     unique.push(item);
