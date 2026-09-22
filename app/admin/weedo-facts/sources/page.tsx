@@ -168,7 +168,7 @@ export default function WeedoFactsSourcesPage() {
         <a href="/admin/weedo-facts" className={styles.back}>← GeoWeedo Facts admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS DATA SOURCES</span>
         <h1>Source updates</h1>
-        <p>Refresh public source data at any time. Large Cannlytics states run in durable chunks, save checkpoints, and can resume after a restart without discarding records already imported.</p>
+        <p>Manage GeoWeedo's external product and laboratory data here. Cannlytics Product & Lab Data is the single supported Cannlytics importer; large states run in durable chunks, save checkpoints, and can resume safely.</p>
       </div>
       <button type="button" className={styles.refresh} onClick={load}>Refresh status</button>
     </header>
@@ -205,7 +205,7 @@ export default function WeedoFactsSourcesPage() {
             <dt>Last started</dt><dd>{formatDate(source.lastStartedAt)}</dd>
             <dt>Last completed</dt><dd>{formatDate(source.lastCompletedAt)}</dd>
             {source.state === 'running' ? <><dt>Heartbeat</dt><dd>{formatDate(source.lastHeartbeatAt)}{source.heartbeatAgeMs != null ? ` · ${formatAge(source.heartbeatAgeMs)}` : ''}</dd></> : null}
-            <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open public source ↗</a></dd>
+            <dt>Source</dt><dd><a href={source.sourceUrl} target="_blank" rel="noreferrer">{source.id === 'cannlytics' ? 'Cannlytics Cannabis Results ↗' : 'Open public source ↗'}</a></dd>
           </dl>
 
           {source.lastError ? <div className={wasStopped ? styles.stopNotice : styles.sourceError}>{source.lastError}</div> : null}
