@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AdminPermission } from '@/lib/adminPermissions';
+import AdminDatabaseHealth from '@/components/AdminDatabaseHealth';
 import styles from './admin.module.css';
 
 type AdminUser = {
@@ -193,6 +194,8 @@ export default function AdminHomePage() {
           {data.dispensaries.recent.length?data.dispensaries.recent.map(row=><div className={styles.dashboardRecentRow} key={row.id}><div><strong>{row.name}</strong><span>{row.location||'Location unavailable'} · {row.playable?'playable':row.active?'active':'disabled'}</span></div><time>{dateLabel(row.updatedAt)}</time></div>):<p className={styles.dashboardEmpty}>No dispensaries stored yet.</p>}
         </div>
       </article>:null}
+
+      {data.admin.permissions?.includes('data.manage')?<AdminDatabaseHealth/>:null}
     </section>
   </main>;
 }
