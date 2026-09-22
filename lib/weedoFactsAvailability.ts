@@ -2,6 +2,7 @@ import { getDatabase } from './sqlite';
 import { ensureWeedoMenuSchema } from './weedoMenus';
 import { availabilityConfidence, ensureWeedoCoreSchema, findCanonicalProductMatch, type WeedoAvailabilityConfidence } from './weedoCore';
 import { ensureProductMaintenanceSchema, resolveCanonicalProductId } from './productMaintenance';
+import { listProductAvailabilityObservations } from './productAvailabilityObservations';
 
 export type WeedoFactsAvailabilityItem = {
   menuItemId: string;
@@ -30,6 +31,12 @@ export type WeedoFactsAvailabilityItem = {
   verified: boolean;
   sourceUrl: string | null;
   sourceUpdatedAt: string | null;
+  sourceType: string;
+  evidenceType: 'owner_verified' | 'current_listed' | 'scanner_sighting' | 'user_sighting' | 'brand_distribution' | 'historical';
+  evidenceLabel: string;
+  observedAt: string | null;
+  expiresAt: string | null;
+  historical: boolean;
   batchNumber: string | null;
   uid: string | null;
   batchVerified: boolean;
@@ -169,6 +176,36 @@ function refreshStrongMenuLinksForProduct(productId: string) {
   return linked;
 }
 
+function menuEvidence(row:any){
+  const source=String(row.source_type||'').toLowerCase();
+  const observedAt=String(row.source_updated_at||row.updated_at||row.created_at||'').trim()||null;
+  const owner=['owner','verified_owner_scan','owner_reported_scan'].includes(source);
+  const ttlDays=owner?30:3;
+  let expiresAt:string|null=null;
+  if(observedAt){
+    const parsed=Date.parse(observedAt);
+    if(Number.isFinite(parsed))expiresAt=new Date(parsed+ttlDays*86400000).toISOString();
+  }
+  const historical=Boolean(expiresAt&&expiresAt<=new Date().toISOString())||String(row.inventory_status||'').toLowerCase()==='out_of_stock';
+  return{
+    sourceType:source||'menu',
+    evidenceType:historical?'historical':owner?'owner_verified':'current_listed',
+    evidenceLabel:historical?'Previously carried':owner?'Verified by dispensary':'Currently listed',
+    observedAt,
+    expiresAt,
+    historical,
+  } as const;
+}
+
+function observationEvidence(sourceType:string,historical:boolean){
+  if(historical)return{evidenceType:'historical' as const,evidenceLabel:'Previously seen'};
+  if(sourceType==='owner'||sourceType==='admin')return{evidenceType:'owner_verified' as const,evidenceLabel:'Verified by dispensary'};
+  if(sourceType==='scanner')return{evidenceType:'scanner_sighting' as const,evidenceLabel:'Recently scanned here'};
+  if(sourceType==='brand')return{evidenceType:'brand_distribution' as const,evidenceLabel:'Brand says carried here'};
+  if(sourceType==='public_menu')return{evidenceType:'current_listed' as const,evidenceLabel:'Currently listed'};
+  return{evidenceType:'user_sighting' as const,evidenceLabel:'Recently seen'};
+}
+
 export function listWeedoFactsAvailability(productId: string, batchId?: string | null): WeedoFactsAvailabilityItem[] {
   ensureWeedoMenuSchema();
   ensureWeedoCoreSchema();
@@ -181,6 +218,7 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
     SELECT mi.id AS menu_item_id, mi.product_id, mi.batch_id, mi.item_name, mi.brand_name,
            mi.category, mi.variant, mi.package_size, mi.price_cents, mi.currency,
            mi.inventory_status, mi.verified AS item_verified, mi.source_url, mi.source_updated_at,
+           mi.source_type,mi.updated_at,mi.created_at,
            mi.match_confidence,mi.match_review_status,
            d.id AS dispensary_id, d.name AS dispensary_name, d.city, d.region, d.country,
            d.latitude, d.longitude,
@@ -205,7 +243,9 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
               mi.item_name COLLATE NOCASE
   `).all(canonicalProductId, batchId || null, batchId || null) as any[];
 
-  return rows.map((row) => {
+  const productRow = db.prepare('SELECT product_name,brand_name,product_type FROM cannabis_products WHERE id=? LIMIT 1').get(canonicalProductId) as any;
+
+  const menuItems = rows.map((row) => {
     const confidence = availabilityConfidence({
       requestedBatchId: batchId || null,
       listingBatchId: row.batch_id || null,
@@ -241,10 +281,46 @@ export function listWeedoFactsAvailability(productId: string, batchId?: string |
       inventoryStatus: row.inventory_status || 'unknown',
       verified: Boolean(row.item_verified),
       sourceUrl: row.source_url || null,
-      sourceUpdatedAt: row.source_updated_at || null,
+      sourceUpdatedAt: row.source_updated_at || row.updated_at || row.created_at || null,
+      ...menuEvidence(row),
       batchNumber: row.batch_number || null,
       uid: row.uid || null,
       batchVerified: Boolean(row.batch_verified),
     };
   });
+
+  const observations = listProductAvailabilityObservations(canonicalProductId, batchId).map(observation => {
+    const evidence=observationEvidence(observation.sourceType,observation.historical);
+    const exact=Boolean(batchId&&observation.batchId&&observation.batchId===batchId);
+    return {
+      menuItemId: observation.id,
+      productId: canonicalProductId,
+      batchId: observation.batchId,
+      exactBatch: exact,
+      matchConfidence: observation.confidence,
+      availabilityConfidence: (exact?'exact_batch':'same_product') as WeedoAvailabilityConfidence,
+      dispensary: observation.dispensary,
+      itemName: String(productRow?.product_name||'Product sighting'),
+      brandName: productRow?.brand_name||null,
+      category: productRow?.product_type||null,
+      variant: null,
+      packageSize: null,
+      priceCents: observation.priceCents,
+      currency: observation.currency,
+      inventoryStatus: observation.availabilityStatus,
+      verified: observation.confidence==='high',
+      sourceUrl: observation.sourceReference,
+      sourceUpdatedAt: observation.observedAt,
+      sourceType: observation.sourceType,
+      ...evidence,
+      observedAt: observation.observedAt,
+      expiresAt: observation.expiresAt,
+      historical: observation.historical,
+      batchNumber: null,
+      uid: null,
+      batchVerified: false,
+    };
+  });
+
+  return [...menuItems,...observations];
 }
