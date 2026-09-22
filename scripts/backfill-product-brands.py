@@ -323,8 +323,15 @@ def main():
 
         phase = time.monotonic()
         print(f"Applying {len(updates):,} brand updates in one transaction...", flush=True)
-        db.execute("BEGIN IMMEDIATE")
+
+        # Temp-table work and the SQLite backup can leave the connection inside
+        # an implicit transaction. Close that cleanly before starting the write
+        # transaction so BEGIN IMMEDIATE never nests.
+        if db.in_transaction:
+            db.commit()
+
         try:
+            db.execute("BEGIN IMMEDIATE")
             db.executemany("""
               UPDATE cannabis_products
               SET brand_name=?, normalized_name=?, updated_at=?
@@ -332,11 +339,11 @@ def main():
             """, updates)
             db.commit()
         except Exception:
-            db.rollback()
+            if db.in_transaction:
+                db.rollback()
             raise
 
-        changed = int(db.execute("SELECT changes()").fetchone()[0])
-        print(f"Applied {len(updates):,} attempted brand backfills ({time.monotonic()-phase:.1f}s write phase).")
+        print(f"Applied {len(updates):,} brand backfills ({time.monotonic()-phase:.1f}s write phase).")
         print(f"BACKFILL COMPLETE in {elapsed(started)}.")
         return 0
     finally:
