@@ -5,8 +5,10 @@ import csv
 import hashlib
 import json
 import math
+import os
 import re
 import sqlite3
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -391,6 +393,12 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Maximum eligible records to evaluate; 0 means all.")
     args = parser.parse_args()
     state = args.state.lower()
+
+    # Production imports share SQLite with the live web app. Keep write
+    # transactions intentionally short and yield briefly between batches so
+    # interactive requests retain priority even on a small VPS.
+    commit_every = max(10, min(500, int(os.environ.get("CANNLYTICS_COMMIT_EVERY", "50") or 50)))
+    yield_ms = max(0, min(2000, int(os.environ.get("CANNLYTICS_YIELD_MS", "100") or 100)))
     extension, upstream_records = STATE_FILES[state]
     root = Path.cwd()
     cache_dir = root / "data" / "source-cache" / "cannlytics"
@@ -407,6 +415,7 @@ def main():
     if not args.dry_run:
         db = sqlite3.connect(db_path, timeout=60)
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA busy_timeout=5000")
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA synchronous=NORMAL")
         db.execute("PRAGMA foreign_keys=ON")
@@ -483,8 +492,10 @@ def main():
             if existing_map and existing_map["row_hash"] == row_hash:
                 db.execute("UPDATE cannlytics_source_records SET last_seen_at=?,updated_at=? WHERE external_key=?", (now, now, external_key))
                 unchanged += 1
-                if considered % 500 == 0:
+                if considered % commit_every == 0:
                     db.commit()
+                    if yield_ms:
+                        time.sleep(yield_ms / 1000)
                 continue
 
             direct = candidate_existing_batch(db, sample_id, batch_number, product_name, producer)
@@ -546,8 +557,10 @@ def main():
               ON CONFLICT(external_key) DO UPDATE SET row_hash=excluded.row_hash,batch_id=excluded.batch_id,
                 source_label=excluded.source_label,last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
             """, (external_key, state, source_record_id, row_hash, batch_id, source_label, first_seen, now, now))
-            if considered % 500 == 0:
+            if considered % commit_every == 0:
                 db.commit()
+                if yield_ms:
+                    time.sleep(yield_ms / 1000)
 
         if db:
             db.commit()
