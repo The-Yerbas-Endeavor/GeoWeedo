@@ -3,6 +3,7 @@ import { getDatabase } from './sqlite.ts';
 export type ProductBrowseFilters = {
   q?: string | null;
   brand?: string | null;
+  producer?: string | null;
   type?: string | null;
   sort?: string | null;
   page?: number | null;
@@ -13,6 +14,7 @@ export type ProductBrowseFilters = {
 export type ProductBrowseSummary = {
   productId: string;
   brandName: string | null;
+  producerName: string | null;
   productName: string;
   productType: string | null;
   canonicalProductType: string | null;
@@ -38,12 +40,14 @@ export type ProductBrowseCatalog = {
   menuLinkedProducts: number;
   batchCount: number;
   brandCount: number;
+  producerCount: number;
   categoryCount: number;
   hasCannlytics: boolean;
   page: number;
   pageSize: number;
   pageCount: number;
   brands: string[];
+  producers: string[];
   productCategories: Array<{ id: string; slug: string; name: string }>;
 };
 
@@ -79,12 +83,14 @@ function emptyCatalog(filters: ProductBrowseFilters, pageSize = pageSizeFor(filt
     menuLinkedProducts: 0,
     batchCount: 0,
     brandCount: 0,
+    producerCount: 0,
     categoryCount: 0,
     hasCannlytics: false,
     page: Math.max(1, Math.floor(Number(filters.page || 1)) || 1),
     pageSize,
     pageCount: 1,
     brands: [],
+    producers: [],
     productCategories: [],
   };
 }
@@ -94,11 +100,12 @@ function requireColumns(actual: Set<string>, required: string[], table: string) 
   if (missing.length) throw new Error(`${table} is missing columns: ${missing.join(', ')}`);
 }
 
-function productSortSql(value: unknown, brandSql = 'p.brand_name') {
+function productSortSql(value: unknown, brandSql = 'p.brand_name', producerSql = 'NULL') {
   switch (String(value || '').trim()) {
     case 'name-asc': return `p.product_name COLLATE NOCASE ASC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
     case 'name-desc': return `p.product_name COLLATE NOCASE DESC,${brandSql} COLLATE NOCASE ASC,p.id ASC`;
     case 'brand-asc': return `COALESCE(NULLIF(TRIM(${brandSql}),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
+    case 'producer-asc': return `COALESCE(NULLIF(TRIM(${producerSql}),''),'zzzz') COLLATE NOCASE ASC,p.product_name COLLATE NOCASE ASC,p.id ASC`;
     case 'recent': return 'latest_record DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'batches-desc': return 'verified_batch_count DESC,p.product_name COLLATE NOCASE ASC,p.id ASC';
     case 'category':
@@ -133,6 +140,15 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
   // Public brand filtering must use explicit source/scanner brand evidence only.
   // Product titles are too inconsistent to safely infer brands at browse time.
   const effectiveBrandSql = `COALESCE(NULLIF(TRIM(p.brand_name),''),${scanBrandSql})`;
+  const effectiveProducerSql = `(
+    SELECT NULLIF(TRIM(bp.producer_name),'')
+    FROM cannabis_batches bp
+    WHERE bp.product_id=p.id
+      AND bp.producer_name IS NOT NULL
+      AND TRIM(bp.producer_name)<>''
+    ORDER BY bp.verified DESC, COALESCE(bp.tested_at,bp.updated_at,bp.created_at) DESC
+    LIMIT 1
+  )`;
   const hasApprovedUploads =
     submissionColumns.has('id') && submissionColumns.has('product_id') && submissionColumns.has('status') &&
     uploadColumns.has('submission_id') && uploadColumns.has('status');
@@ -162,15 +178,20 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     : `WITH public_product_ids AS (${evidenceSelects.join(' UNION ')})`;
   const q = normalizedSearch(filters.q);
   const brand = String(filters.brand || '').trim();
+  const producer = String(filters.producer || '').trim();
   const type = String(filters.type || '').trim();
   const pageSize = pageSizeFor(filters);
-  const orderBy = productSortSql(filters.sort, effectiveBrandSql);
+  const orderBy = productSortSql(filters.sort, effectiveBrandSql, effectiveProducerSql);
   const conditions: string[] = [];
   const params: Array<string | number> = [];
 
   if (brand) {
     conditions.push(`${effectiveBrandSql} = ? COLLATE NOCASE`);
     params.push(brand);
+  }
+  if (producer) {
+    conditions.push(`${effectiveProducerSql} = ? COLLATE NOCASE`);
+    params.push(producer);
   }
   if (type) {
     conditions.push('(c.slug = ? OR c.name = ? COLLATE NOCASE OR p.product_type = ? COLLATE NOCASE)');
@@ -179,7 +200,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
 
   const searchExpression = `LOWER(
     COALESCE(p.product_name,'') || ' ' || COALESCE(${effectiveBrandSql},'') || ' ' ||
-    COALESCE(c.name,'') || ' ' || COALESCE(p.product_type,'') || ' ' ||
+    COALESCE(${effectiveProducerSql},'') || ' ' || COALESCE(c.name,'') || ' ' || COALESCE(p.product_type,'') || ' ' ||
     COALESCE(p.canonical_product_type,'') || ' ' || COALESCE(p.net_contents,'')
   )`;
   for (const token of q.split(/\s+/).filter(Boolean)) {
@@ -192,6 +213,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     SELECT
       COUNT(DISTINCT p.id) AS product_count,
       COUNT(DISTINCT ${effectiveBrandSql}) AS brand_count,
+      COUNT(DISTINCT ${effectiveProducerSql}) AS producer_count,
       COUNT(DISTINCT CASE WHEN p.category_id IS NOT NULL THEN p.category_id END) AS category_count
     FROM cannabis_products p
     JOIN public_product_ids public ON public.product_id=p.id
@@ -280,6 +302,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     SELECT
       p.id AS product_id,
       ${effectiveBrandSql} AS brand_name,
+      ${effectiveProducerSql} AS producer_name,
       p.product_name,
       p.product_type,
       p.canonical_product_type,
@@ -308,6 +331,14 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     ORDER BY value COLLATE NOCASE
   `).all() as Array<{ value: string }>;
 
+  const producerRows = db.prepare(`${publicCte}
+    SELECT DISTINCT ${effectiveProducerSql} AS value
+    FROM cannabis_products p
+    JOIN public_product_ids public ON public.product_id=p.id
+    WHERE ${effectiveProducerSql} IS NOT NULL AND TRIM(${effectiveProducerSql}) <> ''
+    ORDER BY value COLLATE NOCASE
+  `).all() as Array<{ value: string }>;
+
   const categories = db.prepare(`${publicCte}
     SELECT DISTINCT c.id,c.slug,c.name,c.sort_order
     FROM cannabis_product_categories c
@@ -321,6 +352,7 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     products: rows.map(row => ({
       productId: String(row.product_id),
       brandName: row.brand_name || null,
+      producerName: row.producer_name || null,
       productName: String(row.product_name),
       productType: row.product_type || null,
       canonicalProductType: row.canonical_product_type || null,
@@ -343,12 +375,14 @@ function publicProductBrowseCatalog(filters: ProductBrowseFilters): ProductBrows
     menuLinkedProducts,
     batchCount: Number(batchStats?.batch_count || 0),
     brandCount: Number(stats?.brand_count || 0),
+    producerCount: Number(stats?.producer_count || 0),
     categoryCount: Number(stats?.category_count || 0),
     hasCannlytics: Boolean(batchStats?.has_cannlytics),
     page,
     pageSize,
     pageCount,
     brands: brandRows.map(row => String(row.value)),
+    producers: producerRows.map(row => String(row.value)),
     productCategories: categories,
   };
 }
