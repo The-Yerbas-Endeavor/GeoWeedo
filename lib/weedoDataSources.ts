@@ -48,9 +48,31 @@ function ensureColumn(db: any, table: string, column: string, definition: string
   if (!columns.some(row => row.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+function sourceSchemaExists(db: any) {
+  try {
+    for (const table of ['cannabis_data_sources', 'cannlytics_state_sync']) {
+      if (!tableExists(db, table)) return false;
+    }
+    const columns = new Set((db.prepare('PRAGMA table_info(cannlytics_state_sync)').all() as Array<{name?:string}>)
+      .map(row => String(row.name || '')).filter(Boolean));
+    return ['next_row_offset','processed_records','last_progress_at'].every(column => columns.has(column));
+  } catch {
+    return false;
+  }
+}
+
 function ensureSourceSchema() {
   const db = getDatabase();
   if (sourceSchemaReady) return db;
+
+  // The admin status endpoint is polled while imports run. Once schema is
+  // already present, keep that path read-only instead of replaying CREATE /
+  // ALTER / seed statements against the same live SQLite database.
+  if (sourceSchemaExists(db)) {
+    sourceSchemaReady = true;
+    return db;
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS cannabis_data_sources (
       id TEXT PRIMARY KEY,
@@ -152,20 +174,34 @@ function countKannapedia(db: any) {
   return { records:Number(row?.records||0), products:Number(row?.cultivars||0), primaryLabel:'cultivars', secondaryCount:Number(row?.registrants||0), secondaryLabel:'registrants' };
 }
 
+let cannlyticsProductCountCache: { value: number; at: number } | null = null;
+
 function countCannlytics(db: any) {
-  const hasRecords = tableExists(db, 'cannlytics_source_records');
   const hasBatches = tableExists(db, 'cannabis_batches');
-  const records = hasRecords ? Number((db.prepare(`SELECT COUNT(*) count FROM cannlytics_source_records`).get() as any)?.count || 0) : 0;
-  const products = hasBatches ? Number((db.prepare(`SELECT COUNT(DISTINCT product_id) count FROM cannabis_batches WHERE source_name='Cannlytics' AND verified=1`).get() as any)?.count || 0) : 0;
-  const importedByState = new Map<string, number>();
-  if (hasRecords) {
-    for (const row of db.prepare(`SELECT state_code,COUNT(*) count FROM cannlytics_source_records GROUP BY state_code`).all() as any[]) {
-      importedByState.set(String(row.state_code), Number(row.count || 0));
-    }
-  }
   const syncRows = new Map<string, any>();
   for (const row of db.prepare(`SELECT * FROM cannlytics_state_sync`).all() as any[]) {
     syncRows.set(String(row.state_code), row);
+  }
+
+  // State checkpoints already store tracked record counts, so the status page
+  // does not need to GROUP BY the entire source-record table every refresh.
+  let records = 0;
+  const importedByState = new Map<string, number>();
+  for (const [code, row] of syncRows) {
+    const imported = Number(row?.imported_records || 0);
+    importedByState.set(code, imported);
+    records += imported;
+  }
+
+  // COUNT(DISTINCT product_id) over a large batch table is useful but not
+  // heartbeat-critical. Cache it for one minute while the importer runs.
+  const nowMs = Date.now();
+  let products = cannlyticsProductCountCache?.value ?? 0;
+  if (!cannlyticsProductCountCache || nowMs - cannlyticsProductCountCache.at >= 60_000) {
+    products = hasBatches
+      ? Number((db.prepare(`SELECT COUNT(DISTINCT product_id) count FROM cannabis_batches WHERE source_name='Cannlytics' AND verified=1`).get() as any)?.count || 0)
+      : 0;
+    cannlyticsProductCountCache = { value: products, at: nowMs };
   }
   const regions = CANNLYTICS_REGIONS.map(([code,label,configuredUpstreamRecords]) => {
     const sync = syncRows.get(code);
