@@ -34,7 +34,21 @@ export default function HomeClient({initialApprovedDispensaries}:Props){
 
  const playableLocations=useMemo(()=>approvedDispensaries.filter(item=>item.active&&item.gameplayEnabled!==false&&item.verified&&item.imageryPhotoId),[approvedDispensaries]);
  const rounds=started?gameRounds:playableLocations;
- const homeLocations=useMemo(()=>{const starterFallback=approvedDispensaries.length===0?dispensaries.filter(item=>item.active):[];const merged=[...approvedDispensaries.filter(item=>item.active).map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city,region:item.region,country:(item as any).country||'USA',sponsored:item.sponsored,approved:true,enabled:true,imageryReady:Boolean(item.gameplayEnabled!==false&&item.verified&&item.imageryPhotoId),source:'GeoWeedo approved'})),...mapCandidates.map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city||'',region:item.region||'',country:item.country||'USA',sponsored:false,approved:item.status==='approved',enabled:false,imageryReady:item.imageryStatus==='coverage',source:item.dataSource||'Official source'})),...starterFallback.map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city,region:item.region,country:(item as any).country||'USA',sponsored:item.sponsored,approved:false,enabled:false,imageryReady:false,source:'GeoWeedo starter'}))];const seen=new Set<string>();return merged.filter(item=>{if(!Number.isFinite(item.lat)||!Number.isFinite(item.lng))return false;const key=`${item.name}|${item.lat.toFixed(5)}|${item.lng.toFixed(5)}`.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});},[approvedDispensaries,mapCandidates]);
+ const homeLocations=useMemo(()=>{const starterFallback=approvedDispensaries.length===0?dispensaries.filter(item=>item.active):[];const merged=[...approvedDispensaries.filter(item=>item.active).map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city,region:item.region,country:(item as any).country||'USA',sponsored:item.sponsored,approved:true,enabled:true,imageryReady:Boolean(item.gameplayEnabled!==false&&item.verified&&item.imageryPhotoId),source:'GeoWeedo approved'})),...mapCandidates.map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city||'',region:item.region||'',country:item.country||'USA',sponsored:false,approved:item.status==='approved',enabled:false,imageryReady:item.imageryStatus==='coverage',source:item.dataSource||'Official source'})),...starterFallback.map(item=>({id:item.id,name:item.name,lat:item.latitude,lng:item.longitude,city:item.city,region:item.region,country:(item as any).country||'USA',sponsored:item.sponsored,approved:false,enabled:false,imageryReady:false,source:'GeoWeedo starter'}))];
+ const seenIds=new Set<string>(),seenCoords=new Set<string>();
+ return merged.filter(item=>{
+  if(!Number.isFinite(item.lat)||!Number.isFinite(item.lng))return false;
+  const idKey=String(item.id||'').trim().toLowerCase();
+  // Approved/Featured records are merged first, so a mapped candidate that
+  // represents the same physical location must not appear again in Browse.
+  // Coordinate-only dedupe intentionally ignores the display name because
+  // imported candidate names can differ from the approved business name.
+  const coordKey=`${item.lat.toFixed(5)}|${item.lng.toFixed(5)}`;
+  if((idKey&&seenIds.has(idKey))||seenCoords.has(coordKey))return false;
+  if(idKey)seenIds.add(idKey);
+  seenCoords.add(coordKey);
+  return true;
+ });},[approvedDispensaries,mapCandidates]);
  const enabledHomeLocations=useMemo(()=>homeLocations.filter(item=>item.enabled),[homeLocations]);
  const displayedHomeLocations=useMemo(()=>openNowIds?homeLocations.filter(item=>Boolean(item.enabled)&&openNowIds.has(item.id)):homeLocations,[homeLocations,openNowIds]);
  const displayedEnabledHomeLocations=useMemo(()=>displayedHomeLocations.filter(item=>item.enabled),[displayedHomeLocations]);
