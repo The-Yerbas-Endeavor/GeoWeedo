@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
 import { ensureWeedoFactsUploadSchema } from '@/lib/weedoFactsUploads';
-import { approveExactBatchFromCoa, getAdminCoaReviewSubmissions, updateCoaReviewStatus } from '@/lib/weedoFactsReview';
+import { approveExactBatchFromCoa, approveProductBrand, getAdminCoaReviewSubmissions, updateCoaReviewStatus } from '@/lib/weedoFactsReview';
 import { getWeedoFactsReviewMatchPreview } from '@/lib/weedoFactsMatchPreview';
 
 export const runtime = 'nodejs';
@@ -24,13 +24,17 @@ export async function PATCH(request: NextRequest) {
   const submissionId = String(body?.submissionId || '').trim();
   const action = String(body?.action || '').trim();
   const reviewNotes = typeof body?.reviewNotes === 'string' ? body.reviewNotes.trim().slice(0, 2000) : null;
-  if (!submissionId || !['approve_exact_batch', 'reject', 'needs_info'].includes(action)) return NextResponse.json({ error: 'submissionId and a valid action are required.' }, { status: 400 });
+  if (!submissionId || !['approve_exact_batch', 'approve_product_brand', 'reject', 'needs_info'].includes(action)) return NextResponse.json({ error: 'submissionId and a valid action are required.' }, { status: 400 });
 
   try {
     if (action === 'approve_exact_batch') {
       const result = await approveExactBatchFromCoa({ submissionId, adminId: admin.id, reviewNotes });
       const lookupUrl = `/api/weedo-facts/lookup?identifier=${encodeURIComponent(String(result.identifier || ''))}&type=${encodeURIComponent(result.identifierType)}`;
       return NextResponse.json({ ok: true, status: 'approved', ...result, lookupUrl });
+    }
+    if (action === 'approve_product_brand') {
+      const result = approveProductBrand({ submissionId, adminId: admin.id, reviewNotes });
+      return NextResponse.json({ ok: true, status: 'approved', ...result });
     }
     const result = updateCoaReviewStatus({ submissionId, adminId: admin.id, status: action === 'reject' ? 'rejected' : 'needs_info', reviewNotes });
     return NextResponse.json({ ok: true, ...result });
