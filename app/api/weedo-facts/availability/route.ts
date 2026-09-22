@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
     },
     batchId,
     count: items.length,
-    exactBatchCount: items.filter(item => item.exactBatch).length,
+    currentCount: items.filter(item => !item.historical).length,
+    historicalCount: items.filter(item => item.historical).length,
+    exactBatchCount: items.filter(item => item.exactBatch && !item.historical).length,
     items,
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
