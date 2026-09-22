@@ -53,7 +53,7 @@ export default async function FactsProductPage({ params, searchParams }: Props) 
   const record = requestedBatch?.productId === productId ? requestedBatch : productRecord;
 
   if (!record) {
-    return <main className={`landing-shell ${productStyles.shell}`}><SiteHeader /><div className={productStyles.page}><a className={productStyles.back} href="/facts">← GeoWeedo Facts</a><section className={productStyles.hero}><span>GEOWEEDO FACTS</span><h1>Product not found</h1><p>This canonical product is not available in GeoWeedo.</p></section></div></main>;
+    return <main className={`landing-shell ${productStyles.shell}`}><SiteHeader /><div className={productStyles.page}><a className={productStyles.back} href="/product-chemistry">← Back to products</a><section className={productStyles.hero}><span>GEOWEEDO FACTS</span><h1>Product not found</h1><p>This canonical product is not available in GeoWeedo.</p></section></div></main>;
   }
 
   const availability = listWeedoFactsAvailability(productId, record.batchId);
@@ -62,7 +62,7 @@ export default async function FactsProductPage({ params, searchParams }: Props) 
     <SiteHeader />
     <div className={productStyles.page}>
       <div className={productStyles.topline}>
-        <a className={productStyles.back} href="/facts">← Scan another product</a>
+        <a className={productStyles.back} href="/product-chemistry">← Back to products</a>
         <span>Canonical GeoWeedo product</span>
       </div>
 
