@@ -116,6 +116,38 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   }catch(error){try{db.exec('ROLLBACK');}catch{} throw error;}
 }
 
+export function approveProductBrand(input:{submissionId:string;adminId:string;reviewNotes?:string|null}){
+  ensureWeedoFactsSchema(); ensureWeedoMenuSchema();
+  const db=getDatabase();
+  const submission=db.prepare(`SELECT * FROM cannabis_product_submissions WHERE id=? LIMIT 1`).get(input.submissionId) as any;
+  if(!submission)throw new Error('Submission not found.');
+  if(!['pending','needs_info'].includes(submission.status))throw new Error(`Submission is already ${submission.status}.`);
+  const productId=String(submission.product_id||'').trim();
+  const brand=String(submission.brand_name||'').trim();
+  if(!productId)throw new Error('Brand approval requires an existing matched product.');
+  if(!brand)throw new Error('No submitted brand is available to approve.');
+
+  const product=db.prepare(`SELECT id,brand_name,product_name FROM cannabis_products WHERE id=? LIMIT 1`).get(productId) as any;
+  if(!product)throw new Error('Matched product no longer exists.');
+  const currentBrand=String(product.brand_name||'').trim();
+  if(currentBrand && currentBrand.toLowerCase()!==brand.toLowerCase()){
+    throw new Error(`Product already has brand "${currentBrand}". Resolve the conflict before approving "${brand}".`);
+  }
+
+  const now=new Date().toISOString();
+  db.exec('BEGIN IMMEDIATE');
+  try{
+    const normalized=`${brand} ${String(product.product_name||'')}`.trim().toLowerCase();
+    db.prepare(`UPDATE cannabis_products SET brand_name=?,normalized_name=?,updated_at=? WHERE id=?`).run(brand,normalized,now,productId);
+    db.prepare(`UPDATE cannabis_product_submissions SET status='approved',reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`)
+      .run(input.adminId,now,input.reviewNotes||null,now,input.submissionId);
+    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,'admin',?,'weedo_facts.product_brand_approved','cannabis_product_submission',?,?,?)`)
+      .run(`audit-${randomUUID()}`,input.adminId,input.submissionId,JSON.stringify({productId,brand}),now);
+    db.exec('COMMIT');
+    return {productId,brand};
+  }catch(error){try{db.exec('ROLLBACK');}catch{} throw error;}
+}
+
 export function updateCoaReviewStatus(input:{submissionId:string;adminId:string;status:'rejected'|'needs_info';reviewNotes?:string|null}){
   ensureWeedoMenuSchema();const db=getDatabase(),now=new Date().toISOString();
   const result=db.prepare(`UPDATE cannabis_product_submissions SET status=?,reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`).run(input.status,input.adminId,now,input.reviewNotes||null,now,input.submissionId);
