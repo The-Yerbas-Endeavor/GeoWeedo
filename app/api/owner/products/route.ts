@@ -270,6 +270,78 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ ok: true, item });
 }
 
+export async function PUT(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const locationId = cleanText(body?.locationId, 160);
+  const action = cleanText(body?.action, 64);
+  const access = ownerAccess(request, locationId);
+  if ('error' in access) return access.error;
+
+  ensureWeedoMenuSchema();
+  ensureWeedoCoreSchema();
+  const db = getDatabase();
+  ensureOwnerScanColumns(db);
+
+  const now = new Date().toISOString();
+
+  if (action === 'confirm-current') {
+    const result = db.prepare(`
+      UPDATE dispensary_menu_items
+         SET source_type=CASE
+               WHEN source_type IN ('verified_owner_scan','owner_reported_scan') THEN source_type
+               ELSE 'owner'
+             END,
+             source_updated_at=?,
+             verified=1,
+             updated_at=?
+       WHERE active=1
+         AND inventory_status<>'out_of_stock'
+         AND menu_id IN (
+           SELECT id FROM dispensary_menus
+           WHERE dispensary_id=? AND active=1
+         )
+    `).run(now, now, locationId);
+
+    return NextResponse.json({
+      ok: true,
+      action,
+      updated: Number(result.changes || 0),
+      confirmedAt: now,
+      message: `${Number(result.changes || 0)} current product listing${Number(result.changes || 0)===1?'':'s'} confirmed.`,
+    });
+  }
+
+  if (action === 'mark-all-unavailable') {
+    const result = db.prepare(`
+      UPDATE dispensary_menu_items
+         SET inventory_status='out_of_stock',
+             source_type=CASE
+               WHEN source_type IN ('verified_owner_scan','owner_reported_scan') THEN source_type
+               ELSE 'owner'
+             END,
+             source_updated_at=?,
+             verified=1,
+             updated_at=?
+       WHERE active=1
+         AND inventory_status<>'out_of_stock'
+         AND menu_id IN (
+           SELECT id FROM dispensary_menus
+           WHERE dispensary_id=? AND active=1
+         )
+    `).run(now, now, locationId);
+
+    return NextResponse.json({
+      ok: true,
+      action,
+      updated: Number(result.changes || 0),
+      confirmedAt: now,
+      message: `${Number(result.changes || 0)} product listing${Number(result.changes || 0)===1?'':'s'} marked unavailable.`,
+    });
+  }
+
+  return NextResponse.json({ error: 'Unknown bulk product action.' }, { status: 400 });
+}
+
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const locationId = cleanText(searchParams.get('locationId'), 160);
