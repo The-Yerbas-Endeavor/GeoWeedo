@@ -23,6 +23,7 @@ type Props = {
     batch?: string | string[];
     q?: string | string[];
     brand?: string | string[];
+    producer?: string | string[];
     type?: string | string[];
     sort?: string | string[];
     page?: string | string[];
@@ -39,7 +40,7 @@ function displayType(value: string | null) {
   return value.replace(/-/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
-const PRODUCT_SORTS = new Set(['category', 'name-asc', 'name-desc', 'brand-asc', 'recent', 'batches-desc']);
+const PRODUCT_SORTS = new Set(['category', 'name-asc', 'name-desc', 'brand-asc', 'producer-asc', 'recent', 'batches-desc']);
 
 export default async function ProductChemistryPage({ searchParams }: Props) {
   const query = await searchParams;
@@ -83,13 +84,14 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
 
   const q = one(query.q)?.trim() || '';
   const brand = one(query.brand)?.trim() || '';
+  const producer = one(query.producer)?.trim() || '';
   const productCategory = one(query.type)?.trim() || '';
   const requestedSort = one(query.sort)?.trim() || 'category';
   const sort = PRODUCT_SORTS.has(requestedSort) ? requestedSort : 'category';
   const view = one(query.view)?.trim() === 'all' ? 'all' : 'evidence';
   const requestedPage = Math.max(1, Number(one(query.page) || '1') || 1);
-  const catalog = getProductBrowseCatalog({ q, brand, type: productCategory, sort, page: requestedPage, pageSize: 36, scope: view });
-  const filtersActive = Boolean(q || brand || productCategory);
+  const catalog = getProductBrowseCatalog({ q, brand, producer, type: productCategory, sort, page: requestedPage, pageSize: 36, scope: view });
+  const filtersActive = Boolean(q || brand || producer || productCategory);
   const resultStart = catalog.matchingProducts ? (catalog.page - 1) * catalog.pageSize + 1 : 0;
   const resultEnd = Math.min(catalog.page * catalog.pageSize, catalog.matchingProducts);
 
@@ -97,6 +99,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (brand) params.set('brand', brand);
+    if (producer) params.set('producer', producer);
     if (productCategory) params.set('type', productCategory);
     if (sort !== 'category') params.set('sort', sort);
     if (view === 'all') params.set('view', 'all');
@@ -153,13 +156,20 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               <span>Search products</span>
               <input name="q" defaultValue={q} placeholder="Product or brand…" />
             </label>
-            <label>
+            {catalog.brands.length ? <label>
               <span>Brand</span>
               <select name="brand" defaultValue={brand}>
                 <option value="">All brands</option>
                 {catalog.brands.map(value => <option value={value} key={value}>{value}</option>)}
               </select>
-            </label>
+            </label> : null}
+            {catalog.producers.length ? <label>
+              <span>Producer</span>
+              <select name="producer" defaultValue={producer}>
+                <option value="">All producers</option>
+                {catalog.producers.map(value => <option value={value} key={value}>{value}</option>)}
+              </select>
+            </label> : null}
             <label>
               <span>Category</span>
               <select name="type" defaultValue={productCategory}>
@@ -173,7 +183,8 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                 <option value="category">Category · Product A–Z</option>
                 <option value="name-asc">Product name A–Z</option>
                 <option value="name-desc">Product name Z–A</option>
-                <option value="brand-asc">Brand A–Z</option>
+                {catalog.brands.length ? <option value="brand-asc">Brand A–Z</option> : null}
+                {catalog.producers.length ? <option value="producer-asc">Producer A–Z</option> : null}
                 <option value="recent">Newest lab record</option>
                 <option value="batches-desc">Most verified batches</option>
               </select>
@@ -194,7 +205,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                       <span className="productBrowseCategory">{product.categoryName || 'Other'}</span>
                     </div>
                     <strong className="productBrowseName">{product.productName}</strong>
-                    <span className="productBrowseBrand">{product.brandName || 'Brand not reported'}</span>
+                    <span className="productBrowseBrand">{product.brandName || (product.producerName ? `Producer: ${product.producerName}` : 'Brand not reported')}</span>
                     {secondary ? <span className="productBrowseSecondary">{secondary}</span> : null}
                     <div className="productBrowseEvidence">
                       {product.scanCount > 0 ? <span>✓ Scanned{product.scanCount > 1 ? ` ${product.scanCount.toLocaleString()} times` : ''}</span> : null}
