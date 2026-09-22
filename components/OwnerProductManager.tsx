@@ -22,6 +22,7 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
   const[message,setMessage]=useState<string|null>(null),[editingId,setEditingId]=useState<string|null>(null),[form,setForm]=useState<FormState>(EMPTY);
   const[search,setSearch]=useState(''),[hits,setHits]=useState<ProductHit[]>([]),[searching,setSearching]=useState(false);
   const[scanValue,setScanValue]=useState(''),[scanType,setScanType]=useState('');
+  const[bulkBusy,setBulkBusy]=useState(false);
   const linked=useMemo(()=>hits.find(hit=>hit.id===form.productId)||null,[hits,form.productId]);
 
   async function load(){
@@ -50,6 +51,28 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
   }
 
   function reset(){setEditingId(null);setForm(EMPTY);setSearch('');setHits([]);setScanValue('');setScanType('');}
+
+  async function bulkAction(action:'confirm-current'|'mark-all-unavailable'){
+    if(!items.length)return;
+    const confirmText=action==='confirm-current'
+      ? `Confirm all currently available products at this dispensary? This refreshes their availability evidence for GeoWeedo.`
+      : `Mark every current product listing unavailable at this dispensary? The products stay in history, but GeoWeedo will stop presenting them as current availability.`;
+    if(!window.confirm(confirmText))return;
+    setBulkBusy(true);setMessage(null);
+    try{
+      const response=await fetch('/api/owner/products',{
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({locationId,action}),
+      });
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||'Could not update product availability.');
+      setMessage(body.message||'Product availability updated.');
+      await load();
+    }catch(error){
+      setMessage(error instanceof Error?error.message:'Could not update product availability.');
+    }finally{setBulkBusy(false);}
+  }
 
   async function save(){
     if(!form.itemName.trim()){setMessage('Product name is required.');return;}setSaving(true);setMessage(null);
@@ -107,12 +130,12 @@ export default function OwnerProductManager({locationId}:{locationId:string}){
 
   return <section className="owner-panel" id="products">
     <div className="owner-panel-head"><div><span>PRODUCTS & MENU</span><h2>Manage products</h2></div><a href={`/dispensary/${encodeURIComponent(locationId)}#menu`} target="_blank" rel="noreferrer">View public menu ↗</a></div>
-    <p style={{marginTop:0}}>Add products sold at this dispensary, link them to GeoWeedo Products when possible, and keep retail price, package and availability current.</p>
+    <p style={{marginTop:0}}>Add products sold at this dispensary, link them to GeoWeedo Products when possible, and keep retail price, package and availability current.</p><p style={{marginTop:-4,color:'var(--muted)',fontSize:12}}>Availability is evidence-based: confirming current products refreshes them as owner-verified for 30 days. Marking products unavailable preserves the historical link without presenting them as live inventory.</p>
     {message&&<div className="owner-message" style={{margin:'12px 0'}}>{message}</div>}
 
     <div className="owner-product-layout">
       <div className="owner-product-menu-column">
-        <div className="owner-product-menu-head"><strong>Current menu ({items.length})</strong><button type="button" className="owner-primary owner-product-add-button" onClick={reset}>+ Add product</button></div>
+        <div className="owner-product-menu-head"><strong>Current menu ({items.length})</strong><div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}><button type="button" disabled={bulkBusy||items.length===0} onClick={()=>void bulkAction('confirm-current')}>{bulkBusy?'Updating…':'✓ Confirm current products'}</button><button type="button" disabled={bulkBusy||items.length===0} onClick={()=>void bulkAction('mark-all-unavailable')}>Mark all unavailable</button><button type="button" className="owner-primary owner-product-add-button" onClick={reset}>+ Add product</button></div></div>
         {loading?<small>Loading products…</small>:items.length===0?<div style={{border:'1px dashed var(--border)',borderRadius:12,padding:16,color:'var(--muted)'}}>No products yet. Add the first product for this shop.</div>:items.map(item=><div key={item.id} className={`owner-product-card${editingId===item.id?' is-editing':''}`}>
           <div className="owner-product-card-copy"><strong>{item.item_name}</strong><small>{[item.brand_name,item.canonical_category_name,item.package_size,item.variant].filter(Boolean).join(' · ')||'Owner-reported product'}</small><div className="owner-product-card-meta"><strong>{money(item.price_cents)}</strong> · {(item.inventory_status||'unknown').replaceAll('_',' ')} {item.product_id&&<span>GeoWeedo Product linked · <a href={`/facts/product/${encodeURIComponent(item.product_id)}`} target="_blank" rel="noreferrer">View Facts ↗</a></span>}</div></div>
           <div className="owner-product-card-actions"><button type="button" onClick={()=>edit(item)}>Edit</button><button type="button" onClick={()=>void remove(item)}>Remove</button></div>
