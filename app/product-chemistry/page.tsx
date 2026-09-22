@@ -156,13 +156,13 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
               <span>Search products</span>
               <input name="q" defaultValue={q} placeholder="Product or brand…" />
             </label>
-            {catalog.brands.length ? <label>
+            <label>
               <span>Brand</span>
               <select name="brand" defaultValue={brand}>
                 <option value="">All brands</option>
                 {catalog.brands.map(value => <option value={value} key={value}>{value}</option>)}
               </select>
-            </label> : null}
+            </label>
             {catalog.producers.length ? <label>
               <span>Producer</span>
               <select name="producer" defaultValue={producer}>
@@ -183,7 +183,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
                 <option value="category">Category · Product A–Z</option>
                 <option value="name-asc">Product name A–Z</option>
                 <option value="name-desc">Product name Z–A</option>
-                {catalog.brands.length ? <option value="brand-asc">Brand A–Z</option> : null}
+                <option value="brand-asc">Brand A–Z</option>
                 {catalog.producers.length ? <option value="producer-asc">Producer A–Z</option> : null}
                 <option value="recent">Newest lab record</option>
                 <option value="batches-desc">Most verified batches</option>
