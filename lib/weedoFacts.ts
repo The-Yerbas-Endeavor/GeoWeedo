@@ -180,21 +180,25 @@ function getAnalytes(batchId: string) {
 
 function directVerifiedBatch(db: any, identifier: string, identifierType?: WeedoFactsLookup['identifierType']) {
   const selectByField = (field: 'uid' | 'coa_number') => db.prepare(`
-    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_batch_identifiers bi WHERE bi.batch_id=b.id AND bi.identifier_value=? COLLATE NOCASE AND bi.verified=1) THEN 1 ELSE 0 END AS identifier_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
     FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
     WHERE b.${field} = ? COLLATE NOCASE
     ORDER BY b.verified DESC, b.tested_at DESC
     LIMIT 1
-  `).get(identifier) as any;
+  `).get(identifier, identifier) as any;
 
   const uniqueBatchNumber = () => {
     const rows = db.prepare(`
-      SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+      SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
+             CASE WHEN EXISTS (SELECT 1 FROM cannabis_batch_identifiers bi WHERE bi.batch_id=b.id AND bi.identifier_value=? COLLATE NOCASE AND bi.verified=1) THEN 1 ELSE 0 END AS identifier_verified,
+             CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
       FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
       WHERE b.batch_number = ? COLLATE NOCASE
       ORDER BY b.verified DESC, b.tested_at DESC
       LIMIT 2
-    `).all(identifier) as any[];
+    `).all(identifier, identifier) as any[];
     return rows.length === 1 ? rows[0] : null;
   };
 
@@ -213,7 +217,8 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
 
   const batchHit = db.prepare(`
     SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
-           i.verified AS identifier_verified
+           i.verified AS identifier_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
     FROM cannabis_batch_identifiers i
     JOIN cannabis_batches b ON b.id = i.batch_id
     JOIN cannabis_products p ON p.id = b.product_id
@@ -228,7 +233,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
   if (directBatch) {
     const analytes = getAnalytes(directBatch.id);
     const evidenceStatus = String(directBatch.evidence_status || '').toLowerCase() as WeedoFactsEvidenceStatus;
-    const strictVerified = evidenceStatus === 'verified' && Boolean(directBatch.identifier_verified);
+    const strictVerified = evidenceStatus === 'verified' && Boolean(directBatch.identifier_verified) && Boolean(directBatch.verified_source);
     const sourceBacked = strictVerified || evidenceStatus === 'source_backed' || (Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified));
     const exactLabBatch = strictVerified;
     return {
