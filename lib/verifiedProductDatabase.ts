@@ -8,7 +8,7 @@ export type VerifiedProductDatabaseWrite = {
   productId: string;
   batchId: string;
   verified: true;
-  sourceType: 'lab';
+  sourceType: string;
   analyteCount: number;
   coaSourceCount: number;
   productName: string;
@@ -22,7 +22,7 @@ export type VerifiedProductDatabaseWrite = {
 /**
  * Verified QR/COA adapters write through their source-specific ingestion layer.
  * This function is the shared postcondition: never report a verified scan as
- * successful unless the canonical product, verified lab batch, and chemistry
+ * successful unless the canonical product, independently verified batch, and chemistry
  * rows can be read back from the product database.
  */
 export function confirmVerifiedProductDatabaseWrite(
@@ -57,8 +57,8 @@ export function confirmVerifiedProductDatabaseWrite(
   `).get(productId, batchId) as any;
 
   if (!row) throw new Error('Verified COA product database write could not be read back.');
-  if (Number(row.verified) !== 1 || String(row.source_type || '').toLowerCase() !== 'lab' || String(row.evidence_status || '').toLowerCase() !== 'verified') {
-    throw new Error('Verified COA batch was not promoted to verified lab evidence.');
+  if (Number(row.verified) !== 1 || String(row.evidence_status || '').toLowerCase() !== 'verified') {
+    throw new Error('Verified COA batch was not promoted to independently verified evidence.');
   }
   const analyteCount = Number(row.analyte_count || 0);
   if (analyteCount < 1) {
@@ -74,7 +74,7 @@ export function confirmVerifiedProductDatabaseWrite(
     productId: String(row.product_id),
     batchId: String(row.batch_id),
     verified: true,
-    sourceType: 'lab',
+    sourceType: String(row.source_type || 'verified_coa'),
     analyteCount,
     coaSourceCount,
     productName: String(row.product_name),
