@@ -105,28 +105,14 @@ function findOrCreateRetailProduct(source: RetailId1A4Record) {
   if (!rawName || /^(?:metrc\s+)?retail\s*id(?:\s+product)?$/i.test(rawName)) return null;
   const productName = rawName.slice(0, 240);
   const brandName = clean(source.brandName)?.slice(0, 180) || null;
+  // A retail page's brand + product name is descriptive evidence, not a
+  // canonical identity key. Without an existing batch UID link, create a
+  // separate source-backed product and let later strong identifiers/admin
+  // reconciliation merge it if warranted.
   const normalized = normalizeProductName(`${brandName || ''} ${productName}`);
   if (!normalized) return null;
 
-  let existing = db.prepare(`
-    SELECT id
-    FROM cannabis_products
-    WHERE LOWER(TRIM(COALESCE(normalized_name,'')))=?
-    ORDER BY updated_at DESC
-    LIMIT 1
-  `).get(normalized) as any;
-  if (!existing?.id && !brandName) {
-    existing = db.prepare(`
-      SELECT id
-      FROM cannabis_products
-      WHERE brand_name IS NULL AND product_name=? COLLATE NOCASE
-      ORDER BY updated_at DESC
-      LIMIT 1
-    `).get(productName) as any;
-  }
-  return existing?.id
-    ? String(existing.id)
-    : createWeedoFactsProduct({
+  return createWeedoFactsProduct({
         brandName,
         productName,
         productType: clean(source.productType),
