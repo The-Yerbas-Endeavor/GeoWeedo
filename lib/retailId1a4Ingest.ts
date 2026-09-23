@@ -127,19 +127,6 @@ export function ingestRetailId1A4(source: RetailId1A4Record): IngestResult {
   }
 
   const product = createSourceBackedProduct(source);
-  if (source.batchNumber) {
-    const stronger = db.prepare(`SELECT id,product_id,uid FROM cannabis_batches
-      WHERE product_id=? AND batch_number=? COLLATE NOCASE AND verified=1 AND evidence_status='verified'
-      ORDER BY tested_at DESC LIMIT 1`).get(product.id, source.batchNumber) as any;
-    if (stronger) {
-      const now = new Date().toISOString();
-      if (!stronger.uid) db.prepare('UPDATE cannabis_batches SET uid=?,updated_at=? WHERE id=?').run(uid, now, stronger.id);
-      addSourceIdentifiers(stronger.id, source, now);
-      recordSource(stronger.id, source, now);
-      return { batchId: stronger.id, productId: stronger.product_id, created: false, preservedExisting: true };
-    }
-  }
-
   const now = new Date().toISOString();
   const batchId = `metrc-${crypto.createHash('sha256').update(uid).digest('hex').slice(0, 24)}`;
   db.prepare(`INSERT INTO cannabis_batches
