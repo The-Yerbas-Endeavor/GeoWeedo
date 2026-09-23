@@ -54,6 +54,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   if(!fs.existsSync(storedPath))throw new Error('Stored COA PDF is missing.');
   const existingParsed=parseJson(upload.parsed_json) as any;
   const parserVersion=String(existingParsed?.parserVersion||existingParsed?.parser_version||'');
+  if(!parserVersion)throw new Error('Uploaded COA has no trusted parser provenance. Keep it in review until a supported server parser has processed it.');
   const parsed=parserVersion.startsWith('sclabs-')
     ? await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)))
     : existingParsed;
@@ -105,7 +106,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     const externalId=`pdf:${upload.sha256}`;
     const existingSource=db.prepare(`SELECT id FROM cannabis_coa_sources WHERE external_id=? LIMIT 1`).get(externalId) as any;
     const rawPayload=JSON.stringify({...parsed,uploadId:upload.id,filename:upload.original_filename||null});
-    if(existingSource)db.prepare(`UPDATE cannabis_coa_sources SET batch_id=?,source_type='lab_coa_pdf',source_name=?,source_url=?,raw_payload_json=?,parser_version='sclabs-coa-pdf-v2',fetched_at=?,verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',document_path=?,document_sha256=?,document_mime_type='application/pdf',document_size=?,archived_at=? WHERE id=?`).run(batchId,parsed.labName||null,sourceUrl,rawPayload,now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,existingSource.id);
+    if(existingSource)db.prepare(`UPDATE cannabis_coa_sources SET batch_id=?,source_type='lab_coa_pdf',source_name=?,source_url=?,raw_payload_json=?,parser_version=parserVersion,fetched_at=?,verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',document_path=?,document_sha256=?,document_mime_type='application/pdf',document_size=?,archived_at=? WHERE id=?`).run(batchId,parsed.labName||null,sourceUrl,rawPayload,now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,existingSource.id);
     else db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,document_path,document_sha256,document_mime_type,document_size,archived_at,created_at) VALUES (?,?,'lab_coa_pdf',?,?,?,?,?,?,0,'review','uploaded_lab_document',?,?,'application/pdf',?,?,?)`).run(`coas-${randomUUID()}`,batchId,parsed.labName||null,sourceUrl,externalId,rawPayload,'sclabs-coa-pdf-v2',now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,now);
 
     const menuItemId:string|null=null;
