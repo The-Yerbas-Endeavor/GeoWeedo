@@ -106,7 +106,8 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
     productName: product.product_name,
     productType: product.product_type,
     netContents: product.net_contents,
-    matchLevel: batch.verified ? 'exact_batch' : 'community_unverified',
+    matchLevel: String(batch.evidence_status || '').toLowerCase() === 'verified' ? 'exact_batch' : String(batch.evidence_status || '').toLowerCase() === 'source_backed' ? 'source_backed' : 'community_unverified',
+    evidenceStatus: String(batch.evidence_status || '').toLowerCase() === 'verified' ? 'verified' : String(batch.evidence_status || '').toLowerCase() === 'source_backed' ? 'source_backed' : String(batch.evidence_status || '').toLowerCase() === 'review' ? 'review' : 'unverified',
     batchNumber: batch.batch_number,
     uid: batch.uid,
     coaNumber: batch.coa_number,
@@ -140,7 +141,7 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
       type: batch.source_type,
       name: batch.source_name,
       url: batch.source_url || batch.coa_url,
-      verified: Boolean(batch.verified),
+      verified: String(batch.evidence_status || '').toLowerCase() === 'verified',
     },
   };
 }
