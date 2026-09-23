@@ -350,19 +350,25 @@ export function getWeedoFactsProductListing(productId: string, requestedBatchId?
   let batch: any = null;
   if (requestedBatchId) {
     batch = db.prepare(`
-      SELECT *
-      FROM cannabis_batches
-      WHERE id = ? AND product_id = ? AND verified = 1 AND evidence_status = 'verified'
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.id = ? AND b.product_id = ?
+        AND b.verified = 1 AND b.evidence_status = 'verified'
+        AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)
+        AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
       LIMIT 1
     `).get(requestedBatchId, productId) as any;
   }
 
   if (!batch) {
     batch = db.prepare(`
-      SELECT *
-      FROM cannabis_batches
-      WHERE product_id = ? AND verified = 1 AND evidence_status = 'verified'
-      ORDER BY COALESCE(tested_at, updated_at, created_at) DESC, created_at DESC
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.product_id = ?
+        AND b.verified = 1 AND b.evidence_status = 'verified'
+        AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)
+        AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
+      ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC, b.created_at DESC
       LIMIT 1
     `).get(productId) as any;
   }
