@@ -30,9 +30,9 @@ export function enrichScLabsBatchFromCoa(pdf: ScLabsCoaPdfData, expectedSampleId
       received_at=COALESCE(?,received_at),
       tested_at=COALESCE(?,tested_at),
       overall_status=COALESCE(?,overall_status),
-      verified=0,
-      evidence_status='review',
-      evidence_reason='uploaded_lab_document',
+      verified=CASE WHEN evidence_status='verified' THEN verified ELSE 0 END,
+      evidence_status=CASE WHEN evidence_status='verified' THEN evidence_status ELSE 'review' END,
+      evidence_reason=CASE WHEN evidence_status='verified' THEN evidence_reason ELSE 'uploaded_lab_document' END,
       updated_at=?
     WHERE id=?`).run(
       pdf.batchNumber || null,
