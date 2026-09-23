@@ -84,14 +84,14 @@ function validScanPayload(identifier: string) {
 
 function normalizeEvidenceRecord(record: any) {
   if (!record) return record;
-  if (record.batchId && record.source?.verified && record.source?.type !== 'lab' && record.matchLevel === 'exact_batch') {
+  if (record.batchId && record.matchLevel === 'exact_batch' && record.evidenceStatus !== 'verified') {
     return { ...record, matchLevel: 'source_backed' };
   }
   return record;
 }
 
 function isDirectLabRecord(record: any) {
-  return Boolean(record?.batchId && record?.evidenceStatus === 'verified' && record?.source?.verified && record?.source?.type === 'lab');
+  return Boolean(record?.batchId && record?.evidenceStatus === 'verified' && record?.source?.verified);
 }
 
 function scanOutcome(record: any, discovered = false) {
