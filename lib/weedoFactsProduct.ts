@@ -77,6 +77,7 @@ function productOnly(product: any): WeedoFactsRecord {
     productType: product.product_type,
     netContents: product.net_contents,
     matchLevel: 'product_only',
+    evidenceStatus: 'unverified',
     batchNumber: null,
     uid: null,
     coaNumber: null,
