@@ -49,7 +49,8 @@ export function confirmVerifiedProductDatabaseWrite(
       b.verified,
       b.evidence_status,
       (SELECT COUNT(*) FROM cannabis_analytes a WHERE a.batch_id=b.id) AS analyte_count,
-      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1 AND s.evidence_status='verified') AS coa_source_count
+      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1 AND s.evidence_status='verified') AS coa_source_count,
+      (SELECT COUNT(*) FROM cannabis_batch_identifiers i WHERE i.batch_id=b.id AND i.verified=1) AS verified_identifier_count
     FROM cannabis_products p
     JOIN cannabis_batches b ON b.product_id=p.id
     WHERE p.id=? AND b.id=?
@@ -59,6 +60,10 @@ export function confirmVerifiedProductDatabaseWrite(
   if (!row) throw new Error('Verified COA product database write could not be read back.');
   if (Number(row.verified) !== 1 || String(row.evidence_status || '').toLowerCase() !== 'verified') {
     throw new Error('Verified COA batch was not promoted to independently verified evidence.');
+  }
+  const verifiedIdentifierCount = Number(row.verified_identifier_count || 0);
+  if (verifiedIdentifierCount < 1) {
+    throw new Error('Verified COA did not persist a verified batch identifier.');
   }
   const analyteCount = Number(row.analyte_count || 0);
   if (analyteCount < 1) {
