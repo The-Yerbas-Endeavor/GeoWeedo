@@ -10,20 +10,22 @@ function parseJson(value: unknown) { if (!value || typeof value !== 'string') re
 function normalizeStatus(value: unknown) { const text=String(value||'').trim(); if(!text)return null; if(/^pass(ed)?$/i.test(text))return'Pass'; if(/^fail(ed)?$/i.test(text))return'Fail'; return text.slice(0,80); }
 function numberOrNull(value: unknown) { return value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value):null; }
 
-function ensureIdentifier(db:any,input:{batchId:string;type:string;value:string|null|undefined;now:string}){
+function ensureIdentifier(db:any,input:{batchId:string;type:string;value:string|null|undefined;now:string;verified?:boolean}){
   const value=String(input.value||'').trim(); if(!value)return;
   const conflict=db.prepare(`SELECT batch_id FROM cannabis_batch_identifiers WHERE identifier_type=? AND identifier_value=? LIMIT 1`).get(input.type,value) as any;
   if(conflict&&conflict.batch_id!==input.batchId)throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another batch.`);
-  if(conflict){db.prepare(`UPDATE cannabis_batch_identifiers SET verified=1 WHERE identifier_type=? AND identifier_value=? AND batch_id=?`).run(input.type,value,input.batchId);return;}
-  db.prepare(`INSERT INTO cannabis_batch_identifiers (id,batch_id,identifier_type,identifier_value,verified,created_at) VALUES (?,?,?,?,1,?)`).run(`cbid-${randomUUID()}`,input.batchId,input.type,value,input.now);
+  const verified=input.verified?1:0;
+  if(conflict){if(verified)db.prepare(`UPDATE cannabis_batch_identifiers SET verified=1 WHERE identifier_type=? AND identifier_value=? AND batch_id=?`).run(input.type,value,input.batchId);return;}
+  db.prepare(`INSERT INTO cannabis_batch_identifiers (id,batch_id,identifier_type,identifier_value,verified,created_at) VALUES (?,?,?,?,?,?)`).run(`cbid-${randomUUID()}`,input.batchId,input.type,value,verified,input.now);
 }
 
-function ensureProductIdentifier(db:any,input:{productId:string;type:string;value:string|null|undefined;now:string}){
+function ensureProductIdentifier(db:any,input:{productId:string;type:string;value:string|null|undefined;now:string;verified?:boolean}){
   const value=String(input.value||'').trim(); if(!value)return;
   const conflict=db.prepare(`SELECT product_id FROM cannabis_product_identifiers WHERE identifier_type=? AND identifier_value=? LIMIT 1`).get(input.type,value) as any;
   if(conflict&&conflict.product_id!==input.productId)throw new Error(`${input.type.toUpperCase()} ${value} is already linked to another product.`);
-  if(conflict){db.prepare(`UPDATE cannabis_product_identifiers SET verified=1,source='admin_coa_review' WHERE identifier_type=? AND identifier_value=? AND product_id=?`).run(input.type,value,input.productId);return;}
-  db.prepare(`INSERT INTO cannabis_product_identifiers (id,product_id,identifier_type,identifier_value,source,verified,created_at) VALUES (?,?,?,?, 'admin_coa_review',1,?)`).run(`cpid-${randomUUID()}`,input.productId,input.type,value,input.now);
+  const verified=input.verified?1:0;
+  if(conflict){if(verified)db.prepare(`UPDATE cannabis_product_identifiers SET verified=1,source='admin_coa_review' WHERE identifier_type=? AND identifier_value=? AND product_id=?`).run(input.type,value,input.productId);return;}
+  db.prepare(`INSERT INTO cannabis_product_identifiers (id,product_id,identifier_type,identifier_value,source,verified,created_at) VALUES (?,?,?,?, 'admin_coa_review',?,?)`).run(`cpid-${randomUUID()}`,input.productId,input.type,value,verified,input.now);
 }
 
 function findExistingBatch(db:any,productId:string,input:{uid?:string|null;batchNumber?:string|null;sampleId?:string|null}){
@@ -82,7 +84,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     const sourceUrl=submission.coa_url||submission.source_url||null;
 
     if(!batch){
-      db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'lab_coa_pdf',?,?,0,'review','uploaded_lab_document',?,?)`).run(batchId,productId,batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||'SC Labs',parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,now);
+      db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'lab_coa_pdf',?,?,0,'review','uploaded_lab_document',?,?)`).run(batchId,productId,batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||null,parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,now);
     }else{
       db.prepare(`UPDATE cannabis_batches SET batch_number=COALESCE(?,batch_number),uid=COALESCE(?,uid),coa_number=COALESCE(?,coa_number),coa_url=COALESCE(?,coa_url),lab_name=?,lab_license_number=COALESCE(?,lab_license_number),producer_name=COALESCE(?,producer_name),producer_license_number=COALESCE(?,producer_license_number),collected_at=COALESCE(?,collected_at),received_at=COALESCE(?,received_at),tested_at=COALESCE(?,tested_at),overall_status=COALESCE(?,overall_status),source_type='lab_coa_pdf',source_name=COALESCE(?,source_name),source_url=COALESCE(?,source_url),verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',updated_at=? WHERE id=?`).run(batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||'SC Labs',parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,batchId);
     }
@@ -106,7 +108,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     else db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,document_path,document_sha256,document_mime_type,document_size,archived_at,created_at) VALUES (?,?,'lab_coa_pdf',?,?,?,?,?,?,0,'review','uploaded_lab_document',?,?,'application/pdf',?,?,?)`).run(`coas-${randomUUID()}`,batchId,parsed.labName||null,sourceUrl,externalId,rawPayload,'sclabs-coa-pdf-v2',now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,now);
 
     let menuItemId:string|null=null; const menu=parseJson(submission.menu_item_json);
-    if(submission.requested_menu_add&&submission.dispensary_id&&menu){menuItemId=addDispensaryMenuItem({dispensaryId:submission.dispensary_id,productId,batchId,itemName:menu.itemName||verifiedProductName,brandName:verifiedBrand,category:menu.category||verifiedType,variant:menu.variant||null,packageSize:menu.packageSize||verifiedContents,priceCents:Number.isFinite(Number(menu.priceCents))?Number(menu.priceCents):null,currency:menu.currency||'USD',inventoryStatus:'reported',sourceType:'verified_coa_submission',sourceUrl,verified:true});}
+    if(submission.requested_menu_add&&submission.dispensary_id&&menu){menuItemId=addDispensaryMenuItem({dispensaryId:submission.dispensary_id,productId,batchId,itemName:menu.itemName||verifiedProductName,brandName:verifiedBrand,category:menu.category||verifiedType,variant:menu.variant||null,packageSize:menu.packageSize||verifiedContents,priceCents:Number.isFinite(Number(menu.priceCents))?Number(menu.priceCents):null,currency:menu.currency||'USD',inventoryStatus:'reported',sourceType:'coa_review_submission',sourceUrl,verified:false});}
 
     db.prepare(`UPDATE cannabis_product_submissions SET product_id=?,batch_id=?,status='needs_info',reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`).run(productId,batchId,input.adminId,now,input.reviewNotes||null,now,input.submissionId);
     db.prepare(`UPDATE cannabis_coa_uploads SET status='needs_info',parsed_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(parsed),now,upload.id);
