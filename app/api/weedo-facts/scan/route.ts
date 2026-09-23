@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({
         ok: true,
-        outcome: scanOutcome(record, true),
+        outcome: scanOutcome(record, ingestion.created),
         found: Boolean(record),
         record,
         resolvedBy: 'sc_labs_public_page',
