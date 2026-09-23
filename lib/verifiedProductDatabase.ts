@@ -47,8 +47,9 @@ export function confirmVerifiedProductDatabaseWrite(
       b.overall_status,
       b.source_type,
       b.verified,
+      b.evidence_status,
       (SELECT COUNT(*) FROM cannabis_analytes a WHERE a.batch_id=b.id) AS analyte_count,
-      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1) AS coa_source_count
+      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1 AND s.evidence_status='verified') AS coa_source_count
     FROM cannabis_products p
     JOIN cannabis_batches b ON b.product_id=p.id
     WHERE p.id=? AND b.id=?
@@ -56,7 +57,7 @@ export function confirmVerifiedProductDatabaseWrite(
   `).get(productId, batchId) as any;
 
   if (!row) throw new Error('Verified COA product database write could not be read back.');
-  if (Number(row.verified) !== 1 || String(row.source_type || '').toLowerCase() !== 'lab') {
+  if (Number(row.verified) !== 1 || String(row.source_type || '').toLowerCase() !== 'lab' || String(row.evidence_status || '').toLowerCase() !== 'verified') {
     throw new Error('Verified COA batch was not promoted to verified lab evidence.');
   }
   const analyteCount = Number(row.analyte_count || 0);
