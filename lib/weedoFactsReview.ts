@@ -1,8 +1,8 @@
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { getDatabase } from './sqlite';
-import { ensureWeedoFactsSchema, createWeedoFactsProduct } from './weedoFacts';
-import { ensureWeedoMenuSchema, addDispensaryMenuItem } from './weedoMenus';
+import { ensureWeedoFactsSchema } from './weedoFacts';
+import { ensureWeedoMenuSchema } from './weedoMenus';
 import { parseScLabsCoaPdf } from './scLabsCoaPdf';
 import { getStoredCoaPath } from './weedoFactsUploads';
 
@@ -65,16 +65,12 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   try{
     db.prepare(`UPDATE cannabis_coa_uploads SET parsed_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(parsed),now,upload.id);
 
-    let productId=submission.product_id as string|null;
+    const productId=String(submission.product_id||'').trim();
+    if(!productId)throw new Error('Uploaded COA review must be matched to an existing product before batch evidence can be staged.');
     const verifiedProductName=String(parsed.productName||submission.product_name||'').trim();
-    if(!verifiedProductName)throw new Error('Product name is required before exact-batch approval.');
     const verifiedBrand=parsed.brandName||submission.brand_name||null;
     const verifiedType=parsed.productType||submission.product_type||null;
     const verifiedContents=parsed.netContents||submission.net_contents||null;
-    if(!productId){productId=createWeedoFactsProduct({brandName:verifiedBrand,productName:verifiedProductName,productType:verifiedType,netContents:verifiedContents});}
-    else{
-      db.prepare(`UPDATE cannabis_products SET brand_name=COALESCE(?,brand_name),product_name=?,product_type=COALESCE(?,product_type),net_contents=COALESCE(?,net_contents),normalized_name=?,updated_at=? WHERE id=?`).run(verifiedBrand,verifiedProductName,verifiedType,verifiedContents,`${verifiedBrand||''} ${verifiedProductName}`.trim().toLowerCase(),now,productId);
-    }
 
     let batch=submission.batch_id?db.prepare(`SELECT * FROM cannabis_batches WHERE id=?`).get(submission.batch_id) as any:null;
     if(batch&&batch.product_id!==productId)throw new Error('Existing submission batch belongs to another product.');
@@ -86,7 +82,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     if(!batch){
       db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'lab_coa_pdf',?,?,0,'review','uploaded_lab_document',?,?)`).run(batchId,productId,batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||null,parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,now);
     }else{
-      db.prepare(`UPDATE cannabis_batches SET batch_number=COALESCE(?,batch_number),uid=COALESCE(?,uid),coa_number=COALESCE(?,coa_number),coa_url=COALESCE(?,coa_url),lab_name=?,lab_license_number=COALESCE(?,lab_license_number),producer_name=COALESCE(?,producer_name),producer_license_number=COALESCE(?,producer_license_number),collected_at=COALESCE(?,collected_at),received_at=COALESCE(?,received_at),tested_at=COALESCE(?,tested_at),overall_status=COALESCE(?,overall_status),source_type='lab_coa_pdf',source_name=COALESCE(?,source_name),source_url=COALESCE(?,source_url),verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',updated_at=? WHERE id=?`).run(batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||'SC Labs',parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,batchId);
+      db.prepare(`UPDATE cannabis_batches SET batch_number=COALESCE(?,batch_number),uid=COALESCE(?,uid),coa_number=COALESCE(?,coa_number),coa_url=COALESCE(?,coa_url),lab_name=?,lab_license_number=COALESCE(?,lab_license_number),producer_name=COALESCE(?,producer_name),producer_license_number=COALESCE(?,producer_license_number),collected_at=COALESCE(?,collected_at),received_at=COALESCE(?,received_at),tested_at=COALESCE(?,tested_at),overall_status=COALESCE(?,overall_status),source_type='lab_coa_pdf',source_name=COALESCE(?,source_name),source_url=COALESCE(?,source_url),verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',updated_at=? WHERE id=?`).run(batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||null,parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,batchId);
     }
 
     ensureIdentifier(db,{batchId,type:'uid',value:uid,now});
@@ -107,8 +103,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     if(existingSource)db.prepare(`UPDATE cannabis_coa_sources SET batch_id=?,source_type='lab_coa_pdf',source_name=?,source_url=?,raw_payload_json=?,parser_version='sclabs-coa-pdf-v2',fetched_at=?,verified=0,evidence_status='review',evidence_reason='uploaded_lab_document',document_path=?,document_sha256=?,document_mime_type='application/pdf',document_size=?,archived_at=? WHERE id=?`).run(batchId,parsed.labName||null,sourceUrl,rawPayload,now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,existingSource.id);
     else db.prepare(`INSERT INTO cannabis_coa_sources (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,document_path,document_sha256,document_mime_type,document_size,archived_at,created_at) VALUES (?,?,'lab_coa_pdf',?,?,?,?,?,?,0,'review','uploaded_lab_document',?,?,'application/pdf',?,?,?)`).run(`coas-${randomUUID()}`,batchId,parsed.labName||null,sourceUrl,externalId,rawPayload,'sclabs-coa-pdf-v2',now,storedPath,upload.sha256,Number(upload.byte_size||fs.statSync(storedPath).size),upload.archived_at||now,now);
 
-    let menuItemId:string|null=null; const menu=parseJson(submission.menu_item_json);
-    if(submission.requested_menu_add&&submission.dispensary_id&&menu){menuItemId=addDispensaryMenuItem({dispensaryId:submission.dispensary_id,productId,batchId,itemName:menu.itemName||verifiedProductName,brandName:verifiedBrand,category:menu.category||verifiedType,variant:menu.variant||null,packageSize:menu.packageSize||verifiedContents,priceCents:Number.isFinite(Number(menu.priceCents))?Number(menu.priceCents):null,currency:menu.currency||'USD',inventoryStatus:'reported',sourceType:'coa_review_submission',sourceUrl,verified:false});}
+    const menuItemId:string|null=null;
 
     db.prepare(`UPDATE cannabis_product_submissions SET product_id=?,batch_id=?,status='needs_info',reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`).run(productId,batchId,input.adminId,now,input.reviewNotes||null,now,input.submissionId);
     db.prepare(`UPDATE cannabis_coa_uploads SET status='needs_info',parsed_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(parsed),now,upload.id);
