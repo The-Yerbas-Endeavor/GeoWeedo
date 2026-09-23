@@ -52,8 +52,12 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
 
   const storedPath=getStoredCoaPath(upload.sha256);
   if(!fs.existsSync(storedPath))throw new Error('Stored COA PDF is missing.');
-  const parsed=await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)));
-  if(parsed.sha256!==upload.sha256)throw new Error('Stored COA PDF hash does not match the upload record.');
+  const existingParsed=parseJson(upload.parsed_json) as any;
+  const parsed=existingParsed?.parserVersion?.startsWith('sclabs-')
+    ? await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)))
+    : existingParsed;
+  if(!parsed)throw new Error('Uploaded COA has not been parsed by a supported lab parser. Keep it in review until a matching parser is available.');
+  if(parsed.sha256 && parsed.sha256!==upload.sha256)throw new Error('Stored COA PDF hash does not match the upload record.');
 
   const uid=String(parsed.uid||submission.uid||'').trim()||null;
   const batchNumber=String(parsed.batchNumber||submission.batch_number||'').trim()||null;
