@@ -255,7 +255,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       cannabinoids: analytes.filter(a => a.group_name === 'cannabinoid').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       terpenes: analytes.filter(a => a.group_name === 'terpene').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       safetyTests: analytes.filter(a => !['cannabinoid', 'terpene'].includes(a.group_name)).map(a => ({ category: a.group_name, analyte: a.analyte_name, status: a.status, value: a.value, unit: a.unit, limitValue: a.limit_value, limitUnit: a.limit_unit })),
-      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: sourceBacked },
+      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: strictVerified },
     };
   }
 
@@ -281,7 +281,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
     labName: null, labLicenseNumber: null, producerName: null, producerLicenseNumber: null,
     testedAt: null, collectedAt: null, receivedAt: null, overallStatus: null,
     cannabinoids: [], terpenes: [], safetyTests: [],
-    source: { type: 'product_identifier', name: null, url: null, verified: true },
+    source: { type: 'product_identifier', name: null, url: null, verified: false },
   };
 }
 
