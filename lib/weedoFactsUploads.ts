@@ -17,6 +17,9 @@ function ensureSchema() {
       sha256 TEXT NOT NULL,
       original_filename TEXT,
       stored_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL DEFAULT 'application/pdf',
+      byte_size INTEGER,
+      archived_at TEXT,
       parsed_json TEXT NOT NULL,
       submission_id TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
@@ -29,6 +32,10 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_coa_uploads_submission_idx ON cannabis_coa_uploads(submission_id);
     CREATE INDEX IF NOT EXISTS cannabis_coa_uploads_sha_idx ON cannabis_coa_uploads(sha256);
   `);
+  const columns = db.prepare('PRAGMA table_info(cannabis_coa_uploads)').all() as Array<{ name?: string }>;
+  if (!columns.some(column => column.name === 'mime_type')) db.exec("ALTER TABLE cannabis_coa_uploads ADD COLUMN mime_type TEXT NOT NULL DEFAULT 'application/pdf'");
+  if (!columns.some(column => column.name === 'byte_size')) db.exec('ALTER TABLE cannabis_coa_uploads ADD COLUMN byte_size INTEGER');
+  if (!columns.some(column => column.name === 'archived_at')) db.exec('ALTER TABLE cannabis_coa_uploads ADD COLUMN archived_at TEXT');
   return db;
 }
 
@@ -61,9 +68,9 @@ export function saveCoaUpload(input: {
   const now = new Date().toISOString();
   const parsedJson = JSON.stringify(input.parsed);
   db.prepare(`INSERT INTO cannabis_coa_uploads
-    (id,user_id,identifier_type,identifier_value,sha256,original_filename,stored_path,parsed_json,status,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?, 'pending', ?,?)`)
-    .run(id, input.userId, input.identifierType, input.identifierValue, input.parsed.sha256, input.originalFilename || null, storedPath, parsedJson, now, now);
+    (id,user_id,identifier_type,identifier_value,sha256,original_filename,stored_path,mime_type,byte_size,archived_at,parsed_json,status,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,'application/pdf',?,?,?, 'pending', ?,?)`)
+    .run(id, input.userId, input.identifierType, input.identifierValue, input.parsed.sha256, input.originalFilename || null, storedPath, input.bytes.byteLength, now, parsedJson, now, now);
   return db.prepare('SELECT * FROM cannabis_coa_uploads WHERE id=?').get(id) as any;
 }
 
