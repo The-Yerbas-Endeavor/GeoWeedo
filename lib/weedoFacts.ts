@@ -230,7 +230,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
     const evidenceStatus = String(directBatch.evidence_status || '').toLowerCase() as WeedoFactsEvidenceStatus;
     const strictVerified = evidenceStatus === 'verified' && Boolean(directBatch.identifier_verified);
     const sourceBacked = strictVerified || evidenceStatus === 'source_backed' || (Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified));
-    const exactLabBatch = strictVerified && String(directBatch.source_type || '').toLowerCase() === 'lab';
+    const exactLabBatch = strictVerified;
     return {
       productId: directBatch.product_id,
       batchId: directBatch.id,
