@@ -36,6 +36,7 @@ function retailIdFallbackRecord(source: RetailId1A4Record, productId?: string | 
     productType: source.productType,
     netContents: source.netContents,
     matchLevel: 'source_backed',
+    evidenceStatus: 'source_backed',
     batchNumber: source.batchNumber,
     uid: source.retailId,
     coaNumber: null,
@@ -55,7 +56,7 @@ function retailIdFallbackRecord(source: RetailId1A4Record, productId?: string | 
       type: 'regulatory_public',
       name: 'Metrc Retail ID',
       url: source.url,
-      verified: true,
+      verified: false,
     },
   };
 }
@@ -90,7 +91,13 @@ function normalizeEvidenceRecord(record: any) {
 }
 
 function isDirectLabRecord(record: any) {
-  return Boolean(record?.batchId && record?.source?.verified && record?.source?.type === 'lab');
+  return Boolean(record?.batchId && record?.evidenceStatus === 'verified' && record?.source?.verified && record?.source?.type === 'lab');
+}
+
+function scanOutcome(record: any, discovered = false) {
+  if (!record) return 'REVIEW' as const;
+  if (record.evidenceStatus === 'verified') return discovered ? 'DISCOVERED' as const : 'MATCH' as const;
+  return 'REVIEW' as const;
 }
 
 function refreshError(error: unknown) {
@@ -194,6 +201,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({
         ok: true,
+        outcome: scanOutcome(record, Boolean(ingestion?.created)),
         found: Boolean(record),
         record,
         resolvedBy: 'sc_labs_public_page',
@@ -238,6 +246,7 @@ export async function POST(request: NextRequest) {
             : null;
           return NextResponse.json({
             ok: true,
+            outcome: scanOutcome(localRecord),
             found: true,
             record: localRecord,
             resolvedBy: isDirectLabRecord(localRecord)
@@ -275,6 +284,7 @@ export async function POST(request: NextRequest) {
       const record = linkedRecord || retailIdFallbackRecord(retailId, persistedQr.productId);
       return NextResponse.json({
         ok: true,
+        outcome: scanOutcome(record, Boolean(coaIngestion.verifiedBatch && ingestion.created)),
         found: true,
         record,
         resolvedBy: coaIngestion.verifiedBatch
@@ -315,7 +325,7 @@ export async function POST(request: NextRequest) {
         countScan: false,
       });
     }
-    return NextResponse.json({ ok: true, found: Boolean(record), record, resolvedBy: identifierType || 'auto', persistedQr });
+    return NextResponse.json({ ok: true, outcome: scanOutcome(record), found: Boolean(record), record, resolvedBy: identifierType || 'auto', persistedQr });
   } catch (error) {
     return NextResponse.json({
       ok: false,
