@@ -24,7 +24,8 @@
     "searxng:enable-engines": "sudo bash scripts/configure-searxng-engines.sh",
     "wallet:worker": "node --env-file=.env.local scripts/yerb-wallet-worker.mjs",
     "rewards:dry-run": "node --env-file=.env.local scripts/yerb-payout-worker.mjs",
-    "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute"
+    "rewards:pay": "node --env-file=.env.local scripts/yerb-payout-worker.mjs --execute",
+    "db:migrate": "node --conditions=react-server --experimental-strip-types scripts/init-db.mjs"
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "5.15.1",
