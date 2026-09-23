@@ -97,13 +97,13 @@ function sourceAnalytes(source: RetailId1A4Record): RetailId1A4Analyte[] {
   ].filter(Boolean) as RetailId1A4Analyte[];
 }
 
-function insertIdentifier(db: any, batchId: string, type: string, value: string | null, now: string) {
+function insertIdentifier(db: any, batchId: string, type: string, value: string | null, now: string, verified = false) {
   if (!value) return;
   db.prepare(`
     INSERT OR IGNORE INTO cannabis_batch_identifiers
       (id,batch_id,identifier_type,identifier_value,verified,created_at)
-    VALUES (?,?,?,?,1,?)
-  `).run(`cbi-${randomUUID()}`, batchId, type, value, now);
+    VALUES (?,?,?,?,?,?)
+  `).run(`cbi-${randomUUID()}`, batchId, type, value, verified ? 1 : 0, now);
 }
 
 function enrichVerifiedProduct(db: any, productId: string, source: RetailId1A4Record, now: string) {
@@ -160,7 +160,9 @@ function upsertCoaSource(db: any, batchId: string, source: RetailId1A4Record, so
           raw_payload_json=?,
           parser_version='metrc-retail-id-api-v2',
           fetched_at=?,
-          verified=1
+          verified=0,
+          evidence_status='source_backed',
+          evidence_reason='regulatory_source'
       WHERE id=?
     `).run(sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, existing.id);
     return existing.id as string;
@@ -168,8 +170,8 @@ function upsertCoaSource(db: any, batchId: string, source: RetailId1A4Record, so
   const id = `coa-${randomUUID()}`;
   db.prepare(`
     INSERT INTO cannabis_coa_sources
-      (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at)
-    VALUES (?,?,?,?,?,?,?,'metrc-retail-id-api-v2',?,1,?)
+      (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,created_at)
+    VALUES (?,?,?,?,?,?,?,'metrc-retail-id-api-v2',?,0,'source_backed','regulatory_source',?)
   `).run(id, batchId, sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, now);
   return id;
 }
@@ -231,6 +233,10 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
     }
   }
 
+  // Regulatory/retailer evidence is valuable, but it is not an independently
+  // verified laboratory trail. Preserve it as source-backed evidence. Only a
+  // dedicated official-lab adapter (currently SC Labs above) may promote a
+  // record to Verified COA.
   const db = getDatabase();
   const now = new Date().toISOString();
   const existing = db.prepare(`
@@ -241,144 +247,59 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
   `).get(uid) as any;
   const batchId = existing?.id || `cb-${randomUUID()}`;
   const coaNumber = clean(source.coaNumber ?? source.coaDocumentId);
+  const analytes = sourceAnalytes(source);
 
   db.exec('BEGIN IMMEDIATE');
   try {
-    const productEnriched = enrichVerifiedProduct(db, productId, source, now);
-
     if (!existing) {
       db.prepare(`
         INSERT INTO cannabis_batches (
           id,product_id,batch_number,uid,coa_number,coa_url,
           lab_name,lab_license_number,producer_name,producer_license_number,
           collected_at,received_at,tested_at,overall_status,
-          source_type,source_name,source_url,verified,created_at,updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?, 'lab',?,?,1,?,?)
-      `).run(
-        batchId,
-        productId,
-        clean(source.batchNumber),
-        uid,
-        coaNumber,
-        coaUrl || source.url,
-        labName,
-        clean(source.labLicense),
-        clean(source.facility),
-        clean(source.facilityLicense),
-        clean(source.testedAt),
-        overallStatus,
-        labName,
-        finalSourceUrl,
-        now,
-        now,
-      );
-    } else {
-      db.prepare(`
-        UPDATE cannabis_batches SET
-          product_id=COALESCE(product_id,?),
-          batch_number=CASE WHEN batch_number IS NULL OR batch_number='' THEN COALESCE(?,batch_number) ELSE batch_number END,
-          coa_number=CASE WHEN coa_number IS NULL OR coa_number='' THEN COALESCE(?,coa_number) ELSE coa_number END,
-          coa_url=CASE WHEN coa_url IS NULL OR coa_url='' THEN COALESCE(?,coa_url) ELSE coa_url END,
-          lab_name=CASE WHEN lab_name IS NULL OR lab_name='' THEN COALESCE(?,lab_name) ELSE lab_name END,
-          lab_license_number=CASE WHEN lab_license_number IS NULL OR lab_license_number='' THEN COALESCE(?,lab_license_number) ELSE lab_license_number END,
-          producer_name=CASE WHEN producer_name IS NULL OR producer_name='' THEN COALESCE(?,producer_name) ELSE producer_name END,
-          producer_license_number=CASE WHEN producer_license_number IS NULL OR producer_license_number='' THEN COALESCE(?,producer_license_number) ELSE producer_license_number END,
-          tested_at=COALESCE(?,tested_at),
-          overall_status=COALESCE(?,overall_status),
-          source_type='lab',
-          source_name=CASE WHEN verified=1 AND source_type='lab' THEN source_name ELSE ? END,
-          source_url=CASE WHEN verified=1 AND source_type='lab' THEN source_url ELSE ? END,
-          verified=1,
-          updated_at=?
-        WHERE id=?
-      `).run(
-        productId,
-        clean(source.batchNumber),
-        coaNumber,
-        coaUrl || source.url,
-        labName,
-        clean(source.labLicense),
-        clean(source.facility),
-        clean(source.facilityLicense),
-        clean(source.testedAt),
-        overallStatus,
-        labName,
-        finalSourceUrl,
-        now,
-        batchId,
-      );
+          source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL,?,?, 'regulatory',?,?,0,'source_backed','regulatory_source',?,?)
+      `).run(batchId, productId, clean(source.batchNumber), uid, coaNumber, coaUrl || source.url,
+        labName, clean(source.labLicense), clean(source.facility), clean(source.facilityLicense),
+        clean(source.testedAt), overallStatus, 'Metrc Retail ID', finalSourceUrl, now, now);
+    } else if (String(existing.evidence_status || '') !== 'verified') {
+      db.prepare(`UPDATE cannabis_batches SET
+        batch_number=COALESCE(batch_number,?), coa_number=COALESCE(coa_number,?),
+        coa_url=COALESCE(coa_url,?), lab_name=COALESCE(lab_name,?),
+        lab_license_number=COALESCE(lab_license_number,?), producer_name=COALESCE(producer_name,?),
+        producer_license_number=COALESCE(producer_license_number,?), tested_at=COALESCE(tested_at,?),
+        overall_status=COALESCE(overall_status,?), source_type='regulatory',
+        source_name='Metrc Retail ID', source_url=?, verified=0,
+        evidence_status='source_backed', evidence_reason='regulatory_source', updated_at=?
+        WHERE id=?`).run(clean(source.batchNumber), coaNumber, coaUrl || source.url, labName,
+          clean(source.labLicense), clean(source.facility), clean(source.facilityLicense),
+          clean(source.testedAt), overallStatus, finalSourceUrl, now, batchId);
     }
 
-    insertIdentifier(db, batchId, 'uid', uid, now);
-    insertIdentifier(db, batchId, 'qr', source.url, now);
-    insertIdentifier(db, batchId, 'batch', clean(source.batchNumber), now);
-    insertIdentifier(db, batchId, 'coa', coaNumber, now);
+    insertIdentifier(db, batchId, 'uid', uid, now, false);
+    insertIdentifier(db, batchId, 'qr', source.url, now, false);
+    insertIdentifier(db, batchId, 'batch', clean(source.batchNumber), now, false);
+    insertIdentifier(db, batchId, 'coa', coaNumber, now, false);
     const coaSourceId = upsertCoaSource(db, batchId, source, finalSourceUrl, now);
 
-    const analytes = sourceAnalytes(source);
-    const removeCanonicalAnalyte = db.prepare(`
-      DELETE FROM cannabis_analytes
-      WHERE batch_id=? AND group_name=? COLLATE NOCASE AND analyte_name=? COLLATE NOCASE
-    `);
-    const insert = db.prepare(`
-      INSERT INTO cannabis_analytes
-        (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at)
-      VALUES (?,?,?,?,?,?,NULL,NULL,?,?,?,?)
-    `);
-
-    // A verified exact-batch rescan replaces the current value for each analyte
-    // present in the lab payload instead of accumulating stale values. Analytes
-    // absent from the new payload are preserved, and the raw source payload
-    // remains attached to the COA source for provenance.
+    const removeCanonicalAnalyte = db.prepare(`DELETE FROM cannabis_analytes
+      WHERE batch_id=? AND group_name=? COLLATE NOCASE AND analyte_name=? COLLATE NOCASE`);
+    const insert = db.prepare(`INSERT INTO cannabis_analytes
+      (id,batch_id,group_name,analyte_name,value,unit,lod,loq,status,limit_value,limit_unit,created_at)
+      VALUES (?,?,?,?,?,?,NULL,NULL,?,?,?,?)`);
     for (const row of analytes) {
       removeCanonicalAnalyte.run(batchId, row.groupName, row.analyteName);
-      insert.run(
-        `ca-${randomUUID()}`,
-        batchId,
-        row.groupName,
-        row.analyteName,
-        row.value,
-        row.unit,
-        row.status ?? null,
-        row.limitValue ?? null,
-        row.limitUnit ?? null,
-        now,
-      );
-    }
-
-    // Early versions of the Retail ID importer stored a generic THC summary row.
-    // Once the structured payload provides Total THC, remove only the exact-value
-    // legacy alias. Detailed cannabinoids such as Delta-9 THC remain untouched.
-    if (Array.isArray(source.analytes) && source.analytes.length) {
-      db.prepare(`
-        DELETE FROM cannabis_analytes
-        WHERE batch_id=?
-          AND group_name='cannabinoid'
-          AND analyte_name='THC' COLLATE NOCASE
-          AND EXISTS (
-            SELECT 1 FROM cannabis_analytes AS rich
-            WHERE rich.batch_id=cannabis_analytes.batch_id
-              AND rich.group_name='cannabinoid'
-              AND rich.analyte_name='Total THC' COLLATE NOCASE
-              AND rich.value IS cannabis_analytes.value
-              AND COALESCE(rich.unit,'')=COALESCE(cannabis_analytes.unit,'')
-          )
-      `).run(batchId);
+      insert.run(`ca-${randomUUID()}`, batchId, row.groupName, row.analyteName, row.value, row.unit,
+        row.status ?? null, row.limitValue ?? null, row.limitUnit ?? null, now);
     }
 
     db.exec('COMMIT');
     return {
-      verifiedBatch: true,
-      reason: embeddedLabCoa ? 'embedded_regulatory_lab_coa' as const : 'authenticated_regulatory_coa' as const,
-      productId,
-      batchId,
-      analyteCount: analytes.length,
-      coaUrl: coaUrl || source.url,
-      coaDocumentId,
-      labName,
-      overallStatus,
-      productEnriched,
-      coaSourceId,
+      verifiedBatch: false,
+      evidenceStatus: 'source_backed' as const,
+      reason: embeddedLabCoa ? 'embedded_regulatory_lab_coa' as const : 'regulatory_coa_source' as const,
+      productId, batchId, analyteCount: analytes.length, coaUrl: coaUrl || source.url,
+      coaDocumentId, labName, overallStatus, coaSourceId,
     };
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch {}
