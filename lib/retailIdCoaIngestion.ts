@@ -133,7 +133,7 @@ function enrichVerifiedProduct(db: any, productId: string, source: RetailId1A4Re
   return changed;
 }
 
-function upsertCoaSource(db: any, batchId: string, source: RetailId1A4Record, sourceUrl: string, now: string) {
+function upsertCoaSource(db: any, batchId: string, source: RetailId1A4Record, sourceUrl: string, now: string, verified = false) {
   const externalId = clean(source.coaNumber ?? source.coaDocumentId ?? source.retailId ?? source.serial);
   const existing = externalId
     ? db.prepare(`
@@ -160,19 +160,19 @@ function upsertCoaSource(db: any, batchId: string, source: RetailId1A4Record, so
           raw_payload_json=?,
           parser_version='metrc-retail-id-api-v2',
           fetched_at=?,
-          verified=0,
-          evidence_status='source_backed',
-          evidence_reason='regulatory_source'
+          verified=?,
+          evidence_status=?,
+          evidence_reason=?
       WHERE id=?
-    `).run(sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, existing.id);
+    `).run(sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, verified ? 1 : 0, verified ? 'verified' : 'source_backed', verified ? 'official_coa_link' : 'regulatory_source', existing.id);
     return existing.id as string;
   }
   const id = `coa-${randomUUID()}`;
   db.prepare(`
     INSERT INTO cannabis_coa_sources
       (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,created_at)
-    VALUES (?,?,?,?,?,?,?,'metrc-retail-id-api-v2',?,0,'source_backed','regulatory_source',?)
-  `).run(id, batchId, sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, now);
+    VALUES (?,?,?,?,?,?,?,'metrc-retail-id-api-v2',?,?,?,?,?)
+  `).run(id, batchId, sourceType, source.labName || 'Metrc Retail ID', sourceUrl, externalId, payload, now, verified ? 1 : 0, verified ? 'verified' : 'source_backed', verified ? 'official_coa_link' : 'regulatory_source', now);
   return id;
 }
 
@@ -233,10 +233,10 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
     }
   }
 
-  // Regulatory/retailer evidence is valuable, but it is not an independently
-  // verified laboratory trail. Preserve it as source-backed evidence. Only a
-  // dedicated official-lab adapter (currently SC Labs above) may promote a
-  // record to Verified COA.
+  // KISS: when the official Retail ID record exposes a reachable COA URL plus
+  // the exact UID, lab and COA/document id, that official chain is sufficient
+  // provenance for Verified COA. A bare Retail ID record remains source-backed.
+  const officialCoaVerified = Boolean(coaUrl && finalSourceUrl !== source.url && embeddedLabCoa);
   const db = getDatabase();
   const now = new Date().toISOString();
   const existing = db.prepare(`
@@ -269,18 +269,20 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
         lab_license_number=COALESCE(lab_license_number,?), producer_name=COALESCE(producer_name,?),
         producer_license_number=COALESCE(producer_license_number,?), tested_at=COALESCE(tested_at,?),
         overall_status=COALESCE(overall_status,?), source_type='regulatory',
-        source_name='Metrc Retail ID', source_url=?, verified=0,
-        evidence_status='source_backed', evidence_reason='regulatory_source', updated_at=?
+        source_name='Metrc Retail ID', source_url=?, verified=?,
+        evidence_status=?, evidence_reason=?, updated_at=?
         WHERE id=?`).run(clean(source.batchNumber), coaNumber, coaUrl || source.url, labName,
           clean(source.labLicense), clean(source.facility), clean(source.facilityLicense),
-          clean(source.testedAt), overallStatus, finalSourceUrl, now, batchId);
+          clean(source.testedAt), overallStatus, finalSourceUrl, officialCoaVerified ? 1 : 0,
+          officialCoaVerified ? 'verified' : 'source_backed',
+          officialCoaVerified ? 'official_coa_link' : 'regulatory_source', now, batchId);
     }
 
-    insertIdentifier(db, batchId, 'uid', uid, now, false);
-    insertIdentifier(db, batchId, 'qr', source.url, now, false);
-    insertIdentifier(db, batchId, 'batch', clean(source.batchNumber), now, false);
-    insertIdentifier(db, batchId, 'coa', coaNumber, now, false);
-    const coaSourceId = upsertCoaSource(db, batchId, source, finalSourceUrl, now);
+    insertIdentifier(db, batchId, 'uid', uid, now, officialCoaVerified);
+    insertIdentifier(db, batchId, 'qr', source.url, now, officialCoaVerified);
+    insertIdentifier(db, batchId, 'batch', clean(source.batchNumber), now, officialCoaVerified);
+    insertIdentifier(db, batchId, 'coa', coaNumber, now, officialCoaVerified);
+    const coaSourceId = upsertCoaSource(db, batchId, source, finalSourceUrl, now, officialCoaVerified);
 
     const removeCanonicalAnalyte = db.prepare(`DELETE FROM cannabis_analytes
       WHERE batch_id=? AND group_name=? COLLATE NOCASE AND analyte_name=? COLLATE NOCASE`);
@@ -295,9 +297,9 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
 
     db.exec('COMMIT');
     return {
-      verifiedBatch: false,
-      evidenceStatus: 'source_backed' as const,
-      reason: embeddedLabCoa ? 'embedded_regulatory_lab_coa' as const : 'regulatory_coa_source' as const,
+      verifiedBatch: officialCoaVerified,
+      evidenceStatus: officialCoaVerified ? 'verified' as const : 'source_backed' as const,
+      reason: officialCoaVerified ? 'official_coa_link' as const : embeddedLabCoa ? 'embedded_regulatory_lab_coa' as const : 'regulatory_coa_source' as const,
       productId, batchId, analyteCount: analytes.length, coaUrl: coaUrl || source.url,
       coaDocumentId, labName, overallStatus, coaSourceId,
     };
