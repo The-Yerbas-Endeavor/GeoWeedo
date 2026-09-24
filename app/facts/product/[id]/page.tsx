@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
-import WeedoFactsNearby from '@/components/WeedoFactsNearby';
 import { getWeedoFactsProductListing } from '@/lib/weedoFactsProduct';
 import { resolveCanonicalProductId } from '@/lib/productMaintenance';
 import { getFactsRecordForBatchId } from '@/lib/weedoCore';
@@ -61,7 +60,6 @@ export default async function FactsProductPage({ params, searchParams }: Props) 
         <div className={productStyles.factsStage}><WeedoFactsProductLabel record={record} /></div>
       </section>
 
-      <WeedoFactsNearby productId={productId} batchId={record.batchId} productName={record.productName} />
     </div>
   </main>;
 }
