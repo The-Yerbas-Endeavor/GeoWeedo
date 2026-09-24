@@ -38,11 +38,12 @@ function retailIdCoaHref(value?: string | null) {
 }
 
 export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsRecord }) {
-  const sourcedBatch = Boolean(record.batchId && record.source?.verified);
-  const directLabBatch = sourcedBatch && record.source?.type === 'lab';
-  const normalizedDataset = sourcedBatch && (record.source?.type === 'public_dataset' || record.source?.name === 'Cannlytics');
-  const regulatorySource = sourcedBatch && record.source?.type === 'regulatory_public';
-  const sourceBackedBatch = sourcedBatch && !directLabBatch;
+  const hasBatch = Boolean(record.batchId);
+  const verifiedBatch = hasBatch && record.evidenceStatus === 'verified' && Boolean(record.source?.verified);
+  const sourceBackedBatch = hasBatch && record.evidenceStatus === 'source_backed';
+  const reviewBatch = hasBatch && record.evidenceStatus === 'review';
+  const normalizedDataset = hasBatch && (record.source?.type === 'public_dataset' || record.source?.name === 'Cannlytics');
+  const regulatorySource = hasBatch && record.source?.type === 'regulatory_public';
   const statusText = String(record.overallStatus || '').trim();
   const failed = /fail/i.test(statusText);
   const cannabinoidRows = filterHeadlineTotals(record.cannabinoids, 'cannabinoid');
@@ -53,7 +54,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
   const collected = formatDate(record.collectedAt);
   const tested = formatDate(record.testedAt);
   const sourceHref = record.coaUrl || record.source?.url || null;
-  const refreshedRetailIdCoaHref = directLabBatch ? retailIdCoaHref(sourceHref) : null;
+  const refreshedRetailIdCoaHref = verifiedBatch ? retailIdCoaHref(sourceHref) : null;
   const coaHref = refreshedRetailIdCoaHref || sourceHref;
 
   return (
@@ -64,16 +65,16 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
           <h2>{record.productName}</h2>
           <p>{[record.brandName, record.productType, record.netContents].filter(Boolean).join(' · ')}</p>
         </div>
-        <span className={`weedoFactsStatus ${sourcedBatch ? 'verified' : 'partial'}`}>
-          {directLabBatch ? '✓ Verified lab batch' : sourceBackedBatch ? '✓ Source-backed batch data' : 'Product record — batch needed'}
+        <span className={`weedoFactsStatus ${verifiedBatch ? 'verified' : 'partial'}`}>
+          {verifiedBatch ? '✓ Verified COA' : sourceBackedBatch ? 'Source-backed batch data' : reviewBatch ? 'Batch evidence under review' : hasBatch ? 'Batch data — unverified' : 'Product record — batch needed'}
         </span>
       </div>
 
       {hasChemistry ? <WeedoFactsHeadlineTotals cannabinoids={record.cannabinoids} terpenes={record.terpenes} /> : null}
 
-      {directLabBatch ? (
+      {verifiedBatch ? (
         <p className="weedoFactsProductNotice">
-          This listing shows a verified lab batch for this product. Match the batch / lot or UID on your package before treating these values as your exact package results.
+          This listing shows an independently verified COA batch for this product. Match the batch / lot or UID on your package before treating these values as your exact package results.
         </p>
       ) : regulatorySource ? (
         <p className="weedoFactsProductNotice">
@@ -85,7 +86,15 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
         </p>
       ) : sourceBackedBatch ? (
         <p className="weedoFactsProductNotice">
-          This batch has source-backed evidence, but GeoWeedo has not authenticated a direct lab COA for it yet.
+          This batch has source-backed evidence, but GeoWeedo has not independently established the official laboratory trail yet.
+        </p>
+      ) : reviewBatch ? (
+        <p className="weedoFactsProductNotice warning">
+          This batch evidence is under review and is not a Verified COA.
+        </p>
+      ) : hasBatch ? (
+        <p className="weedoFactsProductNotice warning">
+          Batch chemistry is available, but its verification status has not been established.
         </p>
       ) : (
         <p className="weedoFactsProductNotice warning">
@@ -119,7 +128,7 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
           <summary>Source tools</summary>
           <p>Supporting source material for verification and troubleshooting.</p>
           <a className="weedoFactsChemistryLink" href={coaHref} target="_blank" rel="noreferrer">
-            {refreshedRetailIdCoaHref ? 'Open original lab report ↗' : normalizedDataset ? 'Open source record ↗' : directLabBatch ? 'Open lab source ↗' : 'Open source record ↗'}
+            {refreshedRetailIdCoaHref ? 'Open original lab report ↗' : normalizedDataset ? 'Open source record ↗' : verifiedBatch ? 'Open verified source ↗' : 'Open source record ↗'}
           </a>
         </details>
       ) : null}
