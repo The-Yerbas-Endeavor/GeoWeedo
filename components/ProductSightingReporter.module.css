@@ -42,3 +42,7 @@
 :global(.weedoFactsCard) .price span{color:#536158}
 :global(.weedoFactsCard) .save{background:#43b85a;color:#071008}
 :global(.weedoFactsCard) .success{border-color:#9bc9a4;background:#eef8f0;color:#1d5f30!important}
+
+.location{display:block;margin:7px 0 8px;padding:8px 11px;border:1px solid #34563c;border-radius:8px;background:#15231a;color:#83df8b;font-weight:800;cursor:pointer}
+.location:disabled{opacity:.55;cursor:wait}
+:global(.weedoFactsCard) .location{border-color:#78a883;background:#e9f6eb;color:#185f2d}
