@@ -118,7 +118,7 @@ function sourceTime(value: string | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export default function WeedoFactsNearby({ productId, batchId, productName, reportSource = 'user', scanId }: { productId: string; batchId?: string | null; productName?: string | null; reportSource?: 'scanner' | 'user'; scanId?: string | null }) {
+export default function WeedoFactsNearby({ productId, batchId, productName, scanId }: { productId: string; batchId?: string | null; productName?: string | null; scanId?: string | null }) {
   const [zip, setZip] = useState('');
   const [origin, setOrigin] = useState<Coordinates | null>(null);
   const [locationLabel, setLocationLabel] = useState('');
@@ -333,6 +333,6 @@ export default function WeedoFactsNearby({ productId, batchId, productName, repo
       </div>}
     </> : null}
 
-    <ProductSightingReporter productId={productId} batchId={batchId} source={reportSource} scanId={scanId} />
+    {scanId ? <ProductSightingReporter productId={productId} batchId={batchId} scanId={scanId} /> : null}
   </section>;
 }
