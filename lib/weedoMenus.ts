@@ -262,6 +262,61 @@ export function listDispensaryMenu(dispensaryId: string) {
      WHERE m.dispensary_id=? AND m.active=1 AND mi.active=1
      ORDER BY COALESCE(pc.sort_order,mc.sort_order,999),COALESCE(mi.brand_name,p.brand_name,''),mi.item_name
   `).all(dispensaryId) as any[];
+
+  const observations = db.prepare(`
+    SELECT o.id,
+           o.product_id,
+           o.batch_id,
+           p.product_name AS item_name,
+           p.brand_name,
+           p.product_type AS category,
+           NULL AS variant,
+           p.net_contents AS package_size,
+           o.price_cents,
+           o.currency,
+           o.availability_status AS inventory_status,
+           o.source_type,
+           o.source_reference AS source_url,
+           NULL AS image_url,
+           o.observed_at AS source_updated_at,
+           CASE WHEN o.confidence='high' THEN 1 ELSE 0 END AS verified,
+           COALESCE(pm.image_url,NULL) AS display_image_url,
+           p.product_name AS linked_product_name,
+           p.brand_name AS linked_brand_name,
+           p.product_type AS linked_product_type,
+           p.product_type AS source_category,
+           COALESCE(pc.name,p.product_type,'Other') AS display_category,
+           pc.id AS canonical_category_id,
+           COALESCE(pc.slug,'other') AS canonical_category_slug,
+           COALESCE(pc.name,p.product_type,'Other') AS canonical_category_name,
+           'product' AS canonical_category_source,
+           b.batch_number AS linked_batch_number,
+           b.uid AS linked_uid,
+           b.overall_status AS linked_batch_status,
+           b.verified AS linked_batch_verified
+      FROM cannabis_product_availability_observations o
+      JOIN cannabis_products p ON p.id=o.product_id
+      LEFT JOIN cannabis_product_categories pc ON pc.id=p.category_id
+      LEFT JOIN cannabis_batches b ON b.id=o.batch_id
+      LEFT JOIN cannabis_product_media pm ON pm.id=(
+        SELECT pm2.id FROM cannabis_product_media pm2
+         WHERE pm2.product_id=o.product_id
+         ORDER BY pm2.is_primary DESC,pm2.updated_at DESC LIMIT 1
+      )
+     WHERE o.dispensary_id=?
+       AND o.expires_at>?
+       AND o.availability_status<>'not_seen'
+     ORDER BY o.observed_at DESC
+  `).all(dispensaryId,new Date().toISOString()) as any[];
+
+  const seen = new Set(items.map((item:any)=>`${String(item.product_id||'')}|${String(item.batch_id||'')}`));
+  for(const observation of observations){
+    const key=`${String(observation.product_id||'')}|${String(observation.batch_id||'')}`;
+    if(seen.has(key))continue;
+    items.push(observation);
+    seen.add(key);
+  }
+  return items;
 }
 
 export function saveScanHistory(input: { userId: string; identifierType: string; identifierValue: string; productId?: string | null; batchId?: string | null; matchLevel?: string | null }) {
