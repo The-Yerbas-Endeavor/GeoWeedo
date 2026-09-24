@@ -87,7 +87,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
     <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
     <section className="weedoFactsBatchHistory">
       <div className="weedoFactsBatchHistoryHead">
-        <div><h3>Batch history</h3><p>Verified lab history for this product. Different batches can test differently.</p></div>
+        <div><h3>Batch history</h3><p>Batch chemistry history for this product. Verification status is shown for each batch.</p></div>
         <strong>{summary.verifiedBatchCount || 0} verified {summary.verifiedBatchCount === 1 ? 'batch' : 'batches'}</strong>
       </div>
 
@@ -147,7 +147,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
           <strong>{rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of {batches.length.toLocaleString()} · Page {currentPage.toLocaleString()} of {pageCount.toLocaleString()}</strong>
           <button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>Next →</button>
         </div>
-      </> : <p>No verified historical batches are available yet.</p>}
+      </> : <p>No batch chemistry history is available yet.</p>}
     </section>
   </>;
 }
