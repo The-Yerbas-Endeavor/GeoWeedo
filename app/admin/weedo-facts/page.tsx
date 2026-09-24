@@ -126,7 +126,7 @@ export default function WeedoFactsAdminPage() {
         <a href="/admin" className={styles.back}>← Admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS</span>
         <h1>COA review</h1>
-        <p>Retrieve lab data, review submitted COA PDFs, compare records, and stage evidence for independent verification.</p>
+        <p>Retrieve lab data, review uploaded COA PDFs and retrieve official lab records. Official-source records are Verified automatically.</p>
       </div>
       <div className={styles.links}>
         <a href="/geoweedo-facts" target="_blank" rel="noreferrer">Open GeoWeedo Facts</a>
@@ -165,7 +165,7 @@ export default function WeedoFactsAdminPage() {
       {retrieved && !retrievedRecord && !retrieveError ? <div className={styles.empty}>Data was retrieved, but the source did not expose enough identity to resolve a GeoWeedo batch record.</div> : null}
     </section>
 
-    <div className={styles.queueIntro}><strong>COA review queue</strong><span>Uploaded COAs stay Under Review until an independent official source verifies them. Admin review organizes evidence; it does not create Verified status.</span></div>
+    <div className={styles.queueIntro}><strong>COA review queue</strong><span>KISS rule: official lab/COA source = Verified automatically. A manually uploaded PDF stays Under Review until GeoWeedo can trace it to an official source.</span></div>
 
     <section className={styles.toolbar}>
       {['pending','needs_info','approved','rejected','all'].map(value => <button key={value} className={status===value?styles.active:''} onClick={() => setStatus(value)}>{value.replace('_',' ')}</button>)}
@@ -203,7 +203,7 @@ export default function WeedoFactsAdminPage() {
               <dt>COA URL</dt><dd>{item.coa_url ? <a href={item.coa_url} target="_blank" rel="noreferrer">Open source</a> : '—'}</dd>
               <dt>Notes</dt><dd>{item.notes || '—'}</dd>
             </dl></section>
-            <section><h3>Parsed SC Labs evidence</h3><dl>
+            <section><h3>Parsed COA evidence</h3><dl>
               <dt>Sample ID</dt><dd>{parsed.sampleId || '—'}</dd>
               <dt>Product</dt><dd>{parsed.productName || '—'}</dd>
               <dt>Batch</dt><dd>{parsed.batchNumber || '—'}</dd>
