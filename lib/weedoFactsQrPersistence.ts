@@ -244,3 +244,21 @@ export function persistRetailId1A4Scan(qrValue: string, source: RetailId1A4Recor
     countScan,
   });
 }
+
+
+export function getPersistedQrScanForSighting(scanId: string, productId: string, batchId?: string | null) {
+  const db = ensureSchema();
+  const id = String(scanId || '').trim();
+  const product = String(productId || '').trim();
+  if (!id || !product) return null;
+  const row = db.prepare(`
+    SELECT id,qr_value,product_id,batch_id,last_seen_at
+    FROM cannabis_qr_scans
+    WHERE id=? AND product_id=?
+    LIMIT 1
+  `).get(id, product) as any;
+  if (!row) return null;
+  const requestedBatch = clean(batchId);
+  if (requestedBatch && clean(row.batch_id) !== requestedBatch) return null;
+  return row;
+}
