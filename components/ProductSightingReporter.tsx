@@ -9,7 +9,8 @@ export default function ProductSightingReporter({
   productId,
   batchId,
   source='user',
-}:{productId:string;batchId?:string|null;source?:'scanner'|'user'}){
+  scanId,
+}:{productId:string;batchId?:string|null;source?:'scanner'|'user';scanId?:string|null}){
   const[query,setQuery]=useState('');
   const[results,setResults]=useState<Dispensary[]>([]);
   const[selected,setSelected]=useState<Dispensary|null>(null);
@@ -63,6 +64,7 @@ export default function ProductSightingReporter({
         body:JSON.stringify({
           productId,
           batchId:batchId||null,
+          scanId:scanId||null,
           dispensaryId:selected.id,
           sourceType:source,
           availabilityStatus:'seen',
@@ -80,6 +82,8 @@ export default function ProductSightingReporter({
       setError(cause instanceof Error?cause.message:'Could not save this sighting.');
     }finally{setSaving(false);}
   }
+
+  if(!scanId)return null;
 
   return <details className={styles.shell}>
     <summary>{source==='scanner'?'Where did you find this?':'Seen this product at a dispensary?'}</summary>
