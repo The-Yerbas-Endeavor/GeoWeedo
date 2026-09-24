@@ -3,7 +3,7 @@
 import {FormEvent,useEffect,useState} from 'react';
 import styles from './ProductSightingReporter.module.css';
 
-type Dispensary={id:string;name:string;city:string|null;region:string|null;country:string|null};
+type Dispensary={id:string;name:string;city:string|null;region:string|null;country:string|null;distanceMiles?:number|null};
 
 export default function ProductSightingReporter({
   productId,
@@ -17,6 +17,7 @@ export default function ProductSightingReporter({
   const[saving,setSaving]=useState(false);
   const[message,setMessage]=useState('');
   const[error,setError]=useState('');
+  const[locating,setLocating]=useState(false);
 
   useEffect(()=>{
     const value=query.trim();
@@ -30,6 +31,26 @@ export default function ProductSightingReporter({
     },220);
     return()=>{window.clearTimeout(timer);controller.abort();};
   },[query]);
+
+  function useLocation(){
+    if(!navigator.geolocation){setError('Location is not available in this browser.');return;}
+    setLocating(true);setError('');setMessage('');
+    navigator.geolocation.getCurrentPosition(async position=>{
+      try{
+        const params=new URLSearchParams({lat:String(position.coords.latitude),lng:String(position.coords.longitude)});
+        const response=await fetch('/api/dispensaries/search?'+params.toString(),{cache:'no-store'});
+        const body=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(body.error||'Could not find nearby dispensaries.');
+        const rows=Array.isArray(body.dispensaries)?body.dispensaries:[];
+        setResults(rows);setQuery('');
+        if(!rows.length)setMessage('No mapped dispensaries were found near your current location.');
+      }catch(cause){setError(cause instanceof Error?cause.message:'Could not find nearby dispensaries.');}
+      finally{setLocating(false);}
+    },error=>{
+      setLocating(false);
+      setError(error.code===1?'Location permission was not granted. You can still search manually.':'Could not determine your location. You can still search manually.');
+    },{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
+  }
 
   async function submit(event:FormEvent){
     event.preventDefault();
@@ -69,11 +90,12 @@ export default function ProductSightingReporter({
 
       {!selected?<div className={styles.search}>
         <label>Dispensary
+          <button className={styles.location} type="button" onClick={useLocation} disabled={locating}>{locating?'Finding nearby…':'Use my location'}</button>
           <input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search dispensary, city, or state" autoComplete="off"/>
         </label>
         {results.length?<div className={styles.results}>{results.map(row=><button type="button" key={row.id} onClick={()=>{setSelected(row);setResults([]);}}>
           <strong>{row.name}</strong>
-          <span>{[row.city,row.region].filter(Boolean).join(', ')||'Location details'}</span>
+          <span>{[row.city,row.region].filter(Boolean).join(', ')||'Location details'}{Number.isFinite(row.distanceMiles)?` · ${Number(row.distanceMiles).toFixed(Number(row.distanceMiles)<10?1:0)} mi`:''}</span>
         </button>)}</div>:null}
       </div>:<div className={styles.selected}>
         <div><strong>{selected.name}</strong><span>{[selected.city,selected.region].filter(Boolean).join(', ')}</span></div>
