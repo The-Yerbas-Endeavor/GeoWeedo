@@ -214,6 +214,16 @@ function findUrl(root: any, base: string) {
   return found;
 }
 
+function findCoaFileLink(root: any, base: string) {
+  const links = root?.fileLink;
+  if (!Array.isArray(links)) return null;
+  for (const candidate of links) {
+    const url = absoluteUrl(base, candidate);
+    if (url && /^https:\/\//i.test(url)) return url;
+  }
+  return null;
+}
+
 function prettyAnalyteName(key: string, isTotal = false) {
   const normalized = key.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
   const compact = normalized.replace(/\s+/g, '').toLowerCase();
@@ -379,7 +389,7 @@ export async function fetchRetailId1A4(value: string): Promise<RetailId1A4Record
   const batchNumber = clean(coa.batch ?? coa.sourceBatch ?? coa.batchNumber);
   const testedAt = normalizeDate(clean(coa.dateTested ?? coa.testedDate ?? coa.labTests?.[0]?.at));
   const analytes = collectAnalytes(coa);
-  const coaUrl = findUrl(coaCard, input.toString()) || findUrl(coa, input.toString());
+  const coaUrl = findUrl(coaCard, input.toString()) || findCoaFileLink(coaCard, input.toString()) || findUrl(coa, input.toString());
   const overallStatus = firstJsonText(coa, ['overallStatus', 'complianceStatus', 'resultStatus', 'passFail']);
 
   return {
