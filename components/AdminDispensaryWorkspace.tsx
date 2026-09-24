@@ -6,13 +6,15 @@ import { useState } from 'react';
 const FullEditor = dynamic(() => import('@/components/AdminFullDispensaryEditor'), { ssr: false, loading: () => <Loading/> });
 const ProfileAudit = dynamic(() => import('@/components/AdminEnabledProfileAudit'), { ssr: false, loading: () => <Loading/> });
 const BatchEnrichment = dynamic(() => import('@/components/AdminBatchEnrichmentQueue'), { ssr: false, loading: () => <Loading/> });
+const MenuCatalog = dynamic(() => import('@/components/AdminProductsDispensaries'), { ssr: false, loading: () => <Loading/> });
 
-type Tool = 'editor'|'audit'|'enrichment';
+type Tool = 'editor'|'menu'|'audit'|'enrichment';
 
 function Loading(){return <div className="admin-status">Loading selected dispensary tool…</div>;}
 
 const tools: Array<[Tool,string,string]> = [
   ['editor','Locations','Manage every dispensary and candidate action in one place'],
+  ['menu','Menus','Current menu catalog, product matching, scan evidence, and menu exceptions'],
   ['audit','Quality audit','Review profile completeness and re-audit needs'],
   ['enrichment','Bulk enrichment','Review and run batch enrichment work'],
 ];
@@ -37,6 +39,7 @@ export default function AdminDispensaryWorkspace(){
     </section>
 
     {tool==='editor'?<FullEditor/>:null}
+    {tool==='menu'?<MenuCatalog/>:null}
     {tool==='audit'?<ProfileAudit/>:null}
     {tool==='enrichment'?<BatchEnrichment/>:null}
   </main>;
