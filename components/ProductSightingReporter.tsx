@@ -66,16 +66,14 @@ export default function ProductSightingReporter({
           batchId:batchId||null,
           scanId:scanId||null,
           dispensaryId:selected.id,
-          sourceType:source,
+          scanId:scanId||null,
           availabilityStatus:'seen',
           price:price.trim()||null,
         }),
       });
       const body=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(body.error||'Could not save this sighting.');
-      setMessage(source==='scanner'
-        ? 'Thanks — this scan now contributes to GeoWeedo availability.'
-        : 'Thanks — this product sighting was recorded.');
+      setMessage('Thanks — this scan location was recorded.');
       setQuery('');setResults([]);setSelected(null);setPrice('');
       window.dispatchEvent(new CustomEvent('geoweedo:availability-updated',{detail:{productId}}));
     }catch(cause){
@@ -85,12 +83,12 @@ export default function ProductSightingReporter({
 
   if(!scanId)return null;
 
+  if(!scanId)return null;
+
   return <details className={styles.shell}>
-    <summary>{source==='scanner'?'Where did you find this?':'Seen this product at a dispensary?'}</summary>
+    <summary>Where did you find this?</summary>
     <form onSubmit={submit}>
-      <p>{source==='scanner'
-        ? 'Connect this package scan to the dispensary where you found it.'
-        : 'Add a recent sighting. GeoWeedo treats it as time-limited evidence, not guaranteed live inventory.'}</p>
+      <p>Connect this package scan to the dispensary where you found it.</p>
 
       {!selected?<div className={styles.search}>
         <label>Dispensary
@@ -109,7 +107,7 @@ export default function ProductSightingReporter({
       <label className={styles.price}>Price <span>optional</span>
         <input value={price} onChange={event=>setPrice(event.target.value)} inputMode="decimal" placeholder="35.00"/>
       </label>
-      <button className={styles.save} type="submit" disabled={!selected||saving}>{saving?'Saving…':source==='scanner'?'Save scan location':'Report sighting'}</button>
+      <button className={styles.save} type="submit" disabled={!selected||saving}>{saving?'Saving…':'Save scan location'}</button>
       {error?<p className={styles.error}>{error} {error.startsWith('Login required')?<a href="/account">Log in or create an account</a>:null}</p>:null}
       {message?<p className={styles.success}>{message}</p>:null}
     </form>
