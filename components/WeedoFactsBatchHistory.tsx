@@ -128,8 +128,6 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
         </div>
         <div className="weedoFactsBatchHistoryList">
           {visibleBatches.map((batch: any) => {
-            const lookupIdentifier = batch.uid || batch.coa_number || batch.batch_number;
-            const lookupType = batch.uid ? 'uid' : batch.coa_number ? 'coa' : 'batch';
             const current = batch.id === currentBatchId;
             return <article className={`weedoFactsBatchHistoryItem ${current ? 'current' : ''}`} key={batch.id}>
               <div className="weedoFactsBatchHistoryTitle">
@@ -147,7 +145,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
                 <span>Dominant <strong>{batch.dominantTerpenes?.length ? batch.dominantTerpenes.map((row: any) => row.name).join(', ') : '—'}</strong></span>
               </div>
               <div className="weedoFactsBatchHistoryLinks">
-                {lookupIdentifier ? <a href={`/api/weedo-facts/lookup?identifier=${encodeURIComponent(lookupIdentifier)}&type=${lookupType}`} target="_blank" rel="noreferrer">Open batch lookup →</a> : null}
+                <a href={`/facts/product/${encodeURIComponent(productId)}?batch=${encodeURIComponent(batch.id)}`}>View batch details →</a>
                 {batch.coa_url ? <a href={batch.coa_url} target="_blank" rel="noreferrer">Original COA ↗</a> : null}
               </div>
             </article>;
