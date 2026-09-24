@@ -23,7 +23,7 @@ function range(value: any, unit?: string | null) {
 }
 
 function batchLabel(batch: any) {
-  return String(batch?.batch_number || batch?.coa_number || batch?.uid || 'Verified batch');
+  return String(batch?.batch_number || batch?.coa_number || batch?.uid || 'Batch evidence');
 }
 
 function testedAt(batch: any) {
@@ -72,7 +72,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
   </>;
   if (!data) return <>
     <WeedoFactsNearby productId={productId} batchId={currentBatchId} />
-    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading verified batches…</p></section>
+    <section className="weedoFactsBatchHistory"><h3>Batch history</h3><p>Loading batch evidence…</p></section>
   </>;
 
   const summary = data.summary || {};
@@ -88,7 +88,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
     <section className="weedoFactsBatchHistory">
       <div className="weedoFactsBatchHistoryHead">
         <div><h3>Batch history</h3><p>Batch chemistry history for this product. Verification status is shown for each batch.</p></div>
-        <strong>{summary.verifiedBatchCount || 0} verified {summary.verifiedBatchCount === 1 ? 'batch' : 'batches'}</strong>
+        <strong>{summary.batchCount ?? batches.length} {(summary.batchCount ?? batches.length) === 1 ? 'batch' : 'batches'} · {summary.verifiedBatchCount || 0} verified</strong>
       </div>
 
       {batches.length ? <>
@@ -123,11 +123,11 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
             return <article className={`weedoFactsBatchHistoryItem ${current ? 'current' : ''}`} key={batch.id}>
               <div className="weedoFactsBatchHistoryTitle">
                 <strong>{batchLabel(batch)}</strong>
-                {current ? <span>Current scan</span> : null}
+                <span>{batch.verified ? 'Verified COA' : batch.evidenceStatus === 'review' ? 'Under review' : batch.evidenceStatus === 'source_backed' ? 'Source-backed' : 'Unverified'}{current ? ' · Current scan' : ''}</span>
               </div>
               <div className="weedoFactsBatchHistoryMeta">
                 <span>{batch.tested_at ? `Tested ${new Date(batch.tested_at).toLocaleDateString()}` : 'Test date unavailable'}</span>
-                <span>{batch.lab_name || batch.source_name || 'Verified lab source'}</span>
+                <span>{batch.lab_name || batch.source_name || 'Source unavailable'}</span>
                 {batch.overall_status ? <span>Lab status: {batch.overall_status}</span> : null}
               </div>
               <div className="weedoFactsBatchHistoryMeasures">
