@@ -55,10 +55,9 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   const existingParsed=parseJson(upload.parsed_json) as any;
   const parserVersion=String(existingParsed?.parserVersion||existingParsed?.parser_version||'');
   if(!parserVersion)throw new Error('Uploaded COA has no trusted parser provenance. Keep it in review until a supported server parser has processed it.');
-  const parsed=parserVersion.startsWith('sclabs-')
-    ? await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)))
-    : existingParsed;
-  if(!parsed)throw new Error('Uploaded COA has not been parsed by a supported lab parser. Keep it in review until a matching parser is available.');
+  if(!parserVersion.startsWith('sclabs-'))throw new Error(`Unsupported COA parser "${parserVersion}". Keep this evidence in review until a supported server parser can re-process the original document.`);
+  const parsed=await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)));
+  if(!parsed)throw new Error('Uploaded COA has not been parsed by a supported server parser. Keep it in review until a matching parser is available.');
   if(parsed.sha256 && parsed.sha256!==upload.sha256)throw new Error('Stored COA PDF hash does not match the upload record.');
 
   const uid=String(parsed.uid||submission.uid||'').trim()||null;
@@ -113,7 +112,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
 
     db.prepare(`UPDATE cannabis_product_submissions SET product_id=?,batch_id=?,status='needs_info',reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`).run(productId,batchId,input.adminId,now,input.reviewNotes||null,now,input.submissionId);
     db.prepare(`UPDATE cannabis_coa_uploads SET status='needs_info',parsed_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(parsed),now,upload.id);
-    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,'admin',?,'weedo_facts.exact_batch_reviewed','cannabis_product_submission',?,?,?)`).run(`audit-${randomUUID()}`,input.adminId,input.submissionId,JSON.stringify({productId,batchId,uploadId:upload.id,sha256:upload.sha256,menuItemId,analyteCount:analytes.length,parserVersion:'sclabs-coa-pdf-v2'}),now);
+    db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,'admin',?,'weedo_facts.exact_batch_reviewed','cannabis_product_submission',?,?,?)`).run(`audit-${randomUUID()}`,input.adminId,input.submissionId,JSON.stringify({productId,batchId,uploadId:upload.id,sha256:upload.sha256,menuItemId,analyteCount:analytes.length,parserVersion}),now);
     db.exec('COMMIT');
     return{productId,batchId,uploadId:upload.id,menuItemId,analyteCount:analytes.length,evidenceStatus:'review',verificationRequired:true,identifier:uid||sampleId||batchNumber,identifierType:uid?'uid':sampleId?'coa':'batch'};
   }catch(error){try{db.exec('ROLLBACK');}catch{} throw error;}
