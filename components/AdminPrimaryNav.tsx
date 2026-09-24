@@ -97,7 +97,7 @@ export default function AdminPrimaryNav() {
   const secondary = useMemo<NavItem[]>(() => {
     if (pathname.startsWith('/admin/products-menus') || pathname.startsWith('/admin/weedo-facts') || pathname.startsWith('/admin/cultivar-genetics')) {
       return [
-        { label: 'Catalog & menus', href: '/admin/products-menus', active: pathname.startsWith('/admin/products-menus') },
+        { label: 'Products & sightings', href: '/admin/products-menus', active: pathname.startsWith('/admin/products-menus') },
         { label: 'COAs', href: '/admin/weedo-facts', active: pathname === '/admin/weedo-facts' },
         { label: 'Sources', href: '/admin/weedo-facts/sources', active: pathname.startsWith('/admin/weedo-facts/sources') },
         { label: 'Cultivars', href: '/admin/cultivar-genetics', active: pathname.startsWith('/admin/cultivar-genetics') },
