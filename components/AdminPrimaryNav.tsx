@@ -82,7 +82,7 @@ export default function AdminPrimaryNav() {
       items.push({
         label: 'People',
         href: '/admin/users',
-        active: pathname.startsWith('/admin/users') || pathname.startsWith('/admin/staff'),
+        active: pathname.startsWith('/admin/users') || pathname.startsWith('/admin/scouts') || pathname.startsWith('/admin/staff'),
       });
     }
     if (hasAny(admin, ['dashboard.view'])) {
@@ -111,9 +111,10 @@ export default function AdminPrimaryNav() {
         { label: 'Community', href: '/admin/community', active: pathname.startsWith('/admin/community') || pathname.startsWith('/admin/owner-review') },
       ];
     }
-    if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/staff')) {
+    if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/scouts') || pathname.startsWith('/admin/staff')) {
       return [
         { label: 'Users', href: '/admin/users', active: pathname.startsWith('/admin/users') },
+        { label: 'Scouts', href: '/admin/scouts', active: pathname.startsWith('/admin/scouts') },
         { label: 'Staff & permissions', href: '/admin/staff', active: pathname.startsWith('/admin/staff') },
       ];
     }
