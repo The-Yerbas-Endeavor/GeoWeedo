@@ -8,9 +8,8 @@ type Dispensary={id:string;name:string;city:string|null;region:string|null;count
 export default function ProductSightingReporter({
   productId,
   batchId,
-  source='user',
   scanId,
-}:{productId:string;batchId?:string|null;source?:'scanner'|'user';scanId?:string|null}){
+}:{productId:string;batchId?:string|null;scanId?:string|null}){
   const[query,setQuery]=useState('');
   const[results,setResults]=useState<Dispensary[]>([]);
   const[selected,setSelected]=useState<Dispensary|null>(null);
@@ -64,7 +63,6 @@ export default function ProductSightingReporter({
         body:JSON.stringify({
           productId,
           batchId:batchId||null,
-          scanId:scanId||null,
           dispensaryId:selected.id,
           scanId:scanId||null,
           availabilityStatus:'seen',
@@ -80,8 +78,6 @@ export default function ProductSightingReporter({
       setError(cause instanceof Error?cause.message:'Could not save this sighting.');
     }finally{setSaving(false);}
   }
-
-  if(!scanId)return null;
 
   if(!scanId)return null;
 
