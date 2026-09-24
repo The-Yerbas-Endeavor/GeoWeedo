@@ -1,3 +1,22 @@
+/* Keep the unified search above MapLibre's canvas/gesture layer and make the
+   real input an explicit pointer target. Some desktop browsers otherwise hand
+   the click to the map underneath even though the toolbar is visually above it. */
+.map-first-home .map-browser-tools{
+  pointer-events:auto!important;
+}
+.map-first-home .map-browser-tools .map-unified-search,
+.map-first-home .map-browser-tools .map-unified-search-shell{
+  pointer-events:auto!important;
+  z-index:2!important;
+}
+.map-first-home .map-browser-tools .map-unified-search-input{
+  position:relative!important;
+  z-index:3!important;
+  pointer-events:auto!important;
+  user-select:text!important;
+  cursor:text!important;
+}
+
 .map-browser-tools .map-unified-search{
   min-width:0!important;
   order:-100!important;
