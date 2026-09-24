@@ -55,7 +55,11 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   const existingParsed=parseJson(upload.parsed_json) as any;
   const parserVersion=String(existingParsed?.parserVersion||existingParsed?.parser_version||'');
   if(!parserVersion)throw new Error('Uploaded COA has no trusted parser provenance. Keep it in review until a supported server parser has processed it.');
-  if(!parserVersion.startsWith('sclabs-'))throw new Error(`Unsupported COA parser "${parserVersion}". Keep this evidence in review until a supported server parser can re-process the original document.`);
+  // Parser provenance establishes that GeoWeedo parsed the archived document;
+  // it does not establish verification. Uploaded documents remain Review until
+  // an official-source adapter independently resolves their provenance.
+  const supportedParser = parserVersion.startsWith('sclabs-');
+  if(!supportedParser)throw new Error(`Unsupported COA parser "${parserVersion}". Keep this evidence in review until a supported server parser can re-process the original document.`);
   const parsed=await parseScLabsCoaPdf(new Uint8Array(fs.readFileSync(storedPath)));
   if(!parsed)throw new Error('Uploaded COA has not been parsed by a supported server parser. Keep it in review until a matching parser is available.');
   if(parsed.sha256 && parsed.sha256!==upload.sha256)throw new Error('Stored COA PDF hash does not match the upload record.');
