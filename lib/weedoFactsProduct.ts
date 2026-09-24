@@ -373,5 +373,24 @@ export function getWeedoFactsProductListing(productId: string, requestedBatchId?
     `).get(productId) as any;
   }
 
+  // Keep the Nutrition/Facts experience useful without weakening the Verified
+  // designation. If no strict Verified batch exists, show the newest batch that
+  // actually has chemistry as source-backed evidence. The record renderer will
+  // label it from evidence_status rather than promoting it to Verified.
+  if (!batch) {
+    batch = db.prepare(`
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.product_id = ?
+        AND b.evidence_status IN ('source_backed', 'review', 'unverified')
+        AND EXISTS (SELECT 1 FROM cannabis_analytes a WHERE a.batch_id=b.id)
+      ORDER BY
+        CASE b.evidence_status WHEN 'source_backed' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,
+        COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+        b.created_at DESC
+      LIMIT 1
+    `).get(productId) as any;
+  }
+
   return batch ? recordFromBatch(product, batch) : productOnly(product);
 }
