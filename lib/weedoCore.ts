@@ -193,19 +193,9 @@ export function findCanonicalProductMatch(input: {
     }
   }
 
-  const batchNumber = String(input.batchNumber || '').trim();
-  if (batchNumber) {
-    const batches = db.prepare(`
-      SELECT b.id AS batch_id,b.product_id
-      FROM cannabis_batches b
-      WHERE b.batch_number=? COLLATE NOCASE
-      ORDER BY b.verified DESC,b.tested_at DESC
-      LIMIT 2
-    `).all(batchNumber) as any[];
-    if (batches.length === 1) {
-      return { productId: String(batches[0].product_id), batchId: String(batches[0].batch_id), confidence: 'exact', score: 100, reasons: ['unique exact batch/lot identifier'] };
-    }
-  }
+  // Batch/lot numbers are not globally unique. They only become strong identity
+  // when paired with trusted producer/source provenance, which this matcher does
+  // not receive. Never auto-link a product from a descriptive batch number alone.
 
   const product = normalizeIdentityText(input.productName);
   const brand = normalizeIdentityText(input.brand);
