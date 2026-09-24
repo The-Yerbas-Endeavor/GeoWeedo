@@ -38,6 +38,7 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
   const [sort, setSort] = useState('newest');
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +53,17 @@ export default function WeedoFactsBatchHistory({ productId, currentBatchId }: { 
       })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load batch history.'); });
     return () => { cancelled = true; };
-  }, [productId]);
+  }, [productId, currentBatchId, refreshNonce]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshNonce(value => value + 1);
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('pageshow', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
 
   const batches = useMemo(() => {
     const rows = Array.isArray(data?.batches) ? [...data.batches] : [];
