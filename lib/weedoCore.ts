@@ -9,7 +9,7 @@ import { normalizeProductIdentifier } from './productIdentity';
 
 export type WeedoMatchConfidence = 'exact' | 'high' | 'possible' | 'unmatched';
 export type WeedoAvailabilityConfidence = 'exact_batch' | 'same_product' | 'possible_match';
-export type WeedoScanPayloadKind = 'metrc_retail_id' | 'lab_url' | 'url' | 'upc' | 'text' | 'unknown';
+export type WeedoScanPayloadKind = 'metrc_retail_id' | 'official_lab_url' | 'url' | 'upc' | 'text' | 'unknown';
 
 export type CanonicalMenuListingInput = {
   dispensaryId: string;
@@ -81,7 +81,9 @@ export function classifyWeedoScanPayload(value: unknown): WeedoScanPayloadKind {
     try {
       const host = new URL(raw).hostname.toLowerCase();
       if (host === '1a4.com' || host.endsWith('.1a4.com')) return 'metrc_retail_id';
-      if (host.includes('sclabs.com') || /(?:coa|phytofacts|lab|sample|result)/i.test(raw)) return 'lab_url';
+      // Classification is routing only, never a trust decision. Only hosts
+      // with an explicit official-source adapter get an official-lab kind.
+      if (host === 'sclabs.com' || host.endsWith('.sclabs.com')) return 'official_lab_url';
       return 'url';
     } catch {
       return 'unknown';
