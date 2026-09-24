@@ -19,9 +19,11 @@ export function getWeedoFactsBatchHistory(productId: string) {
 
   const batches = db.prepare(`
     SELECT id,batch_number,uid,coa_number,coa_url,lab_name,collected_at,received_at,tested_at,overall_status,
-           source_type,source_name,source_url,verified
-      FROM cannabis_batches
-     WHERE product_id=? AND verified=1
+           source_type,source_name,source_url,verified,evidence_status
+      FROM cannabis_batches b
+     WHERE product_id=? AND b.verified=1 AND b.evidence_status='verified'
+       AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)
+       AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
      ORDER BY COALESCE(tested_at,collected_at,created_at) DESC
   `).all(productId) as any[];
 
