@@ -1,14 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-export default function SiteHeader() {
-  const [duplicate,setDuplicate]=useState(false);
-  useEffect(()=>{
-    const headers=Array.from(document.querySelectorAll('.site-topbar'));
-    const mine=headers[headers.length-1];
-    setDuplicate(headers.some(header=>header!==mine));
-  },[]);
+ export default function SiteHeader() {
   const links = [
     ['/how-to-play', 'How to play'],
     ['/leaderboard', 'Leaderboard'],
@@ -18,8 +10,6 @@ export default function SiteHeader() {
     ['/for-dispensaries', 'For dispensaries'],
     ['/about', 'About'],
   ] as const;
-
-  if(duplicate)return null;
 
   return (
     <nav className="topbar site-topbar" aria-label="GeoWeedo navigation">
