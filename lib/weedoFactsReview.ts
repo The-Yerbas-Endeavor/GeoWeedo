@@ -5,6 +5,7 @@ import { ensureWeedoFactsSchema } from './weedoFacts';
 import { ensureWeedoMenuSchema } from './weedoMenus';
 import { parseScLabsCoaPdf } from './scLabsCoaPdf';
 import { getStoredCoaPath } from './weedoFactsUploads';
+import { officialSourceCandidates } from './weedoFactsSourceAdapters';
 
 function parseJson(value: unknown) { if (!value || typeof value !== 'string') return null; try { return JSON.parse(value); } catch { return null; } }
 function normalizeStatus(value: unknown) { const text=String(value||'').trim(); if(!text)return null; if(/^pass(ed)?$/i.test(text))return'Pass'; if(/^fail(ed)?$/i.test(text))return'Fail'; return text.slice(0,80); }
@@ -87,6 +88,11 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     const batchId=batch?.id||`cb-${randomUUID()}`;
     const overallStatus=normalizeStatus(parsed.overallStatus);
     const sourceUrl=submission.coa_url||submission.source_url||null;
+    const officialCandidates=officialSourceCandidates([
+      submission.coa_url,
+      submission.source_url,
+      submission.identifier_type === 'qr' ? submission.identifier_value : null,
+    ]);
 
     if(!batch){
       db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'lab_coa_pdf',?,?,0,'review','uploaded_lab_document',?,?)`).run(batchId,productId,batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||null,parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,now);
@@ -118,7 +124,7 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     db.prepare(`UPDATE cannabis_coa_uploads SET status='needs_info',parsed_json=?,updated_at=? WHERE id=?`).run(JSON.stringify(parsed),now,upload.id);
     db.prepare(`INSERT INTO audit_log (id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,'admin',?,'weedo_facts.exact_batch_reviewed','cannabis_product_submission',?,?,?)`).run(`audit-${randomUUID()}`,input.adminId,input.submissionId,JSON.stringify({productId,batchId,uploadId:upload.id,sha256:upload.sha256,menuItemId,analyteCount:analytes.length,parserVersion}),now);
     db.exec('COMMIT');
-    return{productId,batchId,uploadId:upload.id,menuItemId,analyteCount:analytes.length,evidenceStatus:'review',verificationRequired:true,identifier:uid||sampleId||batchNumber,identifierType:uid?'uid':sampleId?'coa':'batch'};
+    return{productId,batchId,uploadId:upload.id,menuItemId,analyteCount:analytes.length,evidenceStatus:'review',verificationRequired:true,officialSourceCandidates:officialCandidates,identifier:uid||sampleId||batchNumber,identifierType:uid?'uid':sampleId?'coa':'batch'};
   }catch(error){try{db.exec('ROLLBACK');}catch{} throw error;}
 }
 
