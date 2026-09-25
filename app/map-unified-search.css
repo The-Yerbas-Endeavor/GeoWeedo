@@ -1,118 +1,4 @@
-/* Keep the unified search above MapLibre's canvas/gesture layer and make the
-   real input an explicit pointer target. Some desktop browsers otherwise hand
-   the click to the map underneath even though the toolbar is visually above it. */
-.map-first-home .map-browser-tools{
-  pointer-events:auto!important;
-}
-.map-first-home .map-browser-tools .map-unified-search,
-.map-first-home .map-browser-tools .map-unified-search-shell{
-  pointer-events:auto!important;
-  z-index:2!important;
-}
-.map-first-home .map-browser-tools .map-unified-search-input{
-  position:relative!important;
-  z-index:3!important;
-  pointer-events:auto!important;
-  user-select:text!important;
-  cursor:text!important;
-}
-
-.map-browser-tools .map-unified-search{
-  min-width:0!important;
-  order:-100!important;
-}
-
-.map-browser-tools .map-unified-search-shell{
-  position:relative!important;
-  display:block!important;
-  width:100%!important;
-  min-width:0!important;
-}
-
-/* mobile.css gives every map-toolbar input a fixed 190px width. The unified
-   search is wider than that, so without this override the scanner remains at
-   the shell's right edge while the visible input stops early. Keep the input
-   and scanner anchored to the same box on every viewport. */
-.map-browser-tools .map-unified-search-shell .map-unified-search-input{
-  display:block!important;
-  width:100%!important;
-  min-width:0!important;
-  max-width:none!important;
-  box-sizing:border-box!important;
-  padding-right:48px!important;
-}
-
-.map-browser-tools .map-unified-search-shell:has(.map-unified-search-clear) .map-unified-search-input{
-  padding-right:82px!important;
-}
-
-.map-browser-tools .map-unified-search-shell .map-unified-search-scanner{
-  position:absolute!important;
-  right:4px!important;
-  left:auto!important;
-  top:50%!important;
-  bottom:auto!important;
-  transform:translateY(-50%)!important;
-  display:grid!important;
-  place-items:center!important;
-  width:34px!important;
-  height:34px!important;
-  min-width:34px!important;
-  min-height:34px!important;
-  max-width:34px!important;
-  max-height:34px!important;
-  margin:0!important;
-  padding:0!important;
-  flex:0 0 34px!important;
-  border:1px solid rgba(255,255,255,.14)!important;
-  border-radius:50%!important;
-  background:rgba(24,33,30,.92)!important;
-  color:inherit!important;
-  box-sizing:border-box!important;
-  cursor:pointer!important;
-  z-index:6!important;
-}
-
-.map-browser-tools .map-unified-search-shell .map-unified-search-scanner svg{
-  display:block!important;
-  width:18px!important;
-  height:18px!important;
-  pointer-events:none;
-}
-
-.map-browser-tools .map-unified-search-shell .map-unified-search-clear{
-  position:absolute!important;
-  right:42px!important;
-  top:50%!important;
-  transform:translateY(-50%)!important;
-  display:grid!important;
-  place-items:center!important;
-  width:30px!important;
-  height:30px!important;
-  min-width:30px!important;
-  min-height:30px!important;
-  margin:0!important;
-  padding:0!important;
-  border-radius:50%!important;
-  z-index:5!important;
-}
-
-@media(max-width:760px){
-  .map-first-home .map-browser-tools .map-unified-search{
-    flex:0 0 min(82vw,360px)!important;
-    width:min(82vw,360px)!important;
-    max-width:min(82vw,360px)!important;
-  }
-
-  .map-first-home .map-browser-tools .map-unified-search-shell,
-  .map-first-home .map-browser-tools .map-unified-search-shell .map-unified-search-input{
-    width:100%!important;
-    min-width:0!important;
-    max-width:none!important;
-  }
-}
-
-/* React owns the unified search outside the legacy map toolbar. */
+/* Unified GeoWeedo search is React-owned and independent of the legacy map toolbar. */
 .map-first-home .map-unified-search-host{
   position:absolute;
   z-index:1005;
@@ -121,17 +7,82 @@
   width:min(420px,calc(100% - 24px));
   pointer-events:auto;
 }
+
 .map-first-home .map-unified-search-host .map-unified-search{
-  width:100%;
+  display:flex!important;
+  align-items:center!important;
+  width:100%!important;
   max-width:none!important;
   pointer-events:auto!important;
 }
+
+.map-first-home .map-unified-search-host .map-unified-search-shell{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+}
+
 .map-first-home .map-unified-search-host .map-unified-search-input{
+  display:block!important;
+  position:relative!important;
+  z-index:1!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:42px!important;
+  box-sizing:border-box!important;
+  padding:0 48px 0 14px!important;
+  border-radius:22px!important;
   pointer-events:auto!important;
   user-select:text!important;
   cursor:text!important;
 }
-@media (max-width:650px){
+
+.map-first-home .map-unified-search-host .map-unified-search-shell:has(.map-unified-search-clear) .map-unified-search-input{
+  padding-right:82px!important;
+}
+
+.map-first-home .map-unified-search-host .map-unified-search-scanner{
+  position:absolute!important;
+  z-index:3!important;
+  right:4px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  display:grid!important;
+  place-items:center!important;
+  width:34px!important;
+  height:34px!important;
+  min-width:34px!important;
+  padding:0!important;
+  margin:0!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  border-radius:50%!important;
+  background:rgba(24,33,30,.92)!important;
+  cursor:pointer!important;
+}
+
+.map-first-home .map-unified-search-host .map-unified-search-scanner svg{
+  display:block!important;
+  width:18px!important;
+  height:18px!important;
+  pointer-events:none;
+}
+
+.map-first-home .map-unified-search-host .map-unified-search-clear{
+  position:absolute!important;
+  z-index:3!important;
+  right:42px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:30px!important;
+  height:30px!important;
+  margin:0!important;
+  padding:0!important;
+  border-radius:50%!important;
+}
+
+@media(max-width:650px){
   .map-first-home .map-unified-search-host{
     top:10px;
     left:10px;
