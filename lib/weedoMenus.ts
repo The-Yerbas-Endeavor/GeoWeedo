@@ -242,7 +242,7 @@ export function addDispensaryMenuItem(input: MenuItemInput) {
 
 export function listDispensaryMenu(dispensaryId: string) {
   const db = ensureSchema();
-  return db.prepare(`
+  const items = db.prepare(`
     SELECT mi.*,m.dispensary_id,m.menu_name,
            COALESCE(mi.image_url,(SELECT pm.image_url FROM cannabis_product_media pm WHERE pm.product_id=mi.product_id ORDER BY pm.is_primary DESC,pm.updated_at DESC LIMIT 1)) AS display_image_url,
            p.product_name AS linked_product_name,p.brand_name AS linked_brand_name,p.product_type AS linked_product_type,
