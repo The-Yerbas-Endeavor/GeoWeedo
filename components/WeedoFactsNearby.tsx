@@ -269,9 +269,9 @@ export default function WeedoFactsNearby({ productId, batchId, productName, scan
   return <section className={styles.shell}>
     <div className={styles.head}>
       <div>
-        <span>FIND THIS PRODUCT</span>
-        <h3>{productLabel ? `Find ${productLabel}` : 'Find this product'}</h3>
-        <p>GeoWeedo combines dispensary confirmations, recent public listings, package scans, and user sightings. Older evidence stays visible as history instead of being presented as live inventory.</p>
+        <span>PRODUCT SIGHTINGS</span>
+        <h3>{productLabel ? `Where ${productLabel} was seen` : 'Where this product was seen'}</h3>
+        <p>Community sightings from scanned products. Sightings show where a product was observed, not live dispensary inventory.</p>
       </div>
     </div>
 
@@ -328,8 +328,8 @@ export default function WeedoFactsNearby({ productId, batchId, productName, scan
           </article>;
         })}
       </div> : <div className={styles.empty}>
-        <strong>No availability evidence yet.</strong>
-        <p>GeoWeedo knows the product, but nobody has linked it to a dispensary yet. An owner confirmation, public menu observation, package scan, or user sighting can create that connection.</p>
+        <strong>No sightings yet.</strong>
+        <p>Nobody has reported seeing this product at a dispensary yet.</p>
       </div>}
     </> : null}
 
