@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { getDatabase } from './sqlite';
 import { ensureWeedoFactsSchema } from './weedoFacts';
 import { fetchScLabsSample, ingestScLabsSample, isScLabsSampleUrl } from './scLabs';
+import { matchOfficialCoaAdapter } from './weedoFactsSourceAdapters';
 import type { RetailId1A4Analyte, RetailId1A4Record } from './retailId1a4';
 
 function clean(value: unknown) {
@@ -219,10 +220,16 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
   }
 
   let finalSourceUrl = source.url;
+  let officialCoaVerified = false;
   if (coaUrl) {
     const checked = await verifyCoaSource(coaUrl);
-    if (checked.ok) finalSourceUrl = checked.finalUrl || coaUrl;
-    else if (!embeddedLabCoa) {
+    if (checked.ok) {
+      finalSourceUrl = checked.finalUrl || coaUrl;
+      // Reachability is not verification. Only a source-specific adapter that
+      // GeoWeedo explicitly knows how to validate may promote evidence.
+      const adapter = matchOfficialCoaAdapter(finalSourceUrl) || matchOfficialCoaAdapter(coaUrl);
+      officialCoaVerified = Boolean(adapter?.verification === 'official_lab_source' && embeddedLabCoa);
+    } else if (!embeddedLabCoa) {
       return {
         verifiedBatch: false,
         reason: 'coa_source_unreachable' as const,
@@ -233,10 +240,10 @@ export async function ingestRetailIdCoaEvidence(source: RetailId1A4Record, produ
     }
   }
 
-  // KISS: when the official Retail ID record exposes a reachable COA URL plus
-  // the exact UID, lab and COA/document id, that official chain is sufficient
-  // provenance for Verified COA. A bare Retail ID record remains source-backed.
-  const officialCoaVerified = Boolean(coaUrl && finalSourceUrl !== source.url && embeddedLabCoa);
+  // Retail ID is valuable regulatory/source-backed evidence, but a reachable
+  // arbitrary COA URL is never enough to mint Verified COA. Promotion happens
+  // only through an explicit official-lab adapter (the dedicated adapter path
+  // above normally handles it and preserves the richest original payload).
   const db = getDatabase();
   const now = new Date().toISOString();
   const existing = db.prepare(`
