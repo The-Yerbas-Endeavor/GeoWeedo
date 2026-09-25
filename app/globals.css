@@ -21,3 +21,64 @@
  .map-browser-row-end{min-width:72px}
  .map-browser-row-status{display:none}
 }
+
+/* Readable, usable browse/search-results panel. Keep it opaque above the map. */
+.map-first-home .map-browser-panel{
+  background:rgba(8,14,10,.97)!important;
+  border-color:rgba(103,214,110,.28)!important;
+  box-shadow:0 16px 48px rgba(0,0,0,.46)!important;
+  backdrop-filter:blur(12px)!important;
+}
+.map-first-home .map-browser-panel-head{
+  min-height:64px!important;
+  padding:12px 14px!important;
+  background:#0d1710!important;
+  border-bottom:1px solid rgba(103,214,110,.25)!important;
+  text-shadow:none!important;
+}
+.map-first-home .map-browser-panel-head>div{
+  gap:4px!important;
+}
+.map-first-home .map-browser-panel-head span{
+  color:#75e47b!important;
+  font-size:11px!important;
+  line-height:1.2!important;
+  letter-spacing:.12em!important;
+}
+.map-first-home .map-browser-panel-head strong{
+  color:#fff!important;
+  font-size:15px!important;
+  line-height:1.25!important;
+}
+.map-first-home .map-browser-panel-head .map-browser-panel-hint{
+  color:#c5d0c8!important;
+  font-size:11px!important;
+  line-height:1.25!important;
+  letter-spacing:0!important;
+}
+.map-first-home .map-browser-panel-head button{
+  background:#1a271e!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+}
+.map-first-home .map-browser-panel-search-minimized{
+  width:min(330px,calc(100% - 28px))!important;
+  max-height:none!important;
+  overflow:visible!important;
+  background:#0d1710!important;
+}
+.map-first-home .map-browser-panel-search-minimized .map-browser-panel-head{
+  cursor:pointer!important;
+  border-bottom:0!important;
+  border-radius:16px!important;
+}
+.map-first-home .map-browser-panel-search-minimized .map-browser-list{
+  display:none!important;
+}
+@media(max-width:650px){
+  .map-first-home .map-browser-panel-search-minimized{
+    left:10px!important;
+    right:10px!important;
+    width:auto!important;
+  }
+}
