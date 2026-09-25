@@ -6,6 +6,7 @@ import { ensureWeedoMenuSchema } from './weedoMenus';
 import { parseScLabsCoaPdf } from './scLabsCoaPdf';
 import { getStoredCoaPath } from './weedoFactsUploads';
 import { officialSourceCandidates } from './weedoFactsSourceAdapters';
+import { fetchScLabsSample, ingestScLabsSample } from './scLabs';
 
 function parseJson(value: unknown) { if (!value || typeof value !== 'string') return null; try { return JSON.parse(value); } catch { return null; } }
 function normalizeStatus(value: unknown) { const text=String(value||'').trim(); if(!text)return null; if(/^pass(ed)?$/i.test(text))return'Pass'; if(/^fail(ed)?$/i.test(text))return'Fail'; return text.slice(0,80); }
@@ -70,6 +71,25 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
   const sampleId=String(parsed.sampleId||'').trim()||null;
   if(!uid&&!batchNumber&&!sampleId)throw new Error('COA does not expose enough batch identity to verify an exact batch.');
 
+  const officialCandidates=officialSourceCandidates([
+    submission.coa_url,
+    submission.source_url,
+    submission.identifier_type === 'qr' ? submission.identifier_value : null,
+  ]);
+  const officialLabCandidate=officialCandidates.find(item=>item.adapter.verification==='official_lab_source')||null;
+  if(officialLabCandidate?.adapter.id==='sc_labs_public_page'){
+    const sample=await fetchScLabsSample(officialLabCandidate.url);
+    const officialUid=String(sample.uid||'').trim();
+    const officialSample=String(sample.coaNumber||sample.sampleId||'').trim();
+    if(uid&&officialUid&&uid.toLowerCase()!==officialUid.toLowerCase())throw new Error('Uploaded COA UID does not match the official lab record.');
+    if(sampleId&&officialSample&&sampleId.toLowerCase()!==officialSample.toLowerCase())throw new Error('Uploaded COA sample/COA does not match the official lab record.');
+    const ingested=ingestScLabsSample(sample);
+    const now=new Date().toISOString();
+    db.prepare(`UPDATE cannabis_product_submissions SET product_id=?,batch_id=?,status='approved',reviewed_by_admin_id=?,reviewed_at=?,review_notes=?,updated_at=? WHERE id=?`).run(ingested.productId,ingested.batchId,input.adminId,now,input.reviewNotes||'Verified automatically from official lab source.',now,input.submissionId);
+    db.prepare(`UPDATE cannabis_coa_uploads SET status='approved',updated_at=? WHERE id=?`).run(now,upload.id);
+    return{productId:ingested.productId,batchId:ingested.batchId,uploadId:upload.id,menuItemId:null,analyteCount:ingested.analyteCount,evidenceStatus:'verified',verificationRequired:false,officialSource:officialLabCandidate.url,identifier:officialUid||officialSample||uid||sampleId||batchNumber,identifierType:officialUid?'uid':'coa'};
+  }
+
   const now=new Date().toISOString();
   db.exec('BEGIN IMMEDIATE');
   try{
@@ -88,12 +108,6 @@ export async function approveExactBatchFromCoa(input:{submissionId:string;adminI
     const batchId=batch?.id||`cb-${randomUUID()}`;
     const overallStatus=normalizeStatus(parsed.overallStatus);
     const sourceUrl=submission.coa_url||submission.source_url||null;
-    const officialCandidates=officialSourceCandidates([
-      submission.coa_url,
-      submission.source_url,
-      submission.identifier_type === 'qr' ? submission.identifier_value : null,
-    ]);
-
     if(!batch){
       db.prepare(`INSERT INTO cannabis_batches (id,product_id,batch_number,uid,coa_number,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,collected_at,received_at,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'lab_coa_pdf',?,?,0,'review','uploaded_lab_document',?,?)`).run(batchId,productId,batchNumber,uid,sampleId,submission.coa_url||null,parsed.labName||null,parsed.labLicenseNumber||null,parsed.producerName||null,parsed.producerLicenseNumber||null,parsed.collectedAt||null,parsed.receivedAt||null,parsed.testedAt||null,overallStatus,parsed.labName||null,sourceUrl,now,now);
     }else{
