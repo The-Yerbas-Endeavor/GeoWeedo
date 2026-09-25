@@ -90,7 +90,6 @@ function ProductAwareMap(props:Props){
  return <div ref={rootRef} style={{position:'relative',width:'100%',height:'100%'}}>
    <div className="map-unified-search-host">{searchControl}</div>
    <MapLibreGuessMap {...props} locations={combinedLocations} mappedTotal={unifiedFilterActive?combinedLocations.length:props.mappedTotal} enabledTotal={unifiedFilterActive?combinedLocations.filter(item=>item.enabled).length:props.enabledTotal} countriesTotal={unifiedFilterActive?productCountries:props.countriesTotal}/>
-   {searchControl}
    {matchCard}
   </div>;
 }
