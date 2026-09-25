@@ -116,3 +116,53 @@
     max-height:52vh!important;
   }
 }
+
+/* Search/browse panel: keep it legible and predictable regardless of older drag/minimize classes. */
+.map-first-home .map-browser-panel.map-browser-panel-draggable{
+  width:min(460px,calc(100% - 36px))!important;
+  min-width:360px!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-centered{
+  left:50%!important;
+  right:auto!important;
+  bottom:28px!important;
+  transform:translateX(-50%)!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized{
+  max-height:none!important;
+  overflow:hidden!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-head{
+  min-height:92px!important;
+  padding:16px 18px!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-head>div:first-child{
+  min-width:0!important;
+  flex:1 1 auto!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-head strong{
+  display:block!important;
+  max-width:none!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  font-size:18px!important;
+  line-height:1.25!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-panel-hint{
+  display:block!important;
+  white-space:normal!important;
+  color:#c9d4cc!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-minimized .map-browser-list{
+  display:none!important;
+}
+@media(max-width:650px){
+  .map-first-home .map-browser-panel.map-browser-panel-draggable{
+    min-width:0!important;
+    width:calc(100% - 20px)!important;
+    left:10px!important;
+    right:10px!important;
+    transform:none!important;
+  }
+}
