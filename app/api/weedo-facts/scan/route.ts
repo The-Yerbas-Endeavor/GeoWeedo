@@ -8,6 +8,7 @@ import { ingestRetailIdCoaEvidence } from '../../../../lib/retailIdCoaIngestion'
 import { persistQrScan, persistRetailId1A4Scan } from '../../../../lib/weedoFactsQrPersistence';
 import { classifyWeedoScanPayload } from '../../../../lib/weedoCore';
 import { confirmVerifiedProductDatabaseWrite } from '../../../../lib/verifiedProductDatabase';
+import { matchOfficialCoaAdapter } from '../../../../lib/weedoFactsSourceAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -153,17 +154,16 @@ export async function POST(request: NextRequest) {
 
   const identifierType = requestedIdentifierType(body, identifier);
   const scanKind = classifyWeedoScanPayload(identifier);
+  const officialAdapter = matchOfficialCoaAdapter(identifier);
   let persistedQr: ReturnType<typeof persistQrScan> | null = null;
 
   try {
     if (validScanPayload(identifier)) {
       persistedQr = persistQrScan({
         qrValue: identifier,
-        resolver: isScLabsSampleUrl(identifier)
-          ? 'sc_labs_public_page'
-          : isRetailId1A4Url(identifier)
-            ? 'metrc_retail_id'
-            : scanKind === 'upc'
+        resolver: officialAdapter?.id
+          ? officialAdapter.id
+          : scanKind === 'upc'
               ? 'upc_lookup'
               : scanKind === 'text'
                 ? 'identifier_lookup'
