@@ -296,7 +296,7 @@ export function listDispensaryMenu(dispensaryId: string) {
            b.uid AS linked_uid,
            b.overall_status AS linked_batch_status,
            b.verified AS linked_batch_verified
-      FROM cannabis_product_availability_observations o
+      FROM product_availability_observations o
       JOIN cannabis_products p ON p.id=o.product_id
       LEFT JOIN cannabis_product_categories pc ON pc.id=p.category_id
       LEFT JOIN cannabis_batches b ON b.id=o.batch_id
