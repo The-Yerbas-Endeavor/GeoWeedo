@@ -1,7 +1,6 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import SiteHeader from '@/components/SiteHeader';
 
 type GameKey='classic'|'hunt'|'daily';
 type Leader={rank:number;gameId:string;player:string;score:number;earnedYerb:number;rewardStatus:string;completedAt:string};
@@ -21,7 +20,8 @@ export default function LeaderboardPage(){
  useEffect(()=>{setActive(initialGame());fetch('/api/leaderboard?limit=50',{cache:'no-store'}).then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not load the leaderboard.');setData(body);}).catch(err=>setError(err instanceof Error?err.message:'Could not load the leaderboard.'));},[]);
  const select=(game:GameKey)=>{setActive(game);const url=new URL(window.location.href);url.searchParams.set('game',game);window.history.replaceState({},'',url.pathname+url.search);};
  const leaders=useMemo(()=>data?.boards?.[active]||[],[data,active]),meta=GAME_META[active],max=data?.limits?.[active]||0,period=data?.periods?.[active]||'';
- return <main className="landing-shell"><SiteHeader/><section className="leaderboard-page">
+ return <main className="landing-shell">
+<section className="leaderboard-page">
   <header className="leaderboard-hero"><div><div className="eyebrow">GEOWEEDO COMPETITION</div><h1>🏆 GeoWeedo Leaderboard</h1><p>Top GeoWeedo scores and the YERB actually earned from completed games. Classic, GeoWeedo Hunt and Daily GeoWeedo all report from the same authoritative game records.</p></div><a className="secondary" href="/">Back to GeoWeedo</a></header>
   <div className="leaderboard-games" role="tablist" aria-label="Choose leaderboard game">{(Object.keys(GAME_META) as GameKey[]).map(game=>{const item=GAME_META[game],count=data?.boards?.[game]?.length||0;return <button key={game} type="button" role="tab" aria-selected={active===game} className={`leaderboard-game-card ${active===game?'active':''}`} onClick={()=>select(game)}><span className="leaderboard-game-icon">{item.icon}</span><span><strong>{item.name}</strong><small>{item.description}</small></span><b>{count} listed</b></button>;})}</div>
   <section className="leaderboard-board result-card"><div className="leaderboard-board-head"><div><div className="eyebrow">{period||'LEADERBOARD'}</div><h2>{meta.icon} {meta.name}</h2><p>{max.toLocaleString()} maximum points</p></div><a className="secondary" href={meta.href}>Play {meta.name}</a></div>
