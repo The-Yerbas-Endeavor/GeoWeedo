@@ -1,4 +1,3 @@
-import SiteHeader from '@/components/SiteHeader';
 import './about.css';
 
 export const metadata = {
@@ -9,9 +8,7 @@ export const metadata = {
 export default function AboutPage() {
   return (
     <main className="info-shell aboutPage">
-      <SiteHeader />
-
-      <section className="aboutHero">
+<section className="aboutHero">
         <div className="aboutHeroCopy">
           <span className="eyebrow">ABOUT GEOWEEDO</span>
           <h1>Search. Scan. Play.</h1>
