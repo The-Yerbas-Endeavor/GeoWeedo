@@ -21,7 +21,7 @@ function textMatchesLocation(item:MapLocation,query:string){return `${item.name}
 
 function ProductAwareMap(props:Props){
  const rootRef=useRef<HTMLDivElement|null>(null);
- const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[legacySearchInput,setLegacySearchInput]=useState<HTMLInputElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
+ const[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
  const[query,setQuery]=useState(''),[debouncedQuery,setDebouncedQuery]=useState(''),[resultQuery,setResultQuery]=useState('');
  const[exactProductId,setExactProductId]=useState(''),[exactProductLabel,setExactProductLabel]=useState('');
  const[results,setResults]=useState<ProductDispensary[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
@@ -31,22 +31,15 @@ function ProductAwareMap(props:Props){
  useEffect(()=>{
   const root=rootRef.current;if(!root)return;
   const sync=()=>{
-   const nextToolbar=root.querySelector<HTMLElement>('.map-browser-tools');
-   const nextLegacy=nextToolbar?.querySelector<HTMLInputElement>('input:not(.map-unified-search-input)')||null;
-   if(nextLegacy){nextLegacy.style.display='none';nextLegacy.setAttribute('aria-hidden','true');nextLegacy.tabIndex=-1;nextLegacy.dataset.unifiedSearchInternal='1';}
    const nextCard=root.querySelector<HTMLElement>('.map-location-card');
-   setToolbar(nextToolbar);setLegacySearchInput(nextLegacy);setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');
+   setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');
   };
   sync();const observer=new MutationObserver(sync);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});return()=>observer.disconnect();
  },[]);
  useEffect(()=>{
-  if(!legacySearchInput)return;
-  const value=query.trim();
-  if(ZIP_QUERY.test(value)){if(legacySearchInput.value!==value)setNativeInputValue(legacySearchInput,value);}
-  else if(legacySearchInput.value)setNativeInputValue(legacySearchInput,'');
-  const active=Boolean(value||exactProductId);document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
+  const active=Boolean(query.trim()||exactProductId);document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
   if(active)document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click();
- },[query,exactProductId,legacySearchInput]);
+ },[query,exactProductId]);
  useEffect(()=>{
   const exactId=exactProductId.trim(),q=debouncedQuery.trim(),isZip=ZIP_QUERY.test(q);
   if(!exactId&&(q.length<2||isZip)){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
@@ -74,7 +67,7 @@ function ProductAwareMap(props:Props){
  const productCountries=useMemo(()=>new Set(combinedLocations.map(item=>item.country).filter(Boolean)).size,[combinedLocations]);
  const selectedMatch=resultMap.get(selectedLocationId);
  const inputValue=exactProductId?(exactProductLabel||'Selected GeoWeedo Facts product'):query;
- const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
+ const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
  const searchControl=<div className="map-unified-search map-unified-search-owned" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
    <div className="map-unified-search-shell" style={{position:'relative',display:'flex',alignItems:'center',width:'100%',minWidth:0}}>
     <input className="map-unified-search-input" value={inputValue} onMouseDown={event=>event.currentTarget.focus()} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180,paddingRight:inputValue?82:48}}/>
