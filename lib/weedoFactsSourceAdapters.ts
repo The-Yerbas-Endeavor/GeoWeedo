@@ -29,3 +29,16 @@ export function matchOfficialCoaAdapter(value: string): OfficialCoaAdapterMatch 
 export function isSupportedOfficialCoaUrl(value: string) {
   return Boolean(matchOfficialCoaAdapter(value));
 }
+
+export function officialSourceCandidates(values: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const matches: Array<{ url: string; adapter: OfficialCoaAdapterMatch }> = [];
+  for (const value of values) {
+    const url = String(value || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const adapter = matchOfficialCoaAdapter(url);
+    if (adapter) matches.push({ url, adapter });
+  }
+  return matches;
+}
