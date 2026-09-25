@@ -124,9 +124,12 @@ export default function WeedoFactsProductLabel({ record }: { record: WeedoFactsR
       </section>
 
       {coaHref ? (
-        <a className="weedoFactsChemistryLink weedoFactsSourceLink" href={coaHref} target="_blank" rel="noreferrer">
-          {refreshedRetailIdCoaHref ? 'Open original lab report ↗' : normalizedDataset ? 'Open source record ↗' : verifiedBatch ? 'Open verified source ↗' : 'Open source record ↗'}
-        </a>
+        <div className="weedoFactsSourceRow">
+          <span>Source</span>
+          <a className="weedoFactsChemistryLink weedoFactsSourceLink" href={coaHref} target="_blank" rel="noreferrer">
+            {refreshedRetailIdCoaHref ? 'Original lab report ↗' : normalizedDataset ? 'Source record ↗' : verifiedBatch ? 'Verified source ↗' : 'Source record ↗'}
+          </a>
+        </div>
       ) : null}
       {record.productId ? <WeedoFactsBatchHistory productId={record.productId} currentBatchId={record.batchId} /> : null}
     </article>
