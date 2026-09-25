@@ -29,6 +29,16 @@ function ProductAwareMap(props:Props){
  useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=String(params.get('product')||params.get('productId')||'').trim();if(id){setExactProductId(id);document.body.classList.add('geoweedo-findo-active',SEARCH_ACTIVE_CLASS);window.setTimeout(()=>document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click(),0);}},[]);
  useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(query.trim()),260);return()=>window.clearTimeout(timer);},[query]);
  useEffect(()=>{
+  const q=debouncedQuery.trim();
+  if(!ZIP_QUERY.test(q)){window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));return;}
+  const zip=q.slice(0,5);let cancelled=false;
+  fetch(`https://api.zippopotam.us/us/${encodeURIComponent(zip)}`,{cache:'no-store'})
+   .then(async response=>{if(!response.ok)throw new Error('ZIP code not found.');return response.json();})
+   .then(data=>{if(cancelled)return;const place=Array.isArray(data?.places)?data.places[0]:null;const lat=Number(place?.latitude),lng=Number(place?.longitude);if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error('ZIP code not found.');setError('');window.dispatchEvent(new CustomEvent('geoweedo:zip-radius',{detail:{zip,lat,lng,radiusMiles:25}}));})
+   .catch(err=>{if(cancelled)return;window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));setError(err instanceof Error?err.message:'ZIP lookup failed.');});
+  return()=>{cancelled=true;};
+ },[debouncedQuery]);
+ useEffect(()=>{
   const root=rootRef.current;if(!root)return;
   const sync=()=>{
    const nextCard=root.querySelector<HTMLElement>('.map-location-card');
