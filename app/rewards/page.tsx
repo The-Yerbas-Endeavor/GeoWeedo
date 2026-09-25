@@ -1,4 +1,3 @@
-import SiteHeader from '@/components/SiteHeader';
 import { getGameRewardPolicy, calculateGameReward } from '@/lib/gameRewardPolicy';
 import { MAX_GAME_SCORE } from '@/lib/yerbasRewards';
 
@@ -15,8 +14,7 @@ export default function RewardsPage() {
 
   return (
     <main className="info-shell rewards-page">
-      <SiteHeader />
-      <section className="info-hero rewards-hero">
+<section className="info-hero rewards-hero">
         <span className="eyebrow">YERB REWARDS</span>
         <h1>Play GeoWeedo. Earn YERB.</h1>
         <p>
