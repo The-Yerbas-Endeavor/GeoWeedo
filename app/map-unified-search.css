@@ -89,3 +89,24 @@
     width:calc(100% - 20px);
   }
 }
+
+/* Reserve the first toolbar slot for unified search so filters never sit underneath it. */
+.map-first-home .map-browser-tools{
+  padding-left:444px!important;
+  min-height:54px!important;
+}
+@media(max-width:900px){
+  .map-first-home .map-unified-search-host{
+    width:min(360px,calc(100% - 24px));
+  }
+  .map-first-home .map-browser-tools{
+    padding-left:384px!important;
+  }
+}
+@media(max-width:650px){
+  .map-first-home .map-browser-tools{
+    padding-left:0!important;
+    padding-top:62px!important;
+    min-height:108px!important;
+  }
+}
