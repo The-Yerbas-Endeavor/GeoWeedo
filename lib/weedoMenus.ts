@@ -263,7 +263,9 @@ export function listDispensaryMenu(dispensaryId: string) {
      ORDER BY COALESCE(pc.sort_order,mc.sort_order,999),COALESCE(mi.brand_name,p.brand_name,''),mi.item_name
   `).all(dispensaryId) as any[];
 
-  const observations = db.prepare(`
+  let observations: any[] = [];
+  try {
+    observations = db.prepare(`
     SELECT o.id,
            o.product_id,
            o.batch_id,
@@ -308,6 +310,11 @@ export function listDispensaryMenu(dispensaryId: string) {
        AND o.availability_status<>'not_seen'
      ORDER BY o.observed_at DESC
   `).all(dispensaryId,new Date().toISOString()) as any[];
+  } catch (error) {
+    // Availability observations are additive evidence. A missing/older
+    // observation schema must never take down the public dispensary page.
+    console.warn('Product sighting observations unavailable for dispensary', dispensaryId, error);
+  }
 
   const seen = new Set(items.map((item:any)=>`${String(item.product_id||'')}|${String(item.batch_id||'')}`));
   for(const observation of observations){
