@@ -82,3 +82,37 @@
     width:auto!important;
   }
 }
+
+/* Search results must open as a usable panel, not a tiny status chip. */
+.map-first-home .map-browser-panel.map-browser-panel-search-minimized{
+  width:min(430px,calc(100% - 32px))!important;
+  max-height:min(58vh,520px)!important;
+  overflow:hidden!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-search-minimized .map-browser-panel-head{
+  min-height:82px!important;
+  padding:14px 16px!important;
+  cursor:default!important;
+  border-bottom:1px solid rgba(103,214,110,.25)!important;
+  border-radius:16px 16px 0 0!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-search-minimized .map-browser-panel-head strong{
+  font-size:17px!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-search-minimized .map-browser-panel-hint{
+  display:block!important;
+  margin-top:4px!important;
+  font-size:12px!important;
+}
+.map-first-home .map-browser-panel.map-browser-panel-search-minimized .map-browser-list{
+  display:block!important;
+  max-height:min(42vh,360px)!important;
+  overflow-y:auto!important;
+  background:#0b120d!important;
+}
+@media(max-width:650px){
+  .map-first-home .map-browser-panel.map-browser-panel-search-minimized{
+    width:auto!important;
+    max-height:52vh!important;
+  }
+}
