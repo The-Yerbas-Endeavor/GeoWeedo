@@ -111,3 +111,30 @@
     max-width:none!important;
   }
 }
+
+/* React owns the unified search outside the legacy map toolbar. */
+.map-first-home .map-unified-search-host{
+  position:absolute;
+  z-index:1005;
+  top:12px;
+  left:12px;
+  width:min(420px,calc(100% - 24px));
+  pointer-events:auto;
+}
+.map-first-home .map-unified-search-host .map-unified-search{
+  width:100%;
+  max-width:none!important;
+  pointer-events:auto!important;
+}
+.map-first-home .map-unified-search-host .map-unified-search-input{
+  pointer-events:auto!important;
+  user-select:text!important;
+  cursor:text!important;
+}
+@media (max-width:650px){
+  .map-first-home .map-unified-search-host{
+    top:10px;
+    left:10px;
+    width:calc(100% - 20px);
+  }
+}
