@@ -75,7 +75,7 @@ function ProductAwareMap(props:Props){
  const selectedMatch=resultMap.get(selectedLocationId);
  const inputValue=exactProductId?(exactProductLabel||'Selected GeoWeedo Facts product'):query;
  const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
- const searchControl=toolbar?createPortal(<div className="map-unified-search" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
+ const searchControl=<div className="map-unified-search map-unified-search-owned" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
    <div className="map-unified-search-shell" style={{position:'relative',display:'flex',alignItems:'center',width:'100%',minWidth:0}}>
     <input className="map-unified-search-input" value={inputValue} onMouseDown={event=>event.currentTarget.focus()} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180,paddingRight:inputValue?82:48}}/>
     {inputValue?<button type="button" className="map-unified-search-clear" onClick={clearSearch} aria-label="Clear search" title="Clear search">×</button>:null}
@@ -84,7 +84,7 @@ function ProductAwareMap(props:Props){
     </button>
    </div>
    {loading?<span aria-label="Searching products" title="Searching products" style={{fontSize:12,whiteSpace:'nowrap'}}>…</span>:error?<span aria-label="Product search unavailable" title={error} style={{fontSize:12,whiteSpace:'nowrap'}}>!</span>:null}
-  </div>,toolbar):null;
+  </div>;
  const matchCard=locationCard&&selectedMatch?createPortal(<div className="map-location-product-matches" style={{marginTop:12,padding:'10px 12px',borderRadius:10,background:'rgba(72,160,91,.12)',border:'1px solid rgba(103,214,110,.28)'}}>
    <strong style={{display:'block',marginBottom:6}}>🌿 {exactProductId?'THIS PRODUCT':'PRODUCT MATCHES'}</strong>
    {selectedMatch.matches.slice(0,4).map(match=><div key={match.menuItemId} style={{padding:'6px 0',borderTop:'1px solid rgba(255,255,255,.08)'}}>
@@ -95,6 +95,7 @@ function ProductAwareMap(props:Props){
   </div>,locationCard):null;
 
  return <div ref={rootRef} style={{position:'relative',width:'100%',height:'100%'}}>
+   <div className="map-unified-search-host">{searchControl}</div>
    <MapLibreGuessMap {...props} locations={combinedLocations} mappedTotal={unifiedFilterActive?combinedLocations.length:props.mappedTotal} enabledTotal={unifiedFilterActive?combinedLocations.filter(item=>item.enabled).length:props.enabledTotal} countriesTotal={unifiedFilterActive?productCountries:props.countriesTotal}/>
    {searchControl}
    {matchCard}
