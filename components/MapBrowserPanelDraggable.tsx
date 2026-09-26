@@ -49,22 +49,6 @@ export default function MapBrowserPanelDraggable(){
       dragPanel.classList.add('map-browser-panel-user-positioned');
       event.preventDefault();
     };
-    const pinPanelBeforeToggle=(event:MouseEvent)=>{
-      if(window.innerWidth<=650)return;
-      const target=event.target as HTMLElement|null;
-      if(!target?.closest('.map-browser-state-head'))return;
-      const panel=target.closest<HTMLElement>('.map-first-home .map-browser-panel');
-      const stage=panel?.closest<HTMLElement>('.home-map-stage');
-      if(!panel||!stage)return;
-      const panelRect=panel.getBoundingClientRect(),stageRect=stage.getBoundingClientRect();
-      panel.style.setProperty('left',`${panelRect.left-stageRect.left}px`,'important');
-      panel.style.setProperty('top',`${panelRect.top-stageRect.top}px`,'important');
-      panel.style.setProperty('right','auto','important');
-      panel.style.setProperty('bottom','auto','important');
-      panel.style.setProperty('transform','none','important');
-      panel.classList.add('map-browser-panel-user-positioned');
-    };
-
     const onPointerDown=(event:PointerEvent)=>{
       if(window.innerWidth<=650||event.button!==0)return;
       const target=event.target as HTMLElement|null;
@@ -91,14 +75,12 @@ export default function MapBrowserPanelDraggable(){
 
 
     document.addEventListener('pointerdown',onPointerDown);
-    document.addEventListener('click',pinPanelBeforeToggle,{capture:true});
     const observer=new MutationObserver(decorate);
     observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','data-location-id','data-location-kind']});
     decorate();
 
     return()=>{
       document.removeEventListener('pointerdown',onPointerDown);
-      document.removeEventListener('click',pinPanelBeforeToggle,{capture:true});
       stopDrag();
       observer.disconnect();
     };
