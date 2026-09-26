@@ -125,7 +125,8 @@
 .map-first-home .map-browser-panel.map-browser-panel-centered{
   left:50%!important;
   right:auto!important;
-  bottom:28px!important;
+  top:86px!important;
+  bottom:auto!important;
   transform:translateX(-50%)!important;
 }
 .map-first-home .map-browser-panel.map-browser-panel-minimized{
