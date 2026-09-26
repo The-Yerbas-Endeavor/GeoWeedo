@@ -33,10 +33,24 @@
   height:42px!important;
   box-sizing:border-box!important;
   padding:0 48px 0 14px!important;
+  border:1px solid rgba(126,217,87,.34)!important;
   border-radius:22px!important;
+  background:rgba(10,18,13,.97)!important;
+  color:#f4f7f4!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+  caret-color:#7ed957!important;
   pointer-events:auto!important;
   user-select:text!important;
   cursor:text!important;
+}
+.map-first-home .map-unified-search-host .map-unified-search-input::placeholder{
+  color:rgba(226,238,228,.68)!important;
+  opacity:1!important;
+}
+.map-first-home .map-unified-search-host .map-unified-search-input:focus{
+  outline:none!important;
+  border-color:rgba(126,217,87,.82)!important;
+  box-shadow:0 0 0 3px rgba(126,217,87,.13),0 8px 24px rgba(0,0,0,.32)!important;
 }
 
 .map-first-home .map-unified-search-host .map-unified-search-shell:has(.map-unified-search-clear) .map-unified-search-input{
@@ -56,16 +70,28 @@
   min-width:34px!important;
   padding:0!important;
   margin:0!important;
-  border:1px solid rgba(255,255,255,.14)!important;
+  border:1px solid rgba(184,255,151,.92)!important;
   border-radius:50%!important;
-  background:rgba(24,33,30,.92)!important;
+  background:#7ed957!important;
+  color:#071108!important;
+  box-shadow:0 2px 10px rgba(0,0,0,.32),0 0 0 1px rgba(126,217,87,.12)!important;
   cursor:pointer!important;
+}
+.map-first-home .map-unified-search-host .map-unified-search-scanner:hover{
+  background:#91e66f!important;
+  border-color:#d8ffc7!important;
+}
+.map-first-home .map-unified-search-host .map-unified-search-scanner:focus-visible{
+  outline:2px solid #f4f7f4!important;
+  outline-offset:2px!important;
 }
 
 .map-first-home .map-unified-search-host .map-unified-search-scanner svg{
   display:block!important;
-  width:18px!important;
-  height:18px!important;
+  width:20px!important;
+  height:20px!important;
+  color:#071108!important;
+  filter:none!important;
   pointer-events:none;
 }
 
@@ -79,7 +105,10 @@
   height:30px!important;
   margin:0!important;
   padding:0!important;
+  border:1px solid rgba(255,255,255,.18)!important;
   border-radius:50%!important;
+  background:rgba(28,37,32,.96)!important;
+  color:#f4f7f4!important;
 }
 
 @media(max-width:650px){
