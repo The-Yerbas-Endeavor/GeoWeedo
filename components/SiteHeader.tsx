@@ -1,4 +1,6 @@
-export default function SiteHeader() {
+'use client';
+
+ export default function SiteHeader() {
   const links = [
     ['/how-to-play', 'How to play'],
     ['/leaderboard', 'Leaderboard'],

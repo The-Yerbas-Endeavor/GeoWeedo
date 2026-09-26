@@ -65,7 +65,9 @@ export function getWeedoFactsReviewMatchPreview(submission: ReviewSubmission) {
         batchNumber: row.batch_number,
         uid: row.uid,
         coaNumber: row.coa_number,
-        verified: Boolean(row.verified),
+        verified: String(row.evidence_status || '').toLowerCase() === 'verified',
+        evidenceStatus: row.evidence_status || (row.verified ? 'source_backed' : 'unverified'),
+        evidenceReason: row.evidence_reason || null,
         sourceType: row.source_type,
         reasons: [reason],
       });

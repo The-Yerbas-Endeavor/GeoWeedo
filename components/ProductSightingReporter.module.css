@@ -20,3 +20,29 @@
 .error{border:1px solid rgba(233,106,106,.25);background:rgba(233,106,106,.06);color:#ffc4c4!important}
 .error a{color:#fff}.success{border:1px solid rgba(103,214,110,.23);background:rgba(103,214,110,.06);color:#a7efac!important}
 @media(max-width:640px){.price{max-width:none}.selected{align-items:flex-start}}
+
+/* Light Facts-card treatment: preserve the dark version elsewhere, but make
+   the reporter fully readable on the white Nutrition/Facts surface. */
+:global(.weedoFactsCard) .shell{border-color:#b9d8bf;background:#f5faf6}
+:global(.weedoFactsCard) .shell summary{color:#1d6b34}
+:global(.weedoFactsCard) .shell form>p{color:#46564b}
+:global(.weedoFactsCard) .search label,
+:global(.weedoFactsCard) .price{color:#34443a}
+:global(.weedoFactsCard) .search input,
+:global(.weedoFactsCard) .price input{border-color:#8f9c92;background:#fff;color:#111}
+:global(.weedoFactsCard) .search input::placeholder,
+:global(.weedoFactsCard) .price input::placeholder{color:#647168;opacity:1}
+:global(.weedoFactsCard) .results{border-color:#9dac9f;background:#fff;box-shadow:0 12px 28px rgba(0,0,0,.16)}
+:global(.weedoFactsCard) .results button{border-bottom-color:#d7e0d9;color:#172019}
+:global(.weedoFactsCard) .results button:hover{background:#edf7ef}
+:global(.weedoFactsCard) .results span{color:#536158}
+:global(.weedoFactsCard) .selected{border-color:#a9cdb0;background:#f0f7f1;color:#172019}
+:global(.weedoFactsCard) .selected span{color:#536158}
+:global(.weedoFactsCard) .selected button{color:#1d6b34}
+:global(.weedoFactsCard) .price span{color:#536158}
+:global(.weedoFactsCard) .save{background:#43b85a;color:#071008}
+:global(.weedoFactsCard) .success{border-color:#9bc9a4;background:#eef8f0;color:#1d5f30!important}
+
+.location{display:block;margin:7px 0 8px;padding:8px 11px;border:1px solid #34563c;border-radius:8px;background:#15231a;color:#83df8b;font-weight:800;cursor:pointer}
+.location:disabled{opacity:.55;cursor:wait}
+:global(.weedoFactsCard) .location{border-color:#78a883;background:#e9f6eb;color:#185f2d}

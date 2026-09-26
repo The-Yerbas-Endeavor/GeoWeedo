@@ -8,7 +8,7 @@ export type VerifiedProductDatabaseWrite = {
   productId: string;
   batchId: string;
   verified: true;
-  sourceType: 'lab';
+  sourceType: string;
   analyteCount: number;
   coaSourceCount: number;
   productName: string;
@@ -22,7 +22,7 @@ export type VerifiedProductDatabaseWrite = {
 /**
  * Verified QR/COA adapters write through their source-specific ingestion layer.
  * This function is the shared postcondition: never report a verified scan as
- * successful unless the canonical product, verified lab batch, and chemistry
+ * successful unless the canonical product, independently verified batch, and chemistry
  * rows can be read back from the product database.
  */
 export function confirmVerifiedProductDatabaseWrite(
@@ -47,8 +47,10 @@ export function confirmVerifiedProductDatabaseWrite(
       b.overall_status,
       b.source_type,
       b.verified,
+      b.evidence_status,
       (SELECT COUNT(*) FROM cannabis_analytes a WHERE a.batch_id=b.id) AS analyte_count,
-      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1) AS coa_source_count
+      (SELECT COUNT(*) FROM cannabis_coa_sources s WHERE s.batch_id=b.id AND s.verified=1 AND s.evidence_status='verified') AS coa_source_count,
+      (SELECT COUNT(*) FROM cannabis_batch_identifiers i WHERE i.batch_id=b.id AND i.verified=1) AS verified_identifier_count
     FROM cannabis_products p
     JOIN cannabis_batches b ON b.product_id=p.id
     WHERE p.id=? AND b.id=?
@@ -56,8 +58,12 @@ export function confirmVerifiedProductDatabaseWrite(
   `).get(productId, batchId) as any;
 
   if (!row) throw new Error('Verified COA product database write could not be read back.');
-  if (Number(row.verified) !== 1 || String(row.source_type || '').toLowerCase() !== 'lab') {
-    throw new Error('Verified COA batch was not promoted to verified lab evidence.');
+  if (Number(row.verified) !== 1 || String(row.evidence_status || '').toLowerCase() !== 'verified') {
+    throw new Error('Verified COA batch was not promoted to independently verified evidence.');
+  }
+  const verifiedIdentifierCount = Number(row.verified_identifier_count || 0);
+  if (verifiedIdentifierCount < 1) {
+    throw new Error('Verified COA did not persist a verified batch identifier.');
   }
   const analyteCount = Number(row.analyte_count || 0);
   if (analyteCount < 1) {
@@ -73,7 +79,7 @@ export function confirmVerifiedProductDatabaseWrite(
     productId: String(row.product_id),
     batchId: String(row.batch_id),
     verified: true,
-    sourceType: 'lab',
+    sourceType: String(row.source_type || 'verified_coa'),
     analyteCount,
     coaSourceCount,
     productName: String(row.product_name),

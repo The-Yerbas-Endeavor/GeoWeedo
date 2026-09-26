@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import styles from './AdminDatabaseHealth.module.css';
 
 type Health={
@@ -34,7 +34,7 @@ function age(value:string){
 export default function AdminDatabaseHealth(){
   const[data,setData]=useState<Health|null>(null);
   const[error,setError]=useState('');
-  const[loading,setLoading]=useState(true);
+  const[loading,setLoading]=useState(false);
 
   const load=async(force=false)=>{
     setLoading(true);
@@ -51,11 +51,13 @@ export default function AdminDatabaseHealth(){
     }
   };
 
-  useEffect(()=>{void load(false);},[]);
-
-  if(!data&&loading)return <section className={styles.card}><p className={styles.loading}>Checking SQLite health…</p></section>;
-  if(!data&&error)return <section className={styles.card}><div className={styles.error}>{error}</div></section>;
-  if(!data)return null;
+  if(!data)return <section className={styles.card} aria-labelledby="database-health-title">
+    <div className={styles.head}>
+      <div><span className={styles.eyebrow}>SQLITE</span><h2 id="database-health-title">Database Health</h2><p>Health checks are manual so the Admin dashboard stays fast.</p></div>
+      <button type="button" onClick={()=>void load(false)} disabled={loading}>{loading?'Checking…':'Check database health'}</button>
+    </div>
+    {error?<div className={styles.error}>{error}</div>:null}
+  </section>;
 
   const walRatio=data.database.bytes>0?data.database.walBytes/data.database.bytes:0;
   const walAttention=walRatio>0.5;

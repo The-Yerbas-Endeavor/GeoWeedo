@@ -69,6 +69,45 @@ function deletePlaceholderDispensaries(ids:string[],adminId:string){
  }catch(error){try{db.exec('ROLLBACK');}catch{}throw error;}
  return {requested:unique.length,deleted,skipped};
 }
+function deleteUnusedDispensary(id:string,adminId:string){
+ const db=getDatabase();
+ const row=db.prepare('SELECT id,name,active,gameplay_enabled FROM dispensaries WHERE id=? LIMIT 1').get(id) as {id:string;name:string;active:number;gameplay_enabled:number}|undefined;
+ if(!row)throw new Error('Dispensary not found.');
+ if(Number(row.active)!==0||Number(row.gameplay_enabled)!==0)throw new Error('Hide this dispensary from browse and disable gameplay before deleting it.');
+ const blockers:Array<[string,string,string]>=[
+  ['game_rounds','dispensary_id','game history'],
+  ['daily_challenge_rounds','dispensary_id','daily challenge history'],
+  ['dispensary_menus','dispensary_id','menu data'],
+  ['dispensary_reviews','location_id','community reviews'],
+  ['dispensary_owner_assignments','location_id','owner assignment'],
+  ['dispensary_owner_claims','location_id','owner claim'],
+  ['dispensary_user_owner_assignments','location_id','verified owner assignment'],
+  ['sponsorships','dispensary_id','sponsorship history'],
+  ['sponsor_business_locations','dispensary_id','sponsor business link'],
+  ['sponsor_entitlements','dispensary_id','featured entitlement'],
+  ['sponsor_events','dispensary_id','sponsor analytics'],
+  ['sponsor_requests','dispensary_id','sponsor request'],
+ ];
+ const protectedBy=blockers.find(([table,column])=>tableCount(db,table,column,id)>0);
+ if(protectedBy)throw new Error('Cannot delete: this record is protected by '+protectedBy[2]+'. Keep it hidden instead.');
+ const cleanup:Array<[string,string]>= [
+  ['dispensary_profiles','location_id'],
+  ['dispensary_profile_verifications','location_id'],
+  ['dispensary_license_types','location_id'],
+  ['google_places_enrichment','location_id'],
+  ['dispensary_batch_items','location_id'],
+ ];
+ db.exec('BEGIN IMMEDIATE');
+ try{
+  for(const [table,column] of cleanup)if(tableExists(db,table))db.prepare(`DELETE FROM ${table} WHERE ${column}=?`).run(id);
+  const result=db.prepare('DELETE FROM dispensaries WHERE id=? AND active=0 AND gameplay_enabled=0').run(id);
+  if(!Number(result.changes))throw new Error('Dispensary changed before deletion.');
+  if(tableExists(db,'audit_log'))db.prepare(`INSERT INTO audit_log(id,actor_type,actor_id,action,entity_type,entity_id,metadata_json,created_at)
+    VALUES (?,'admin',?,'dispensary.unused_deleted','dispensary',?,?,?)`).run(`audit-${randomUUID()}`,adminId,id,JSON.stringify({name:row.name}),new Date().toISOString());
+  db.exec('COMMIT');
+ }catch(error){try{db.exec('ROLLBACK');}catch{}throw error;}
+ return {id,name:row.name};
+}
 function ensureLicenseSchema(){getDatabase().exec(`CREATE TABLE IF NOT EXISTS dispensary_license_types(location_id TEXT NOT NULL,license_type TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(location_id,license_type));CREATE INDEX IF NOT EXISTS dispensary_license_types_location_idx ON dispensary_license_types(location_id);`);}
 function licenseTypesFor(id:string){ensureLicenseSchema();return (getDatabase().prepare(`SELECT license_type FROM dispensary_license_types WHERE location_id=? ORDER BY license_type`).all(id) as {license_type:string}[]).map(r=>r.license_type);}
 function automatedEnrichmentIds(){try{const db=getDatabase();const table=db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='dispensary_batch_items'`).get();if(!table)return new Set<string>();const rows=db.prepare(`SELECT DISTINCT location_id FROM dispensary_batch_items WHERE record_type='candidate' AND status='applied'`).all() as {location_id:string}[];return new Set(rows.map(row=>String(row.location_id)));}catch{return new Set<string>();}}
@@ -106,6 +145,10 @@ const seenCandidateKeys=new Set<string>();
 const visibleCandidates=candidates.filter(row=>{if(String(row.status)==='rejected')return true;const keys=strongLocationIdentityKeys(identity(row));if(keys.some(key=>approvedKeys.has(key)||seenCandidateKeys.has(key)))return false;for(const key of keys)seenCandidateKeys.add(key);return true;});
 return NextResponse.json({records:[...approved,...visibleCandidates].map(row=>decorate(row,enriched)),suppressedDuplicateCandidates:candidates.length-visibleCandidates.length});}
 export async function POST(request:NextRequest){const admin=getAdminFromRequest(request);if(!admin)return NextResponse.json({error:'Unauthorized.'},{status:401});const body=await request.json().catch(()=>null);const action=String(body?.action||'');if(action==='lookup-coordinate-locality'){const latitude=num(body?.latitude),longitude=num(body?.longitude);if(latitude==null||longitude==null||latitude<-90||latitude>90||longitude<-180||longitude>180)return NextResponse.json({error:'Valid coordinates are required.'},{status:400});try{const location=await reverseGeocodeCoordinates(latitude,longitude);if(!location)return NextResponse.json({error:'No city or postal code could be resolved for those coordinates.'},{status:404});return NextResponse.json({ok:true,location});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Reverse geocoding failed.'},{status:502});}}if(!['bulk-profile-audit','set-gameplay-bulk','delete-placeholder-dispensaries'].includes(action)&&!body?.id)return NextResponse.json({error:'id is required.'},{status:400});if(action==='mark-profile-verified'){const days=Math.min(365,Math.max(7,Number(body.reauditDays)||90));return NextResponse.json({ok:true,verification:markProfileVerified(String(body.id),`admin:${String(admin.id)}`,String(body.source||'manual'),String(body.notes||''),days)});}
+if(action==='delete-unused-dispensary'){
+ try{return NextResponse.json({ok:true,deleted:deleteUnusedDispensary(String(body.id),String(admin.id))});}
+ catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Unused dispensary deletion failed.'},{status:400});}
+}
 if(action==='delete-placeholder-dispensaries'){
  const ids=Array.isArray(body?.ids)?body.ids.map((value:unknown)=>String(value)).filter(Boolean):(body?.id?[String(body.id)]:[]);
  if(!ids.length)return NextResponse.json({error:'At least one dispensary id is required.'},{status:400});

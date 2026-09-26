@@ -77,6 +77,7 @@ function productOnly(product: any): WeedoFactsRecord {
     productType: product.product_type,
     netContents: product.net_contents,
     matchLevel: 'product_only',
+    evidenceStatus: 'unverified',
     batchNumber: null,
     uid: null,
     coaNumber: null,
@@ -105,7 +106,8 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
     productName: product.product_name,
     productType: product.product_type,
     netContents: product.net_contents,
-    matchLevel: batch.verified ? 'exact_batch' : 'community_unverified',
+    matchLevel: String(batch.evidence_status || '').toLowerCase() === 'verified' ? 'exact_batch' : String(batch.evidence_status || '').toLowerCase() === 'source_backed' ? 'source_backed' : 'community_unverified',
+    evidenceStatus: String(batch.evidence_status || '').toLowerCase() === 'verified' ? 'verified' : String(batch.evidence_status || '').toLowerCase() === 'source_backed' ? 'source_backed' : String(batch.evidence_status || '').toLowerCase() === 'review' ? 'review' : 'unverified',
     batchNumber: batch.batch_number,
     uid: batch.uid,
     coaNumber: batch.coa_number,
@@ -139,7 +141,7 @@ function recordFromBatch(product: any, batch: any): WeedoFactsRecord {
       type: batch.source_type,
       name: batch.source_name,
       url: batch.source_url || batch.coa_url,
-      verified: Boolean(batch.verified),
+      verified: String(batch.evidence_status || '').toLowerCase() === 'verified',
     },
   };
 }
@@ -199,7 +201,7 @@ const LISTING_SELECT = `
 export function listWeedoFactsListings(): WeedoFactsListingSummary[] {
   const db = ensureCatalogSchema();
   const rows = db.prepare(`${LISTING_SELECT}
-    WHERE b.verified = 1
+    WHERE b.verified = 1 AND b.evidence_status = 'verified' AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1) AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
     ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
              p.product_name COLLATE NOCASE,
              p.brand_name COLLATE NOCASE
@@ -231,7 +233,7 @@ function distinctValues(db: any, column: string) {
     SELECT DISTINCT ${column} AS value
     FROM cannabis_batches b
     JOIN cannabis_products p ON p.id = b.product_id
-    WHERE b.verified = 1 AND ${column} IS NOT NULL AND TRIM(${column}) <> ''
+    WHERE b.verified = 1 AND b.evidence_status = 'verified' AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1) AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified') AND ${column} IS NOT NULL AND TRIM(${column}) <> ''
     ORDER BY value COLLATE NOCASE
   `).all() as any[];
   const values = rows.map(row => String(row.value));
@@ -254,7 +256,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
   const type = String(filters.type || '').trim();
   const pageSize = Math.max(10, Math.min(100, Math.floor(Number(filters.pageSize || 50)) || 50));
 
-  const conditions = ['b.verified = 1'];
+  const conditions = ["b.verified = 1", "b.evidence_status = 'verified'", "EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)", "EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')"];
   const params: Array<string | number> = [];
   if (brand) { conditions.push('p.brand_name = ?'); params.push(brand); }
   if (business) { conditions.push('b.producer_name = ? COLLATE NOCASE'); params.push(business); }
@@ -284,7 +286,7 @@ export function getProductChemistryCatalog(filters: ProductChemistryCatalogFilte
       MAX(CASE WHEN b.source_name = 'Cannlytics' THEN 1 ELSE 0 END) AS has_cannlytics
     FROM cannabis_batches b
     JOIN cannabis_products p ON p.id = b.product_id
-    WHERE b.verified = 1
+    WHERE b.verified = 1 AND b.evidence_status = 'verified' AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1) AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
   `).get() as any;
 
   const matched = db.prepare(`
@@ -348,19 +350,44 @@ export function getWeedoFactsProductListing(productId: string, requestedBatchId?
   let batch: any = null;
   if (requestedBatchId) {
     batch = db.prepare(`
-      SELECT *
-      FROM cannabis_batches
-      WHERE id = ? AND product_id = ? AND verified = 1
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.id = ? AND b.product_id = ?
+        AND b.verified = 1 AND b.evidence_status = 'verified'
+        AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)
+        AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
       LIMIT 1
     `).get(requestedBatchId, productId) as any;
   }
 
   if (!batch) {
     batch = db.prepare(`
-      SELECT *
-      FROM cannabis_batches
-      WHERE product_id = ? AND verified = 1
-      ORDER BY COALESCE(tested_at, updated_at, created_at) DESC, created_at DESC
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.product_id = ?
+        AND b.verified = 1 AND b.evidence_status = 'verified'
+        AND EXISTS (SELECT 1 FROM cannabis_batch_identifiers vi WHERE vi.batch_id=b.id AND vi.verified=1)
+        AND EXISTS (SELECT 1 FROM cannabis_coa_sources vs WHERE vs.batch_id=b.id AND vs.verified=1 AND vs.evidence_status='verified')
+      ORDER BY COALESCE(b.tested_at, b.updated_at, b.created_at) DESC, b.created_at DESC
+      LIMIT 1
+    `).get(productId) as any;
+  }
+
+  // Keep the Nutrition/Facts experience useful without weakening the Verified
+  // designation. If no strict Verified batch exists, show the newest batch that
+  // actually has chemistry as source-backed evidence. The record renderer will
+  // label it from evidence_status rather than promoting it to Verified.
+  if (!batch) {
+    batch = db.prepare(`
+      SELECT b.*
+      FROM cannabis_batches b
+      WHERE b.product_id = ?
+        AND b.evidence_status IN ('source_backed', 'review', 'unverified')
+        AND EXISTS (SELECT 1 FROM cannabis_analytes a WHERE a.batch_id=b.id)
+      ORDER BY
+        CASE b.evidence_status WHEN 'source_backed' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,
+        COALESCE(b.tested_at, b.updated_at, b.created_at) DESC,
+        b.created_at DESC
       LIMIT 1
     `).get(productId) as any;
   }

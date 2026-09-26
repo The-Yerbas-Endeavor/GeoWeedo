@@ -30,7 +30,9 @@ export function enrichScLabsBatchFromCoa(pdf: ScLabsCoaPdfData, expectedSampleId
       received_at=COALESCE(?,received_at),
       tested_at=COALESCE(?,tested_at),
       overall_status=COALESCE(?,overall_status),
-      verified=1,
+      verified=CASE WHEN evidence_status='verified' THEN verified ELSE 0 END,
+      evidence_status=CASE WHEN evidence_status='verified' THEN evidence_status ELSE 'review' END,
+      evidence_reason=CASE WHEN evidence_status='verified' THEN evidence_reason ELSE 'uploaded_lab_document' END,
       updated_at=?
     WHERE id=?`).run(
       pdf.batchNumber || null,
@@ -44,7 +46,7 @@ export function enrichScLabsBatchFromCoa(pdf: ScLabsCoaPdfData, expectedSampleId
     );
 
   const identifier = db.prepare(`INSERT OR IGNORE INTO cannabis_batch_identifiers
-    (id,batch_id,identifier_type,identifier_value,verified,created_at) VALUES (?,?,?,?,1,?)`);
+    (id,batch_id,identifier_type,identifier_value,verified,created_at) VALUES (?,?,?,?,0,?)`);
   if (pdf.batchNumber) identifier.run(`cbi-${randomUUID()}`, batch.id, 'batch', pdf.batchNumber, now);
   if (pdf.uid) identifier.run(`cbi-${randomUUID()}`, batch.id, 'uid', pdf.uid, now);
 
@@ -60,8 +62,8 @@ export function enrichScLabsBatchFromCoa(pdf: ScLabsCoaPdfData, expectedSampleId
   const alreadyStored = db.prepare(`SELECT id FROM cannabis_coa_sources WHERE batch_id=? AND source_name='SC Labs' AND external_id=? LIMIT 1`).get(batch.id, `pdf:${pdf.sha256}`) as any;
   if (!alreadyStored) {
     db.prepare(`INSERT INTO cannabis_coa_sources
-      (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at)
-      VALUES (?,?,'lab_coa_pdf','SC Labs',NULL,?,?, 'sclabs-coa-pdf-v1',?,1,?)`).run(
+      (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,created_at)
+      VALUES (?,?,'lab_coa_pdf','SC Labs',NULL,?,?, 'sclabs-coa-pdf-v1',?,0,'review','uploaded_lab_document',?)`).run(
         `coa-${randomUUID()}`,
         batch.id,
         `pdf:${pdf.sha256}`,

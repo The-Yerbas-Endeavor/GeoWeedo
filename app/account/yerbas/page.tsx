@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import SiteHeader from '@/components/SiteHeader';
 import AccountWorkspaceTabs from '@/components/AccountWorkspaceTabs';
 
 type Summary={
@@ -28,8 +27,7 @@ export default function YerbasAccountPage(){
   async function requestWithdrawal(){if(!confirm(`Request withdrawal of ${withdrawAmount} YERB to ${withdrawAddress}?`))return;setBusy(true);try{const r=await fetch('/api/account/withdrawals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destinationAddress:withdrawAddress,amountYerb:Number(withdrawAmount)})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Withdrawal request failed.');setWithdrawAmount('');setWithdrawAddress('');await loadSummary();if(d.status==='sent'&&d.txid)setStatus(`Withdrawal sent: ${Number(d.amountYerb||0).toFixed(8)} YERB · txid ${d.txid}`);else if(d.status==='approved'&&d.autoApproved)setStatus(`Withdrawal ${d.id} was auto-approved but could not be sent automatically. It is ready for Admin retry.`);else if(d.autoApproved)setStatus(`Withdrawal ${d.id} was automatically approved.`);else setStatus(`Withdrawal ${d.id} is awaiting administrator review.`);}catch(e){setStatus(e instanceof Error?e.message:'Withdrawal request failed.');}finally{setBusy(false);}}
 
   return <main className="info-shell">
-    <SiteHeader/>
-    <AccountWorkspaceTabs/>
+<AccountWorkspaceTabs/>
     <section className="account-card" style={{marginTop:28}}>
       <div className="account-status">{status}</div>
       {!summary?<>

@@ -53,6 +53,7 @@ import NativeAppBridge from '@/components/NativeAppBridge';
 import GlobalScannerCameraAssist from '@/components/GlobalScannerCameraAssist';
 import NativeProductScannerOverlay from '@/components/NativeProductScannerOverlay';
 import GlobalPhotoBarcodeScanner from '@/components/GlobalPhotoBarcodeScanner';
+import SiteHeader from '@/components/SiteHeader';
 
 export const metadata = {
   metadataBase: new URL('https://geoweedo.com'),
@@ -87,7 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preload" href="/assets/geoweedo/geoweedo-map-marker.png" as="image" type="image/png" />
       </head>
-      <body><NativeAppBridge/><NativeProductScannerOverlay/><GlobalPhotoBarcodeScanner/><GlobalScannerCameraAssist/><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
+      <body><SiteHeader/><NativeAppBridge/><NativeProductScannerOverlay/><GlobalPhotoBarcodeScanner/><GlobalScannerCameraAssist/><MapLibreWorkerProvider>{children}</MapLibreWorkerProvider><DailyWeedoEnhancer/><HuntLeaderboardEnhancer/><MapOpenNowFilter/><GameSponsorPlacement/><SponsorAnalyticsTracker/><MapLocationCardLogoEnhancer/><MapBrowserPanelDraggable/><HomeMapUiCleanup/><PendingGameRewardClaim/><AdminGoogleApiStatus/><AdminAmenitiesCheckboxes/><AdminSponsorshipDurationFix/><HomeLocationSelectionCardMinimizer/><DispensaryBrowseTierOrder/><MobileGuessMapController/><StateCandidateStreetViewVerifier/><GeolocationReliability/><AnalyticsTracker/><ProductAnalyticsEvents/><HomeMapLocationDeepLink/><DispensaryCardEnhancer/><FloatingStreetViewEnhancer/><LoadedRegionCoveragePortal/><BrowseCountryPartition/></body>
     </html>
   );
 }

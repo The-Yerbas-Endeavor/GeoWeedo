@@ -1,6 +1,8 @@
 import { getDatabase, getDatabasePath } from '../lib/sqlite.ts';
+import { ensureWeedoFactsSchema } from '../lib/weedoFacts.ts';
 
 const db = getDatabase();
+ensureWeedoFactsSchema();
 const now = new Date().toISOString();
 
 db.exec(`

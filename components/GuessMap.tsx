@@ -21,7 +21,7 @@ function textMatchesLocation(item:MapLocation,query:string){return `${item.name}
 
 function ProductAwareMap(props:Props){
  const rootRef=useRef<HTMLDivElement|null>(null);
- const[toolbar,setToolbar]=useState<HTMLElement|null>(null),[legacySearchInput,setLegacySearchInput]=useState<HTMLInputElement|null>(null),[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
+ const[locationCard,setLocationCard]=useState<HTMLElement|null>(null),[selectedLocationId,setSelectedLocationId]=useState('');
  const[query,setQuery]=useState(''),[debouncedQuery,setDebouncedQuery]=useState(''),[resultQuery,setResultQuery]=useState('');
  const[exactProductId,setExactProductId]=useState(''),[exactProductLabel,setExactProductLabel]=useState('');
  const[results,setResults]=useState<ProductDispensary[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState('');
@@ -29,24 +29,27 @@ function ProductAwareMap(props:Props){
  useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=String(params.get('product')||params.get('productId')||'').trim();if(id){setExactProductId(id);document.body.classList.add('geoweedo-findo-active',SEARCH_ACTIVE_CLASS);window.setTimeout(()=>document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click(),0);}},[]);
  useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(query.trim()),260);return()=>window.clearTimeout(timer);},[query]);
  useEffect(()=>{
+  const q=debouncedQuery.trim();
+  if(!ZIP_QUERY.test(q)){window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));return;}
+  const zip=q.slice(0,5);let cancelled=false;
+  fetch(`https://api.zippopotam.us/us/${encodeURIComponent(zip)}`,{cache:'no-store'})
+   .then(async response=>{if(!response.ok)throw new Error('ZIP code not found.');return response.json();})
+   .then(data=>{if(cancelled)return;const place=Array.isArray(data?.places)?data.places[0]:null;const lat=Number(place?.latitude),lng=Number(place?.longitude);if(!Number.isFinite(lat)||!Number.isFinite(lng))throw new Error('ZIP code not found.');setError('');window.dispatchEvent(new CustomEvent('geoweedo:zip-radius',{detail:{zip,lat,lng,radiusMiles:25}}));})
+   .catch(err=>{if(cancelled)return;window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));setError(err instanceof Error?err.message:'ZIP lookup failed.');});
+  return()=>{cancelled=true;};
+ },[debouncedQuery]);
+ useEffect(()=>{
   const root=rootRef.current;if(!root)return;
   const sync=()=>{
-   const nextToolbar=root.querySelector<HTMLElement>('.map-browser-tools');
-   const nextLegacy=nextToolbar?.querySelector<HTMLInputElement>('input:not(.map-unified-search-input)')||null;
-   if(nextLegacy){nextLegacy.style.display='none';nextLegacy.setAttribute('aria-hidden','true');nextLegacy.tabIndex=-1;nextLegacy.dataset.unifiedSearchInternal='1';}
    const nextCard=root.querySelector<HTMLElement>('.map-location-card');
-   setToolbar(nextToolbar);setLegacySearchInput(nextLegacy);setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');
+   setLocationCard(nextCard);setSelectedLocationId(nextCard?.dataset.locationId||'');
   };
   sync();const observer=new MutationObserver(sync);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['data-location-id']});return()=>observer.disconnect();
  },[]);
  useEffect(()=>{
-  if(!legacySearchInput)return;
-  const value=query.trim();
-  if(ZIP_QUERY.test(value)){if(legacySearchInput.value!==value)setNativeInputValue(legacySearchInput,value);}
-  else if(legacySearchInput.value)setNativeInputValue(legacySearchInput,'');
-  const active=Boolean(value||exactProductId);document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
+  const active=Boolean(query.trim()||exactProductId);document.body.classList.toggle(SEARCH_ACTIVE_CLASS,active);
   if(active)document.querySelector<HTMLButtonElement>('.map-first-home .home-promo-close')?.click();
- },[query,exactProductId,legacySearchInput]);
+ },[query,exactProductId]);
  useEffect(()=>{
   const exactId=exactProductId.trim(),q=debouncedQuery.trim(),isZip=ZIP_QUERY.test(q);
   if(!exactId&&(q.length<2||isZip)){setResults([]);setResultQuery('');setLoading(false);setError('');return;}
@@ -68,23 +71,23 @@ function ProductAwareMap(props:Props){
   const originalById=new Map(originals.map(item=>[String(item.id),item]));
   const combined=new Map<string,MapLocation>();
   if(!exactProductId&&activeTextQuery){for(const item of originals){if(textMatchesLocation(item,activeTextQuery))combined.set(String(item.id),item);}}
-  for(const result of results){const original=originalById.get(String(result.id));const item=original||({id:result.id,name:result.name,lat:Number(result.latitude),lng:Number(result.longitude),city:result.city||'',region:result.region||'',country:result.country||'USA',approved:true,enabled:true,imageryReady:false,source:'Dispensary menu'} as MapLocation);if(Number.isFinite(item.lat)&&Number.isFinite(item.lng))combined.set(String(item.id),item);}
+  for(const result of results){const original=originalById.get(String(result.id));const productMatches=result.matches.map(match=>({id:match.menuItemId,productId:match.productId,itemName:match.itemName,brandName:match.brandName,category:match.category,variant:match.variant,packageSize:match.packageSize,priceCents:match.priceCents,currency:match.currency,inventoryStatus:match.inventoryStatus,verified:match.verified,sourceUpdatedAt:match.sourceUpdatedAt,batchNumber:match.batchNumber}));const item:MapLocation=original?{...original,productMatches}:({id:result.id,name:result.name,lat:Number(result.latitude),lng:Number(result.longitude),city:result.city||'',region:result.region||'',country:result.country||'USA',approved:true,enabled:true,imageryReady:false,source:'Product sighting',productMatches} as MapLocation);if(Number.isFinite(item.lat)&&Number.isFinite(item.lng))combined.set(String(item.id),item);}
   return [...combined.values()];
  },[activeTextQuery,exactProductId,props.locations,results,unifiedFilterActive]);
  const productCountries=useMemo(()=>new Set(combinedLocations.map(item=>item.country).filter(Boolean)).size,[combinedLocations]);
  const selectedMatch=resultMap.get(selectedLocationId);
  const inputValue=exactProductId?(exactProductLabel||'Selected GeoWeedo Facts product'):query;
- const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');if(legacySearchInput?.value)setNativeInputValue(legacySearchInput,'');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
- const searchControl=toolbar?createPortal(<div className="map-unified-search" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
+ const clearSearch=()=>{setExactProductId('');setExactProductLabel('');setQuery('');setDebouncedQuery('');setResults([]);setResultQuery('');setError('');document.body.classList.remove(SEARCH_ACTIVE_CLASS);window.dispatchEvent(new CustomEvent('geoweedo:map-search',{detail:{value:''}}));window.dispatchEvent(new CustomEvent('geoweedo:zip-radius-clear'));clearProductParam();};
+ const searchControl=<div className="map-unified-search map-unified-search-owned" data-map-scanner-embedded="1" style={{display:'flex',alignItems:'center',gap:6,position:'relative',minWidth:0,flex:'1 1 300px',maxWidth:420}}>
    <div className="map-unified-search-shell" style={{position:'relative',display:'flex',alignItems:'center',width:'100%',minWidth:0}}>
-    <input className="map-unified-search-input" value={inputValue} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}setQuery(event.target.value);}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180,paddingRight:inputValue?82:48}}/>
+    <input className="map-unified-search-input" value={inputValue} onMouseDown={event=>event.currentTarget.focus()} onChange={event=>{if(exactProductId){setExactProductId('');setExactProductLabel('');clearProductParam();}const value=event.target.value;setQuery(value);window.dispatchEvent(new CustomEvent('geoweedo:map-search',{detail:{value:''}}));}} placeholder="Search dispensary, product, brand or ZIP" aria-label="Search dispensary, product, brand or ZIP" autoComplete="off" style={{width:'100%',minWidth:180,paddingRight:inputValue?82:48}}/>
     {inputValue?<button type="button" className="map-unified-search-clear" onClick={clearSearch} aria-label="Clear search" title="Clear search">×</button>:null}
     <button type="button" className="map-unified-search-scanner" data-geoweedo-map-scanner="1" aria-label="Scan a barcode or QR code" title="Scan barcode or QR code">
      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 3h6v6H3V3Zm2 2v2h2V5H5Zm10-2h6v6h-6V3Zm2 2v2h2V5h-2ZM3 15h6v6H3v-6Zm2 2v2h2v-2H5Zm7-14h2v2h-2V3Zm0 4h2v4h-2V7Zm4 4h2v2h-2v-2Zm4 0h2v4h-2v-4Zm-8 4h2v2h-2v-2Zm4 0h4v2h-2v2h-2v-4Zm-4 4h2v2h-2v-2Zm8 0h2v2h-2v-2Z"/></svg>
     </button>
    </div>
    {loading?<span aria-label="Searching products" title="Searching products" style={{fontSize:12,whiteSpace:'nowrap'}}>…</span>:error?<span aria-label="Product search unavailable" title={error} style={{fontSize:12,whiteSpace:'nowrap'}}>!</span>:null}
-  </div>,toolbar):null;
+  </div>;
  const matchCard=locationCard&&selectedMatch?createPortal(<div className="map-location-product-matches" style={{marginTop:12,padding:'10px 12px',borderRadius:10,background:'rgba(72,160,91,.12)',border:'1px solid rgba(103,214,110,.28)'}}>
    <strong style={{display:'block',marginBottom:6}}>🌿 {exactProductId?'THIS PRODUCT':'PRODUCT MATCHES'}</strong>
    {selectedMatch.matches.slice(0,4).map(match=><div key={match.menuItemId} style={{padding:'6px 0',borderTop:'1px solid rgba(255,255,255,.08)'}}>
@@ -95,8 +98,8 @@ function ProductAwareMap(props:Props){
   </div>,locationCard):null;
 
  return <div ref={rootRef} style={{position:'relative',width:'100%',height:'100%'}}>
+   <div className="map-unified-search-host">{searchControl}</div>
    <MapLibreGuessMap {...props} locations={combinedLocations} mappedTotal={unifiedFilterActive?combinedLocations.length:props.mappedTotal} enabledTotal={unifiedFilterActive?combinedLocations.filter(item=>item.enabled).length:props.enabledTotal} countriesTotal={unifiedFilterActive?productCountries:props.countriesTotal}/>
-   {searchControl}
    {matchCard}
   </div>;
 }
