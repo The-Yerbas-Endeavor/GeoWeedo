@@ -141,7 +141,7 @@ export default function WeedoFactsSourcesPage() {
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const body = await responseJson(response);
       if (!response.ok) throw new Error(body?.error || 'Unable to load data sources.');
-      const nextSources = Array.isArray(body?.sources) ? body.sources : [];
+      const nextSources = Array.isArray(body?.sources) ? body.sources.filter((source: Source) => source.id === 'cannlytics') : [];
       setSources(nextSources);
       hasSources.current = true;
       setError('');
@@ -240,7 +240,7 @@ export default function WeedoFactsSourcesPage() {
         <a href="/admin/weedo-facts" className={styles.back}>← GeoWeedo Facts admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS DATA SOURCES</span>
         <h1>Source updates</h1>
-        <p>Manage GeoWeedo's external product and laboratory data here. Cannlytics Product & Lab Data is the single supported Cannlytics importer; large states run in durable chunks, save checkpoints, and can resume safely.</p>
+        <p>Manage GeoWeedo's Cannlytics product and laboratory data here. Large state imports run in durable chunks, save checkpoints, and can resume safely.</p>
       </div>
       <button type="button" className={styles.refresh} onClick={load}>Refresh status</button>
     </header>
@@ -396,8 +396,8 @@ export default function WeedoFactsSourcesPage() {
     </section>
 
     <section className={styles.evidence}>
-      <h2>Evidence separation</h2>
-      <p><strong>SC Labs</strong> feeds direct public laboratory batch chemistry. <strong>Cannlytics</strong> feeds normalized public laboratory and regulatory results under CC BY 4.0; GeoWeedo preserves the upstream source and does not overwrite stronger direct-lab evidence. <strong>Kannapedia</strong> remains a separate cultivar-genetics source, and its registrant-reported chemistry is never promoted to verified lab-batch evidence.</p>
+      <h2>Cannlytics evidence</h2>
+      <p>Cannlytics feeds normalized public laboratory and regulatory results under CC BY 4.0. GeoWeedo preserves source provenance and does not overwrite stronger direct-lab evidence.</p>
     </section>
   </main>;
 }
