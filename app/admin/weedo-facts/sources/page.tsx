@@ -312,7 +312,15 @@ export default function WeedoFactsSourcesPage() {
                     const diagnostic = diagnostics[selected.code];
                     return <div className={styles.diagnostic}>
                       <div className={styles.diagnosticHead}>
-                        <strong>{diagnostic.diagnosis === 'parser-healthy' ? 'Parser sample looks healthy' : 'No eligible rows found in sample'}</strong>
+                        <strong>{
+                          diagnostic.diagnosis === 'parser-healthy'
+                            ? 'Parser sample looks healthy'
+                            : diagnostic.diagnosis === 'source-missing-product-identity'
+                              ? 'Source does not provide product identity'
+                              : diagnostic.diagnosis === 'product-identity-unresolved'
+                                ? 'Product identity field unresolved'
+                                : 'No eligible rows found in sample'
+                        }</strong>
                         <span>{diagnostic.sampledRows.toLocaleString()} rows sampled</span>
                       </div>
                       <div className={styles.diagnosticMetrics}>
@@ -321,6 +329,7 @@ export default function WeedoFactsSourcesPage() {
                         <div><span>Analytes</span><strong>{diagnostic.rowsWithAnalytes.toLocaleString()}</strong></div>
                         <div><span>Eligible</span><strong>{diagnostic.eligibleRows.toLocaleString()} · {diagnostic.eligiblePercent.toFixed(1)}%</strong></div>
                       </div>
+                      {diagnostic.diagnosis === 'source-missing-product-identity' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture product names from product type, sample IDs, or other weak fields. This state needs a stronger product-identity source before its chemistry can create canonical products.</p> : null}
                       <p>Missing product name: <strong>{diagnostic.missingProductName.toLocaleString()}</strong> · missing identifier: <strong>{diagnostic.missingIdentifier.toLocaleString()}</strong> · missing analytes: <strong>{diagnostic.missingAnalytes.toLocaleString()}</strong> · duplicate eligible keys: <strong>{diagnostic.duplicateEligibleKeys.toLocaleString()}</strong>.</p>
                       <p>Source file: <strong>{diagnostic.sourceFile}</strong>{diagnostic.usedCache ? ' · cached copy' : ' · refreshed copy'}.</p>
                       {diagnostic.examples.length ? <details><summary>Show eligible examples</summary>{diagnostic.examples.map((example,index)=><div className={styles.diagnosticExample} key={example.identifier + '-' + index}><strong>{example.productName}</strong><span>{example.producer || 'Producer not reported'} · {example.identifier} · {example.analytes} analytes</span></div>)}</details> : null}
