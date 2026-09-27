@@ -75,6 +75,28 @@ function stateClass(source: Source) {
   return '';
 }
 
+function regionHealth(region: Region) {
+  if (region.processedRecords === 0 && region.importedRecords > 0) {
+    return { label: 'LEGACY CHECKPOINT', className: styles.regionLegacy, note: 'Tracked records exist, but this import predates the resumable processed-row checkpoint.' };
+  }
+  if (region.progressPercent >= 100 && region.importedRecords === 0 && region.upstreamRecords > 0) {
+    return { label: 'REVIEW', className: styles.regionReview, note: 'The source was traversed but no Cannlytics records are currently tracked. Review this state before treating it as complete.' };
+  }
+  if (region.processedRecords > 0 && region.progressPercent < 100 && region.importedRecords === 0) {
+    return { label: 'REVIEW', className: styles.regionReview, note: 'Checkpoint progress exists but no Cannlytics records are currently tracked.' };
+  }
+  if (region.importedRecords > region.upstreamRecords && region.upstreamRecords > 0) {
+    return { label: 'HISTORICAL > CURRENT', className: styles.regionHistorical, note: 'GeoWeedo retains tracked source history; the current upstream file is smaller than the accumulated tracked set.' };
+  }
+  if (region.progressPercent >= 100) {
+    return { label: 'COMPLETE', className: styles.regionComplete, note: 'The current source file has been traversed to the end.' };
+  }
+  if (region.nextRowOffset > 0 || region.processedRecords > 0) {
+    return { label: 'RESUMABLE', className: styles.regionPartial, note: 'The state is partially processed and can continue from its saved raw-row checkpoint.' };
+  }
+  return { label: 'NOT STARTED', className: styles.regionIdle, note: 'No resumable source-row checkpoint has been recorded yet.' };
+}
+
 export default function WeedoFactsSourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
@@ -221,19 +243,40 @@ export default function WeedoFactsSourcesPage() {
                   </option>)}
                 </select>
               </label>
-              {selected ? <p>
-                {selected.label}: <strong>{selected.importedRecords.toLocaleString()}</strong> records currently tracked in GeoWeedo · <strong>{selected.progressPercent.toFixed(1)}%</strong> checkpoint progress
-                {selected.nextRowOffset > 0 ? <> · resume row <strong>{selected.nextRowOffset.toLocaleString()}</strong></> : null}
-                {' · '}current upstream <strong>{selected.upstreamRecords.toLocaleString()}</strong>
-                {' · '}last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.
-              </p> : <p>Choose one state at a time. GeoWeedo caches the source file, saves progress between chunks, upserts changed records, skips unchanged rows, and preserves stronger direct-lab evidence.</p>}
+              {selected ? (() => {
+                const health = regionHealth(selected);
+                return <div className={styles.regionSummary}>
+                  <div className={styles.regionSummaryHead}>
+                    <strong>{selected.label}</strong>
+                    <span className={health.className}>{health.label}</span>
+                  </div>
+                  <div className={styles.regionMetrics}>
+                    <div><span>Source rows</span><strong>{selected.upstreamRecords.toLocaleString()}</strong></div>
+                    <div><span>Processed</span><strong>{selected.processedRecords.toLocaleString()}</strong></div>
+                    <div><span>Tracked</span><strong>{selected.importedRecords.toLocaleString()}</strong></div>
+                    <div><span>Progress</span><strong>{selected.progressPercent.toFixed(1)}%</strong></div>
+                  </div>
+                  <p>{health.note}{selected.nextRowOffset > 0 ? <> Resume at raw row <strong>{selected.nextRowOffset.toLocaleString()}</strong>.</> : null}</p>
+                  <p>Last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.</p>
+                </div>;
+              })() : <p>Choose one state at a time. <strong>Processed</strong> is how many raw source rows GeoWeedo has traversed; <strong>tracked</strong> is how many eligible Cannlytics source records are currently stored. Those numbers are not expected to match.</p>}
             </div>
             <details className={styles.regionStatus}>
               <summary>View all Cannlytics state checkpoints</summary>
               <div className={styles.regionTable}>
-                {source.regions.map(region => <div key={region.code}>
-                  <strong>{region.code.toUpperCase()}</strong><span>{region.label}</span><span>{region.importedRecords.toLocaleString()} tracked / {region.upstreamRecords.toLocaleString()} upstream · {region.progressPercent.toFixed(1)}%</span><span>{region.lastProgressAt ? formatDate(region.lastProgressAt) : formatDate(region.lastCompletedAt)}</span>
-                </div>)}
+                <div className={styles.regionTableHead}><span>State</span><span>Source rows</span><span>Processed</span><span>Tracked</span><span>Progress</span><span>Status</span><span>Last activity</span></div>
+                {source.regions.map(region => {
+                  const health = regionHealth(region);
+                  return <div key={region.code}>
+                    <span><strong>{region.code.toUpperCase()}</strong><small>{region.label}</small></span>
+                    <span>{region.upstreamRecords.toLocaleString()}</span>
+                    <span>{region.processedRecords.toLocaleString()}</span>
+                    <span>{region.importedRecords.toLocaleString()}</span>
+                    <span>{region.progressPercent.toFixed(1)}%</span>
+                    <span className={health.className}>{health.label}</span>
+                    <span>{region.lastProgressAt ? formatDate(region.lastProgressAt) : formatDate(region.lastCompletedAt)}</span>
+                  </div>;
+                })}
               </div>
             </details>
           </> : null}
