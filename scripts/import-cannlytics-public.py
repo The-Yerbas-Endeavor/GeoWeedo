@@ -81,6 +81,23 @@ def product_brand(row, product_name):
     return pick(row, *BRAND_KEYS)
 
 
+def source_product_name(row, state):
+    """Return only a source-backed product identity.
+
+    Most Cannlytics state exports use product_name/strain_name/product. Rhode
+    Island's curated export retains the source package/product identity in
+    `label` instead. Do not invent an Oregon product identity: its curated
+    export currently lacks one, and product_type/sample IDs are not product
+    names.
+    """
+    name = pick(row, "product_name", "strain_name", "product")
+    if name:
+        return name
+    if state == "ri":
+        return pick(row, "label")
+    return None
+
+
 def number(value):
     text = clean(value)
     if text is None:
@@ -434,7 +451,7 @@ def main():
     try:
         for raw in iter_rows(source_file):
             row = normalized_row(raw)
-            product_name = pick(row, "product_name", "strain_name", "product")
+            product_name = source_product_name(row, state)
             if not product_name:
                 skipped += 1
                 continue
