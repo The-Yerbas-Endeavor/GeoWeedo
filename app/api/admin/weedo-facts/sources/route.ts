@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
@@ -43,6 +43,37 @@ export async function POST(request: NextRequest) {
   const action = String(body?.action || 'start').toLowerCase();
   if (!['sc-labs', 'kannapedia', 'cannlytics'].includes(sourceId)) {
     return NextResponse.json({ error: 'Unknown data source.' }, { status: 400 });
+  }
+
+  if (action === 'diagnose') {
+    if (sourceId !== 'cannlytics') {
+      return NextResponse.json({ error: 'Diagnostics are only available for Cannlytics state datasets.' }, { status: 400 });
+    }
+    if (!CANNLYTICS_REGIONS.some(([code]) => code === region)) {
+      return NextResponse.json({ error: 'Choose a Cannlytics state before running diagnostics.' }, { status: 400 });
+    }
+    try {
+      if (!sourceCanStart(sourceId)) {
+        return NextResponse.json({ error: 'Wait for the active Cannlytics update to stop before running a source diagnostic.' }, { status: 409 });
+      }
+      const script = path.join(process.cwd(), 'scripts', 'diagnose-cannlytics-state.py');
+      const diagnostic = spawnSync('python3', [script, '--state', region, '--sample', '5000'], {
+        cwd: process.cwd(),
+        env: process.env,
+        encoding: 'utf-8',
+        timeout: 120000,
+        maxBuffer: 1024 * 1024,
+      });
+      if (diagnostic.error) throw diagnostic.error;
+      if (diagnostic.status !== 0) throw new Error((diagnostic.stderr || diagnostic.stdout || 'Cannlytics diagnostic failed.').trim());
+      const lines = String(diagnostic.stdout || '').trim().split(/\r?\n/).filter(Boolean);
+      const last = lines.at(-1);
+      if (!last) throw new Error('Cannlytics diagnostic returned no result.');
+      return NextResponse.json({ ok: true, diagnostic: JSON.parse(last) });
+    } catch (error) {
+      console.error('GeoWeedo Cannlytics diagnostic error', error);
+      return sourceErrorResponse(error, 'Unable to diagnose Cannlytics source.');
+    }
   }
 
   if (action === 'stop') {
