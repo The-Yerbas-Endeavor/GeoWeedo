@@ -124,7 +124,7 @@ def prepare_resumable_source(legacy, state, source_file, cache_dir):
 
 def external_key_for_raw(legacy, state, raw):
     row = legacy.normalized_row(raw)
-    product_name = legacy.pick(row, "product_name", "strain_name", "product")
+    product_name = legacy.source_product_name(row, state)
     if not product_name:
         return None
     sample_id = legacy.pick(row, "sample_id", "lab_id")
