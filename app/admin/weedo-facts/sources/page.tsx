@@ -96,7 +96,13 @@ function stateClass(source: Source) {
   return '';
 }
 
-function regionHealth(region: Region) {
+function regionHealth(region: Region, diagnostic?: Diagnostic) {
+  if (diagnostic?.diagnosis === 'source-missing-product-identity') {
+    return { label: 'SOURCE LIMITATION', className: styles.regionSourceLimit, note: 'The current source does not provide a product identity GeoWeedo can safely promote. Chemistry is preserved at the source level, but this state should not create canonical products until stronger identity data is available.' };
+  }
+  if (diagnostic?.diagnosis === 'parser-healthy' && (region.nextRowOffset > 0 || (region.processedRecords > 0 && region.progressPercent < 100))) {
+    return { label: 'READY TO RESUME', className: styles.regionReady, note: `Parser validated: ${diagnostic.eligiblePercent.toFixed(1)}% of the sampled rows are eligible. Continue from the saved raw-row checkpoint.` };
+  }
   if (region.processedRecords === 0 && region.importedRecords > 0) {
     return { label: 'LEGACY CHECKPOINT', className: styles.regionLegacy, note: 'Tracked records exist, but this import predates the resumable processed-row checkpoint.' };
   }
@@ -288,7 +294,7 @@ export default function WeedoFactsSourcesPage() {
                 </select>
               </label>
               {selected ? (() => {
-                const health = regionHealth(selected);
+                const health = regionHealth(selected, diagnostics[selected.code]);
                 return <div className={styles.regionSummary}>
                   <div className={styles.regionSummaryHead}>
                     <strong>{selected.label}</strong>
@@ -343,7 +349,7 @@ export default function WeedoFactsSourcesPage() {
               <div className={styles.regionTable}>
                 <div className={styles.regionTableHead}><span>State</span><span>Source rows</span><span>Processed</span><span>Tracked</span><span>Progress</span><span>Status</span><span>Last activity</span></div>
                 {source.regions.map(region => {
-                  const health = regionHealth(region);
+                  const health = regionHealth(region, diagnostics[region.code]);
                   return <div key={region.code}>
                     <span><strong>{region.code.toUpperCase()}</strong><small>{region.label}</small></span>
                     <span>{region.upstreamRecords.toLocaleString()}</span>
@@ -362,10 +368,18 @@ export default function WeedoFactsSourcesPage() {
             <button
               type="button"
               className={styles.update}
-              disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
+              disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion) || diagnostics[selectedRegion]?.diagnosis === 'source-missing-product-identity'}
               onClick={() => updateSource(source.id, selectedRegion || undefined)}
             >
-              {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}` : `Update ${source.label}`}
+              {sourceBusy
+                ? 'Updating…'
+                : source.regions?.length && selected
+                  ? diagnostics[selected.code]?.diagnosis === 'parser-healthy' && selected.nextRowOffset > 0
+                    ? `Resume ${selected.label} from row ${selected.nextRowOffset.toLocaleString()}`
+                    : diagnostics[selected.code]?.diagnosis === 'source-missing-product-identity'
+                      ? `${selected.label} source needs product identity`
+                      : `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}`
+                  : `Update ${source.label}`}
             </button>
             {source.id === 'cannlytics' && source.state === 'running' ? <button
               type="button"
