@@ -18,6 +18,27 @@ type Region = {
   lastError: string | null;
 };
 
+type Diagnostic = {
+  state: string;
+  configuredUpstreamRecords: number;
+  sourceFile: string;
+  usedCache: boolean;
+  sampleLimit: number;
+  sampledRows: number;
+  rowsWithProductName: number;
+  rowsWithIdentifier: number;
+  rowsWithAnalytes: number;
+  eligibleRows: number;
+  missingProductName: number;
+  missingIdentifier: number;
+  missingAnalytes: number;
+  duplicateEligibleKeys: number;
+  eligiblePercent: number;
+  diagnosis: string;
+  headers: string[];
+  examples: Array<{ productName: string; identifier: string; analytes: number; producer?: string | null }>;
+};
+
 type Source = {
   id: string;
   label: string;
@@ -104,6 +125,8 @@ export default function WeedoFactsSourcesPage() {
   const [refreshWarning, setRefreshWarning] = useState('');
   const [busy, setBusy] = useState('');
   const [selectedRegions, setSelectedRegions] = useState<Record<string,string>>({});
+  const [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
+  const [diagnosing, setDiagnosing] = useState('');
   const hasSources = useRef(false);
 
   const load = useCallback(async () => {
@@ -157,6 +180,27 @@ export default function WeedoFactsSourcesPage() {
       setError(err instanceof Error ? err.message : 'Unable to start source update.');
     } finally {
       setBusy('');
+    }
+  }
+
+  async function diagnoseRegion(region: string) {
+    setDiagnosing(region);
+    setError('');
+    setRefreshWarning('');
+    try {
+      const response = await fetch('/api/admin/weedo-facts/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'diagnose', sourceId: 'cannlytics', region }),
+      });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const body = await responseJson(response);
+      if (!response.ok) throw new Error(body?.error || 'Unable to diagnose Cannlytics state.');
+      if (body?.diagnostic) setDiagnostics(current => ({ ...current, [region]: body.diagnostic }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to diagnose Cannlytics state.');
+    } finally {
+      setDiagnosing('');
     }
   }
 
@@ -258,6 +302,30 @@ export default function WeedoFactsSourcesPage() {
                   </div>
                   <p>{health.note}{selected.nextRowOffset > 0 ? <> Resume at raw row <strong>{selected.nextRowOffset.toLocaleString()}</strong>.</> : null}</p>
                   <p>Last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.</p>
+                  <button
+                    type="button"
+                    className={styles.diagnose}
+                    disabled={sourceBusy || diagnosing === selected.code}
+                    onClick={() => diagnoseRegion(selected.code)}
+                  >{diagnosing === selected.code ? 'Diagnosing source…' : 'Diagnose source parser'}</button>
+                  {diagnostics[selected.code] ? (() => {
+                    const diagnostic = diagnostics[selected.code];
+                    return <div className={styles.diagnostic}>
+                      <div className={styles.diagnosticHead}>
+                        <strong>{diagnostic.diagnosis === 'parser-healthy' ? 'Parser sample looks healthy' : 'No eligible rows found in sample'}</strong>
+                        <span>{diagnostic.sampledRows.toLocaleString()} rows sampled</span>
+                      </div>
+                      <div className={styles.diagnosticMetrics}>
+                        <div><span>Product name</span><strong>{diagnostic.rowsWithProductName.toLocaleString()}</strong></div>
+                        <div><span>Identifier</span><strong>{diagnostic.rowsWithIdentifier.toLocaleString()}</strong></div>
+                        <div><span>Analytes</span><strong>{diagnostic.rowsWithAnalytes.toLocaleString()}</strong></div>
+                        <div><span>Eligible</span><strong>{diagnostic.eligibleRows.toLocaleString()} · {diagnostic.eligiblePercent.toFixed(1)}%</strong></div>
+                      </div>
+                      <p>Missing product name: <strong>{diagnostic.missingProductName.toLocaleString()}</strong> · missing identifier: <strong>{diagnostic.missingIdentifier.toLocaleString()}</strong> · missing analytes: <strong>{diagnostic.missingAnalytes.toLocaleString()}</strong> · duplicate eligible keys: <strong>{diagnostic.duplicateEligibleKeys.toLocaleString()}</strong>.</p>
+                      <p>Source file: <strong>{diagnostic.sourceFile}</strong>{diagnostic.usedCache ? ' · cached copy' : ' · refreshed copy'}.</p>
+                      {diagnostic.examples.length ? <details><summary>Show eligible examples</summary>{diagnostic.examples.map((example,index)=><div className={styles.diagnosticExample} key={example.identifier + '-' + index}><strong>{example.productName}</strong><span>{example.producer || 'Producer not reported'} · {example.identifier} · {example.analytes} analytes</span></div>)}</details> : null}
+                    </div>;
+                  })() : null}
                 </div>;
               })() : <p>Choose one state at a time. <strong>Processed</strong> is how many raw source rows GeoWeedo has traversed; <strong>tracked</strong> is how many eligible Cannlytics source records are currently stored. Those numbers are not expected to match.</p>}
             </div>
