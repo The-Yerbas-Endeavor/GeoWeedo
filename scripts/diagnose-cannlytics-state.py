@@ -66,7 +66,7 @@ def main():
             result["headers"] = [str(key) for key in raw.keys()][:80]
 
         row = legacy.normalized_row(raw)
-        product_name = legacy.pick(row, "product_name", "strain_name", "product")
+        product_name = legacy.source_product_name(row, state)
         sample_id = legacy.pick(row, "sample_id", "lab_id")
         batch_number = legacy.pick(row, "batch_number", "batch", "lot_number")
         record_id = legacy.pick(row, "id", "sample_hash", "results_hash", "source_id")
@@ -113,10 +113,14 @@ def main():
     sampled = result["sampledRows"]
     eligible = result["eligibleRows"]
     result["eligiblePercent"] = round((eligible / sampled) * 100, 1) if sampled else 0
-    result["diagnosis"] = (
-        "parser-healthy" if eligible > 0
-        else "no-eligible-rows"
-    )
+    if eligible > 0:
+        result["diagnosis"] = "parser-healthy"
+    elif result["rowsWithProductName"] == 0 and state == "or":
+        result["diagnosis"] = "source-missing-product-identity"
+    elif result["rowsWithProductName"] == 0:
+        result["diagnosis"] = "product-identity-unresolved"
+    else:
+        result["diagnosis"] = "no-eligible-rows"
     print(json.dumps(result, separators=(",", ":")))
 
 
