@@ -37,6 +37,7 @@ type Diagnostic = {
   eligiblePercent: number;
   diagnosis: string;
   headers: string[];
+  identifierCandidates: Array<{ field: string; normalizedField: string; nonEmpty: number; unique: number; coveragePercent: number; uniquePercent: number }>;
   examples: Array<{ productName: string; identifier: string; analytes: number; producer?: string | null }>;
 };
 
@@ -342,6 +343,8 @@ export default function WeedoFactsSourcesPage() {
                       {diagnostic.diagnosis === 'source-missing-product-identity' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture product names from product type, sample IDs, or other weak fields. This state needs a stronger product-identity source before its chemistry can create canonical products.</p> : null}
                       <p>Missing product name: <strong>{diagnostic.missingProductName.toLocaleString()}</strong> · missing identifier: <strong>{diagnostic.missingIdentifier.toLocaleString()}</strong> · missing analytes: <strong>{diagnostic.missingAnalytes.toLocaleString()}</strong> · duplicate eligible keys: <strong>{diagnostic.duplicateEligibleKeys.toLocaleString()}</strong>.</p>
                       <p>Source file: <strong>{diagnostic.sourceFile}</strong>{diagnostic.usedCache ? ' · cached copy' : ' · refreshed copy'}.</p>
+                      {diagnostic.identifierCandidates?.length ? <details open={diagnostic.diagnosis !== 'parser-healthy'}><summary>Candidate source identifier fields</summary><div className={styles.candidateFields}>{diagnostic.identifierCandidates.map(candidate=><div key={candidate.normalizedField}><strong>{candidate.field}</strong><span>{candidate.nonEmpty.toLocaleString()} populated · {candidate.coveragePercent.toFixed(1)}% coverage · {candidate.unique.toLocaleString()} unique · {candidate.uniquePercent.toFixed(1)}% unique</span></div>)}</div></details> : null}
+                      <details><summary>Show source columns</summary><div className={styles.sourceColumns}>{diagnostic.headers.map(header=><code key={header}>{header}</code>)}</div></details>
                       {diagnostic.examples.length ? <details><summary>Show eligible examples</summary>{diagnostic.examples.map((example,index)=><div className={styles.diagnosticExample} key={example.identifier + '-' + index}><strong>{example.productName}</strong><span>{example.producer || 'Producer not reported'} · {example.identifier} · {example.analytes} analytes</span></div>)}</details> : null}
                     </div>;
                   })() : null}
