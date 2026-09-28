@@ -11,6 +11,7 @@ export const CANNLYTICS_REGIONS = [
 ] as const;
 
 export const CANNLYTICS_REGION_LIMITATIONS: Record<string,string> = {
+  mi: 'The current Michigan source provides product identity and chemistry but no stable source record, sample, batch, lot, package, METRC, or hash identifier. Import is blocked rather than inventing weak record identities.',
   or: 'The current Oregon source provides lab identifiers and chemistry but no product identity GeoWeedo can safely promote. Import is blocked until a stronger source identity is available.',
 };
 
