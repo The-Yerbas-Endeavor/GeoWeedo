@@ -152,6 +152,8 @@ def main():
         result["diagnosis"] = "source-missing-product-identity"
     elif result["rowsWithProductName"] == 0:
         result["diagnosis"] = "product-identity-unresolved"
+    elif result["rowsWithIdentifier"] == 0:
+        result["diagnosis"] = "source-missing-record-identifier"
     else:
         result["diagnosis"] = "no-eligible-rows"
     print(json.dumps(result, separators=(",", ":")))
