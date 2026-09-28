@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest) {
     if (action === 'approve_exact_batch') {
       const result = await approveExactBatchFromCoa({ submissionId, adminId: admin.id, reviewNotes });
       const lookupUrl = `/api/weedo-facts/lookup?identifier=${encodeURIComponent(String(result.identifier || ''))}&type=${encodeURIComponent(result.identifierType)}`;
-      return NextResponse.json({ ok: true, status: 'approved', ...result, lookupUrl });
+      return NextResponse.json({ ok: true, status: 'needs_info', ...result, lookupUrl });
     }
     if (action === 'approve_product_brand') {
       const result = approveProductBrand({ submissionId, adminId: admin.id, reviewNotes });

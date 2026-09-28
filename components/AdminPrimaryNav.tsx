@@ -68,7 +68,7 @@ export default function AdminPrimaryNav() {
       items.push({
         label: 'Products',
         href: '/admin/products-menus',
-        active: pathname.startsWith('/admin/products-menus') || pathname.startsWith('/admin/weedo-facts') || pathname.startsWith('/admin/cultivar-genetics'),
+        active: pathname.startsWith('/admin/products-menus') || pathname.startsWith('/admin/weedo-facts'),
       });
     }
     if (hasAny(admin, ['locations.view', 'locations.manage', 'data.manage'])) {
@@ -82,7 +82,7 @@ export default function AdminPrimaryNav() {
       items.push({
         label: 'People',
         href: '/admin/users',
-        active: pathname.startsWith('/admin/users') || pathname.startsWith('/admin/staff'),
+        active: pathname.startsWith('/admin/users') || pathname.startsWith('/admin/scouts') || pathname.startsWith('/admin/staff'),
       });
     }
     if (hasAny(admin, ['dashboard.view'])) {
@@ -95,12 +95,11 @@ export default function AdminPrimaryNav() {
   }, [admin, pathname]);
 
   const secondary = useMemo<NavItem[]>(() => {
-    if (pathname.startsWith('/admin/products-menus') || pathname.startsWith('/admin/weedo-facts') || pathname.startsWith('/admin/cultivar-genetics')) {
+    if (pathname.startsWith('/admin/products-menus') || pathname.startsWith('/admin/weedo-facts')) {
       return [
-        { label: 'Catalog & menus', href: '/admin/products-menus', active: pathname.startsWith('/admin/products-menus') },
+        { label: 'Products & sightings', href: '/admin/products-menus', active: pathname.startsWith('/admin/products-menus') },
         { label: 'COAs', href: '/admin/weedo-facts', active: pathname === '/admin/weedo-facts' },
         { label: 'Sources', href: '/admin/weedo-facts/sources', active: pathname.startsWith('/admin/weedo-facts/sources') },
-        { label: 'Cultivars', href: '/admin/cultivar-genetics', active: pathname.startsWith('/admin/cultivar-genetics') },
       ];
     }
     if (pathname.startsWith('/admin/dispensaries') || pathname.startsWith('/admin/data') || pathname.startsWith('/admin/gameplay-pipeline') || pathname.startsWith('/admin/community') || pathname.startsWith('/admin/owner-review')) {
@@ -111,9 +110,10 @@ export default function AdminPrimaryNav() {
         { label: 'Community', href: '/admin/community', active: pathname.startsWith('/admin/community') || pathname.startsWith('/admin/owner-review') },
       ];
     }
-    if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/staff')) {
+    if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/scouts') || pathname.startsWith('/admin/staff')) {
       return [
         { label: 'Users', href: '/admin/users', active: pathname.startsWith('/admin/users') },
+        { label: 'Scouts', href: '/admin/scouts', active: pathname.startsWith('/admin/scouts') },
         { label: 'Staff & permissions', href: '/admin/staff', active: pathname.startsWith('/admin/staff') },
       ];
     }

@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
       `).get(locationId, scanType, scanValue) as any;
       if (duplicate?.id) {
         if (productId) setOwnerProductLinkState(db, String(duplicate.id), access.user.id, productId, true);
-        const item = listDispensaryMenu(locationId).find(row => row.id === duplicate.id) || null;
+        const item = listDispensaryMenu(locationId).find((row: any) => row.id === duplicate.id) || null;
         return NextResponse.json({ ok: true, alreadyExists: true, item });
       }
     }
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
         .run(scanType, scanValue, new Date().toISOString(), id);
     }
     setOwnerProductLinkState(db, id, access.user.id, productId, false);
-    const item = listDispensaryMenu(locationId).find(row => row.id === id) || null;
+    const item = listDispensaryMenu(locationId).find((row: any) => row.id === id) || null;
     return NextResponse.json({ ok: true, item });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not add product.' }, { status: 400 });
@@ -266,7 +266,7 @@ export async function PATCH(request: NextRequest) {
 
   setOwnerProductLinkState(db, itemId, access.user.id, productId, Boolean(existing.product_id));
 
-  const item = listDispensaryMenu(locationId).find(row => row.id === itemId) || null;
+  const item = listDispensaryMenu(locationId).find((row: any) => row.id === itemId) || null;
   return NextResponse.json({ ok: true, item });
 }
 

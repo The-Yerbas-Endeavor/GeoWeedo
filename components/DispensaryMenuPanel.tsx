@@ -47,11 +47,11 @@ export default function DispensaryMenuPanel({ dispensaryId }: { dispensaryId: st
 
   return <section className={styles.section}>
     <div className={styles.head}>
-      <div><span className={styles.eyebrow}>GEOWEEDO PRODUCTS · DISPENSARY MENU</span><h2>Current menu</h2><p>Retail listings organized by the same canonical products and product categories used throughout GeoWeedo.</p></div>
+      <div><span className={styles.eyebrow}>GEOWEEDO PRODUCTS · COMMUNITY SIGHTINGS</span><h2>Products seen here</h2><p>Products reported or observed at this location. Sightings are community/source evidence, not a dispensary-managed live inventory.</p></div>
       <span className={styles.count}>{items.length} {items.length === 1 ? 'product' : 'products'} · {categoryGroups.length} {categoryGroups.length === 1 ? 'category' : 'categories'}</span>
     </div>
-    {items.length === 0 ? <div className={styles.empty}>No GeoWeedo menu products have been published for this dispensary yet.</div> : <>
-      <nav className={styles.categoryNav} aria-label="Menu product categories">
+    {items.length === 0 ? <div className={styles.empty}>No products have been reported at this location yet.</div> : <>
+      <nav className={styles.categoryNav} aria-label="Reported product categories">
         {categoryGroups.map((group, index) => <a key={group.id} href={`#menu-category-${group.slug}-${index}`}><span>{categoryGlyph(group.slug)}</span>{group.name}<b>{group.items.length}</b></a>)}
       </nav>
       <div className={styles.categoryGroups}>{categoryGroups.map((group, groupIndex) => <section className={styles.categoryGroup} id={`menu-category-${group.slug}-${groupIndex}`} key={group.id}>
@@ -71,10 +71,10 @@ export default function DispensaryMenuPanel({ dispensaryId }: { dispensaryId: st
             <div className={styles.imageColumn}>{item.product_id ? <a className={styles.imageLink} href={factsHref(item)} aria-label={`View GeoWeedo Facts for ${imageAlt}`}>{image}</a> : <div className={styles.imageLink}>{image}</div>}</div>
             <div className={styles.itemContent}>
               <div className={styles.itemHead}><div><h4>{item.item_name}</h4>{brand ? <div className={styles.brand}>{brand}</div> : null}</div>{itemPrice ? <span className={styles.price}>{itemPrice}</span> : null}</div>
-              {canonicalProduct ? <a className={styles.canonicalProduct} href={factsHref(item)}><span>GEOWEEDO PRODUCT</span><strong>{canonicalProduct}</strong></a> : <div className={styles.ownerProduct}><span>OWNER-REPORTED PRODUCT</span><strong>{[brand, item.item_name].filter(Boolean).join(' · ')}</strong></div>}
-              <div className={styles.meta}><span className={styles.categoryTag}>{categoryGlyph(item.canonical_category_slug || category)} {category}</span>{item.variant ? <span>{item.variant}</span> : null}{item.package_size ? <span>{item.package_size}</span> : null}<span>Inventory: {item.inventory_status || 'unknown'}</span></div>
-              <div className={styles.badges}>{item.verified ? <span className={styles.badge}>✓ Verified listing</span> : <span className={styles.badge}>Reported listing</span>}{exact ? <span className={`${styles.badge} ${styles.exact}`}>✓ Exact batch linked</span> : item.product_id ? <span className={styles.badge}>✓ Canonical product linked</span> : <span className={styles.badge}>Needs product match</span>}{item.linked_batch_status ? <span className={styles.badge}>Lab status: {item.linked_batch_status}</span> : null}</div>
-              <div className={styles.links}>{item.product_id ? <a href={factsHref(item)}>View GeoWeedo Facts →</a> : <a href="/geoweedo-facts">Find this product in GeoWeedo Facts →</a>}{item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer">Menu source ↗</a> : null}</div>
+              {canonicalProduct ? <a className={styles.canonicalProduct} href={factsHref(item)}><span>GEOWEEDO PRODUCT</span><strong>{canonicalProduct}</strong></a> : <div className={styles.ownerProduct}><span>REPORTED PRODUCT</span><strong>{[brand, item.item_name].filter(Boolean).join(' · ')}</strong></div>}
+              <div className={styles.meta}><span className={styles.categoryTag}>{categoryGlyph(item.canonical_category_slug || category)} {category}</span>{item.variant ? <span>{item.variant}</span> : null}{item.package_size ? <span>{item.package_size}</span> : null}<span>Status: {item.inventory_status || 'unknown'}</span></div>
+              <div className={styles.badges}>{item.verified ? <span className={styles.badge}>✓ Source-backed sighting</span> : <span className={styles.badge}>Community sighting</span>}{exact ? <span className={`${styles.badge} ${styles.exact}`}>✓ Exact batch linked</span> : item.product_id ? <span className={styles.badge}>✓ Canonical product linked</span> : <span className={styles.badge}>Needs product match</span>}{item.linked_batch_status ? <span className={styles.badge}>Lab status: {item.linked_batch_status}</span> : null}</div>
+              <div className={styles.links}>{item.product_id ? <a href={factsHref(item)}>View GeoWeedo Facts →</a> : <a href="/geoweedo-facts">Find this product in GeoWeedo Facts →</a>}{item.source_url ? <a href={item.source_url} target="_blank" rel="noreferrer">Observation source ↗</a> : null}</div>
             </div>
           </article>;
         })}</div>

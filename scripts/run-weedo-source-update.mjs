@@ -108,7 +108,7 @@ function commandForSource() {
   }
   return {
     executable: 'python3',
-    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '2500'],
+    args: [path.join(process.cwd(), 'scripts', 'import-cannlytics-resumable.py'), '--state', region, '--chunk-size', '500'],
   };
 }
 
@@ -129,7 +129,7 @@ function serverIsBusy() {
   if (sourceId !== 'cannlytics') return false;
   const cores = Math.max(1, os.cpus().length);
   const oneMinuteLoad = os.loadavg()[0] || 0;
-  const maxBackgroundStartLoad = Math.max(1, cores * 0.7);
+  const maxBackgroundStartLoad = Math.max(0.75, cores * 0.35);
   return oneMinuteLoad > maxBackgroundStartLoad;
 }
 
@@ -166,9 +166,9 @@ function runChunk() {
 
   if (serverIsBusy()) {
     const delayedAt = new Date().toISOString();
-    fs.writeSync(log, `\n--- ${delayedAt} production load is elevated; delaying Cannlytics chunk for 30s ---\n`);
+    fs.writeSync(log, `\n--- ${delayedAt} production load is elevated; delaying Cannlytics chunk for 60s ---\n`);
     try { heartbeatSourceUpdate(sourceId); } catch {}
-    setTimeout(runChunk, 30_000);
+    setTimeout(runChunk, 60_000);
     return;
   }
 
@@ -180,8 +180,8 @@ function runChunk() {
     env: {
       ...process.env,
       PYTHONUNBUFFERED: '1',
-      CANNLYTICS_COMMIT_EVERY: '50',
-      CANNLYTICS_YIELD_MS: '100',
+      CANNLYTICS_COMMIT_EVERY: '5',
+      CANNLYTICS_YIELD_MS: '300',
     },
     stdio: ['ignore', log, log],
   });
@@ -202,9 +202,9 @@ function runChunk() {
     }
     if (sourceId === 'cannlytics' && code === 75) {
       const checkpointAt = new Date().toISOString();
-      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 20s before next chunk ---\n`);
+      fs.writeSync(log, `\n--- ${checkpointAt} ${region.toUpperCase()} checkpoint saved; cooling down 60s before next production-safe chunk ---\n`);
       heartbeatSourceUpdate(sourceId);
-      setTimeout(runChunk, 20_000);
+      setTimeout(runChunk, 60_000);
       return;
     }
     finish(code ?? 1);

@@ -126,7 +126,7 @@ export default function WeedoFactsAdminPage() {
         <a href="/admin" className={styles.back}>← Admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS</span>
         <h1>COA review</h1>
-        <p>Retrieve lab data, review submitted SC Labs PDFs, compare records, and promote verified evidence into GeoWeedo Facts.</p>
+        <p>Retrieve lab data, review uploaded COA PDFs and retrieve official lab records. Official-source records are Verified automatically.</p>
       </div>
       <div className={styles.links}>
         <a href="/geoweedo-facts" target="_blank" rel="noreferrer">Open GeoWeedo Facts</a>
@@ -165,14 +165,14 @@ export default function WeedoFactsAdminPage() {
       {retrieved && !retrievedRecord && !retrieveError ? <div className={styles.empty}>Data was retrieved, but the source did not expose enough identity to resolve a GeoWeedo batch record.</div> : null}
     </section>
 
-    <div className={styles.queueIntro}><strong>COA review queue</strong><span>The queue below contains user-submitted COA PDFs. Existing/imported lab records are retrieved above and do not need a submission to appear.</span></div>
+    <div className={styles.queueIntro}><strong>COA review queue</strong><span>KISS rule: official lab/COA source = Verified automatically. A manually uploaded PDF stays Under Review until GeoWeedo can trace it to an official source.</span></div>
 
     <section className={styles.toolbar}>
       {['pending','needs_info','approved','rejected','all'].map(value => <button key={value} className={status===value?styles.active:''} onClick={() => setStatus(value)}>{value.replace('_',' ')}</button>)}
       <button onClick={() => load(status)}>Refresh</button>
     </section>
 
-    {lastLookup ? <div className={styles.success}>Exact batch approved. <a href={lastLookup} target="_blank" rel="noreferrer">Open verified lookup →</a></div> : null}
+    {lastLookup ? <div className={styles.success}>Batch evidence staged for verification. <a href={lastLookup} target="_blank" rel="noreferrer">Open current lookup →</a></div> : null}
     {error ? <div className={styles.error}>{error}</div> : null}
     {loading ? <p className={styles.loading}>Loading review queue…</p> : null}
     {!loading && items.length === 0 ? <div className={styles.empty}>No submitted COAs in this queue.</div> : null}
@@ -203,7 +203,7 @@ export default function WeedoFactsAdminPage() {
               <dt>COA URL</dt><dd>{item.coa_url ? <a href={item.coa_url} target="_blank" rel="noreferrer">Open source</a> : '—'}</dd>
               <dt>Notes</dt><dd>{item.notes || '—'}</dd>
             </dl></section>
-            <section><h3>Parsed SC Labs evidence</h3><dl>
+            <section><h3>Parsed COA evidence</h3><dl>
               <dt>Sample ID</dt><dd>{parsed.sampleId || '—'}</dd>
               <dt>Product</dt><dd>{parsed.productName || '—'}</dd>
               <dt>Batch</dt><dd>{parsed.batchNumber || '—'}</dd>
@@ -224,7 +224,7 @@ export default function WeedoFactsAdminPage() {
             </section>
             <section>
               <h3>Test current lookup</h3>
-              <p>Open these before approval to see what GeoWeedo currently returns. After approval, the exact identifier should return <code>exact_batch</code>.</p>
+              <p>Open these before approval to see what GeoWeedo currently returns. Reviewing an upload does not make it Verified. Use these links to inspect GeoWeedo's current evidence.</p>
               <ul>
                 {identifiers.uid ? <li><a href={lookupHref(identifiers.uid, 'uid')} target="_blank" rel="noreferrer">Lookup UID {identifiers.uid} →</a></li> : null}
                 {identifiers.sampleId ? <li><a href={lookupHref(identifiers.sampleId, 'coa')} target="_blank" rel="noreferrer">Lookup COA/sample {identifiers.sampleId} →</a></li> : null}
@@ -238,7 +238,7 @@ export default function WeedoFactsAdminPage() {
 
           <div className={styles.actions}>
             {!item.coa && item.product_id && item.brand_name ? <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} className={styles.approve} onClick={() => review(item.id,'approve_product_brand')}>✓ Approve product brand</button> : null}
-            <button disabled={busy===item.id || !item.coa || !['pending','needs_info'].includes(item.status) || preview.hasPotentialConflict} className={styles.approve} onClick={() => review(item.id,'approve_exact_batch')}>✓ Approve exact batch</button>
+            <button disabled={busy===item.id || !item.coa || !['pending','needs_info'].includes(item.status) || preview.hasPotentialConflict} className={styles.approve} onClick={() => review(item.id,'approve_exact_batch')}>Stage batch evidence</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} onClick={() => review(item.id,'needs_info')}>Needs info</button>
             <button disabled={busy===item.id || !['pending','needs_info'].includes(item.status)} className={styles.reject} onClick={() => review(item.id,'reject')}>Reject</button>
           </div>

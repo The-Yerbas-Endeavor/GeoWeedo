@@ -1,12 +1,10 @@
-import SiteHeader from '@/components/SiteHeader';
 
 export const metadata = { title: 'How to Play · GeoWeedo' };
 
 export default function HowToPlayPage() {
   return (
     <main className="info-shell">
-      <SiteHeader />
-      <section className="info-hero">
+<section className="info-hero">
         <span className="eyebrow">HOW TO PLAY</span>
         <h1>Read the street. Find the dispensary.</h1>
         <p>Each game has five rounds. Explore the street imagery, look for geographic clues, place your guess on the map, and score up to 5,000 points per round.</p>

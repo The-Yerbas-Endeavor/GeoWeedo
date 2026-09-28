@@ -44,27 +44,11 @@ function enrichProductIdentity(product: any, source: RetailId1A4Record) {
   return product;
 }
 
-function findOrCreateProduct(source: RetailId1A4Record) {
+function createSourceBackedProduct(source: RetailId1A4Record) {
   const db = getDatabase();
   const productName = String(source.productName || '').trim();
   const brandName = String(source.brandName || '').trim() || null;
   const normalized = `${brandName || ''} ${productName}`.trim().toLowerCase();
-  let product = db.prepare('SELECT * FROM cannabis_products WHERE normalized_name=? LIMIT 1').get(normalized) as any;
-
-  if (!product) {
-    const candidates = db.prepare(`SELECT * FROM cannabis_products
-      WHERE product_name=? COLLATE NOCASE
-      ORDER BY updated_at DESC`).all(productName) as any[];
-    const compatibleCandidates = candidates.filter(row =>
-      compatible(row.brand_name, brandName) &&
-      compatible(row.product_type, source.productType) &&
-      compatible(row.net_contents, source.netContents),
-    );
-    if (compatibleCandidates.length === 1) product = compatibleCandidates[0];
-  }
-
-  if (product) return enrichProductIdentity(product, source);
-
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO cannabis_products (id,brand_name,product_name,product_type,net_contents,normalized_name,created_at,updated_at)
@@ -77,19 +61,19 @@ function addSourceIdentifiers(batchId: string, source: RetailId1A4Record, now: s
   const db = getDatabase();
   if (source.retailId) {
     db.prepare(`INSERT OR IGNORE INTO cannabis_batch_identifiers (id,batch_id,identifier_type,identifier_value,verified,created_at)
-                VALUES (?,?,?,?,1,?)`)
+                VALUES (?,?,?,?,0,?)`)
       .run(crypto.randomUUID(), batchId, 'uid', source.retailId, now);
   }
   db.prepare(`INSERT OR IGNORE INTO cannabis_batch_identifiers (id,batch_id,identifier_type,identifier_value,verified,created_at)
-              VALUES (?,?,?,?,1,?)`)
+              VALUES (?,?,?,?,0,?)`)
     .run(crypto.randomUUID(), batchId, 'qr', source.url, now);
 }
 
 function recordSource(batchId: string, source: RetailId1A4Record, now: string) {
   const db = getDatabase();
   db.prepare(`INSERT INTO cannabis_coa_sources
-    (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,1,?)`)
+    (id,batch_id,source_type,source_name,source_url,external_id,raw_payload_json,parser_version,fetched_at,verified,evidence_status,evidence_reason,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,0,'source_backed','regulatory_source',?)`)
     .run(
       crypto.randomUUID(),
       batchId,
@@ -142,25 +126,12 @@ export function ingestRetailId1A4(source: RetailId1A4Record): IngestResult {
     };
   }
 
-  const product = findOrCreateProduct(source);
-  if (source.batchNumber) {
-    const stronger = db.prepare(`SELECT id,product_id,uid FROM cannabis_batches
-      WHERE product_id=? AND batch_number=? COLLATE NOCASE AND source_type='lab' AND verified=1
-      ORDER BY tested_at DESC LIMIT 1`).get(product.id, source.batchNumber) as any;
-    if (stronger) {
-      const now = new Date().toISOString();
-      if (!stronger.uid) db.prepare('UPDATE cannabis_batches SET uid=?,updated_at=? WHERE id=?').run(uid, now, stronger.id);
-      addSourceIdentifiers(stronger.id, source, now);
-      recordSource(stronger.id, source, now);
-      return { batchId: stronger.id, productId: stronger.product_id, created: false, preservedExisting: true };
-    }
-  }
-
+  const product = createSourceBackedProduct(source);
   const now = new Date().toISOString();
   const batchId = `metrc-${crypto.createHash('sha256').update(uid).digest('hex').slice(0, 24)}`;
   db.prepare(`INSERT INTO cannabis_batches
-    (id,product_id,batch_number,uid,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,tested_at,overall_status,source_type,source_name,source_url,verified,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    (id,product_id,batch_number,uid,coa_url,lab_name,lab_license_number,producer_name,producer_license_number,tested_at,overall_status,source_type,source_name,source_url,verified,evidence_status,evidence_reason,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'source_backed','regulatory_source',?,?)`)
     .run(
       batchId,
       product.id,
@@ -176,7 +147,7 @@ export function ingestRetailId1A4(source: RetailId1A4Record): IngestResult {
       'regulatory_public',
       'Metrc Retail ID',
       source.url,
-      1,
+      0,
       now,
       now,
     );

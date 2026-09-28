@@ -12,7 +12,15 @@ function continentFor(country:string){
   return 'INTERNATIONAL';
 }
 function sectionCount(section:HTMLElement){
-  return Number((section.querySelector('.map-browser-state-head small')?.textContent||'').replace(/[^0-9]/g,'')||0);
+  const text=section.querySelector('.map-browser-state-head small')?.textContent||'';
+  const first=text.match(/\d[\d,]*/)?.[0]||'0';
+  return Number(first.replace(/,/g,''));
+}
+function productSectionCounts(section:HTMLElement){
+  const text=section.querySelector('.map-browser-state-head small')?.textContent||'';
+  const products=Number((text.match(/([\d,]+)\s+product match(?:es)?/i)?.[1]||'0').replace(/,/g,''));
+  const dispensaries=Number((text.match(/([\d,]+)\s+dispensar(?:y|ies)/i)?.[1]||'0').replace(/,/g,''));
+  return {products,dispensaries};
 }
 
 export default function BrowseCountryPartition(){
@@ -38,6 +46,8 @@ export default function BrowseCountryPartition(){
         const sections=regionFiltered?allSections.filter(section=>(section.querySelector('.map-browser-state-head strong')?.textContent?.trim()||'')===selectedRegion):allSections;
         const regionCountry=new Map(regionsRef.current.map(item=>[item.region,item.country||'USA']));
         const regionMapped=new Map(regionsRef.current.map(item=>[item.region,item.mapped]));
+        const panel=document.querySelector<HTMLElement>('.map-browser-panel');
+        const productSearch=panel?.querySelector('.map-browser-panel-head span')?.textContent?.trim().toUpperCase()==='PRODUCT SEARCH RESULTS';
         const buckets=new Map<string,HTMLElement[]>();
         for(const section of sections){
           const region=section.querySelector('.map-browser-state-head strong')?.textContent?.trim()||'';
@@ -49,7 +59,16 @@ export default function BrowseCountryPartition(){
         for(const [key,items] of ordered){
           const [continent,country]=key.split('|');
           let count=0;
-          if(scope==='enabled'){
+          let productMatches=0;
+          let productDispensaries=0;
+          if(productSearch){
+            for(const item of items){
+              const productCounts=productSectionCounts(item);
+              productMatches+=productCounts.products;
+              productDispensaries+=productCounts.dispensaries;
+            }
+            count=productDispensaries;
+          }else if(scope==='enabled'){
             count=items.reduce((sum,item)=>sum+sectionCount(item),0);
           }else{
             const stats=countriesRef.current.find(item=>item.country===country);
@@ -59,12 +78,13 @@ export default function BrowseCountryPartition(){
           }
           scopedTotal+=count;
           if(count>0)countriesWithLocations.add(country);
-          const detail=`${country} · ${count.toLocaleString()} ${scope==='enabled'?'enabled':'mapped'}`;
+          const detail=productSearch
+            ?`${country} · ${productMatches.toLocaleString()} product ${productMatches===1?'match':'matches'} · ${productDispensaries.toLocaleString()} ${productDispensaries===1?'dispensary':'dispensaries'}`
+            :`${country} · ${count.toLocaleString()} ${scope==='enabled'?'enabled':'mapped'}`;
           list.appendChild(heading(continent,detail));for(const item of items)list.appendChild(item);
         }
-        const panel=document.querySelector<HTMLElement>('.map-browser-panel');
         const panelHead=panel?.querySelector('.map-browser-panel-head strong');
-        if(panelHead&&panel?.dataset.nearbyActive!=='1'){
+        if(panelHead&&!productSearch&&panel?.dataset.nearbyActive!=='1'){
           if(regionFiltered){
             panelHead.textContent=`${scopedTotal.toLocaleString()} ${scope==='enabled'?'enabled dispensar':'mapped location'}${scopedTotal===1?(scope==='enabled'?'y':''):(scope==='enabled'?'ies':'s')} · ${selectedRegion}`;
           }else{

@@ -1,12 +1,10 @@
-import SiteHeader from '@/components/SiteHeader';
 
 export const metadata = { title: 'For Dispensaries · GeoWeedo' };
 
 export default function ForDispensariesPage() {
   return (
     <main className="info-shell">
-      <SiteHeader />
-      <section className="info-hero">
+<section className="info-hero">
         <span className="eyebrow">FOR DISPENSARIES</span>
         <h1>Claim your storefront. Then make it stand out.</h1>
         <p>Claiming a GeoWeedo business listing is free. Verified owners can keep their public profile accurate, upgrade to GeoWeedo Featured, and run clearly labeled game sponsorship campaigns without changing gameplay odds.</p>

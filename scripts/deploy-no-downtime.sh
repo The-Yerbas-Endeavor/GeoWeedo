@@ -214,6 +214,7 @@ else
   log 'Installing and building staging; live production is untouched'
   cd "$STAGE"
   npm ci
+  npm run db:migrate
   npm run build
 
   sudo systemctl stop "${STAGE_SERVICE}.service" >/dev/null 2>&1 || true
@@ -243,6 +244,7 @@ git fetch origin
 git reset --hard origin/main
 rm -rf .next
 npm ci
+npm run db:migrate
 npm run build
 
 log 'Restarting live service on port 3000'

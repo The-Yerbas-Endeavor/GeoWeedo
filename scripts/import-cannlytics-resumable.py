@@ -124,12 +124,12 @@ def prepare_resumable_source(legacy, state, source_file, cache_dir):
 
 def external_key_for_raw(legacy, state, raw):
     row = legacy.normalized_row(raw)
-    product_name = legacy.pick(row, "product_name", "strain_name", "product")
+    product_name = legacy.source_product_name(row, state)
     if not product_name:
         return None
-    sample_id = legacy.pick(row, "sample_id", "lab_id")
+    sample_id = legacy.pick(row, "sample_id", "lab_id", "metrc_lab_id")
     batch_number = legacy.pick(row, "batch_number", "batch", "lot_number")
-    record_id = legacy.pick(row, "id", "sample_hash", "results_hash", "source_id")
+    record_id = legacy.pick(row, "id", "sample_hash", "results_hash", "source_id", "metrc_source_id", "metrc_lab_id")
     analytes = legacy.analytes_from_row(row)
     if not analytes or not (record_id or sample_id or batch_number):
         return None
@@ -162,7 +162,7 @@ def main():
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     args = parser.parse_args()
     state = args.state.lower()
-    chunk_size = max(1000, min(100000, args.chunk_size))
+    chunk_size = max(250, min(100000, args.chunk_size))
 
     if not CORRECT_DB.exists():
         raise SystemExit(f"GeoWeedo database not found at {CORRECT_DB}")

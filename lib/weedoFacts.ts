@@ -4,6 +4,7 @@ import { ensureProductIdentitySchema } from './productIdentity.ts';
 import { normalizeProductTaxonomy } from './productTaxonomy.ts';
 
 export type WeedoFactsMatchLevel = 'exact_batch' | 'source_backed' | 'product_only' | 'community_unverified';
+export type WeedoFactsEvidenceStatus = 'verified' | 'source_backed' | 'unverified' | 'review';
 
 export type WeedoFactsLookup = {
   identifier: string;
@@ -18,6 +19,7 @@ export type WeedoFactsRecord = {
   productType: string | null;
   netContents: string | null;
   matchLevel: WeedoFactsMatchLevel;
+  evidenceStatus: WeedoFactsEvidenceStatus;
   batchNumber: string | null;
   uid: string | null;
   coaNumber: string | null;
@@ -84,6 +86,8 @@ function ensureSchema() {
       source_name TEXT,
       source_url TEXT,
       verified INTEGER NOT NULL DEFAULT 0,
+      evidence_status TEXT NOT NULL DEFAULT 'unverified',
+      evidence_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(product_id) REFERENCES cannabis_products(id) ON DELETE CASCADE
@@ -127,6 +131,13 @@ function ensureSchema() {
       parser_version TEXT,
       fetched_at TEXT,
       verified INTEGER NOT NULL DEFAULT 0,
+      evidence_status TEXT NOT NULL DEFAULT 'unverified',
+      evidence_reason TEXT,
+      document_path TEXT,
+      document_sha256 TEXT,
+      document_mime_type TEXT,
+      document_size INTEGER,
+      archived_at TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY(batch_id) REFERENCES cannabis_batches(id) ON DELETE SET NULL
     );
@@ -137,6 +148,21 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS cannabis_batches_uid_idx ON cannabis_batches(uid);
     CREATE INDEX IF NOT EXISTS cannabis_analytes_batch_group_idx ON cannabis_analytes(batch_id, group_name);
   `);
+  const batchColumns = db.prepare('PRAGMA table_info(cannabis_batches)').all() as Array<{ name?: string }>;
+  if (!batchColumns.some(column => column.name === 'evidence_status')) db.exec("ALTER TABLE cannabis_batches ADD COLUMN evidence_status TEXT NOT NULL DEFAULT 'unverified'");
+  if (!batchColumns.some(column => column.name === 'evidence_reason')) db.exec('ALTER TABLE cannabis_batches ADD COLUMN evidence_reason TEXT');
+  const sourceColumns = db.prepare('PRAGMA table_info(cannabis_coa_sources)').all() as Array<{ name?: string }>;
+  if (!sourceColumns.some(column => column.name === 'evidence_status')) db.exec("ALTER TABLE cannabis_coa_sources ADD COLUMN evidence_status TEXT NOT NULL DEFAULT 'unverified'");
+  if (!sourceColumns.some(column => column.name === 'evidence_reason')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN evidence_reason TEXT');
+  if (!sourceColumns.some(column => column.name === 'document_path')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN document_path TEXT');
+  if (!sourceColumns.some(column => column.name === 'document_sha256')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN document_sha256 TEXT');
+  if (!sourceColumns.some(column => column.name === 'document_mime_type')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN document_mime_type TEXT');
+  if (!sourceColumns.some(column => column.name === 'document_size')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN document_size INTEGER');
+  if (!sourceColumns.some(column => column.name === 'archived_at')) db.exec('ALTER TABLE cannabis_coa_sources ADD COLUMN archived_at TEXT');
+  // Preserve every legacy record. Old verified rows become source-backed until an
+  // official lab adapter independently re-verifies the laboratory trail.
+  db.prepare("UPDATE cannabis_batches SET evidence_status='source_backed', evidence_reason=COALESCE(evidence_reason,'legacy_verified') WHERE verified=1 AND evidence_status='unverified'").run();
+  db.prepare("UPDATE cannabis_coa_sources SET evidence_status='source_backed', evidence_reason=COALESCE(evidence_reason,'legacy_verified') WHERE verified=1 AND evidence_status='unverified'").run();
   ensureProductIdentitySchema(db);
   schemaReady = true;
   return db;
@@ -154,21 +180,25 @@ function getAnalytes(batchId: string) {
 
 function directVerifiedBatch(db: any, identifier: string, identifierType?: WeedoFactsLookup['identifierType']) {
   const selectByField = (field: 'uid' | 'coa_number') => db.prepare(`
-    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+    SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_batch_identifiers bi WHERE bi.batch_id=b.id AND bi.identifier_value=? COLLATE NOCASE AND bi.verified=1) THEN 1 ELSE 0 END AS identifier_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
     FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
     WHERE b.${field} = ? COLLATE NOCASE
     ORDER BY b.verified DESC, b.tested_at DESC
     LIMIT 1
-  `).get(identifier) as any;
+  `).get(identifier, identifier) as any;
 
   const uniqueBatchNumber = () => {
     const rows = db.prepare(`
-      SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents, 1 AS identifier_verified
+      SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
+             CASE WHEN EXISTS (SELECT 1 FROM cannabis_batch_identifiers bi WHERE bi.batch_id=b.id AND bi.identifier_value=? COLLATE NOCASE AND bi.verified=1) THEN 1 ELSE 0 END AS identifier_verified,
+             CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
       FROM cannabis_batches b JOIN cannabis_products p ON p.id = b.product_id
       WHERE b.batch_number = ? COLLATE NOCASE
       ORDER BY b.verified DESC, b.tested_at DESC
       LIMIT 2
-    `).all(identifier) as any[];
+    `).all(identifier, identifier) as any[];
     return rows.length === 1 ? rows[0] : null;
   };
 
@@ -187,7 +217,8 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
 
   const batchHit = db.prepare(`
     SELECT b.*, p.brand_name, p.product_name, p.product_type, p.net_contents,
-           i.verified AS identifier_verified
+           i.verified AS identifier_verified,
+           CASE WHEN EXISTS (SELECT 1 FROM cannabis_coa_sources cs WHERE cs.batch_id=b.id AND cs.verified=1 AND cs.evidence_status='verified') THEN 1 ELSE 0 END AS verified_source
     FROM cannabis_batch_identifiers i
     JOIN cannabis_batches b ON b.id = i.batch_id
     JOIN cannabis_products p ON p.id = b.product_id
@@ -201,8 +232,10 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
 
   if (directBatch) {
     const analytes = getAnalytes(directBatch.id);
-    const sourceBacked = Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified);
-    const exactLabBatch = sourceBacked && String(directBatch.source_type || '').toLowerCase() === 'lab';
+    const evidenceStatus = String(directBatch.evidence_status || '').toLowerCase() as WeedoFactsEvidenceStatus;
+    const strictVerified = evidenceStatus === 'verified' && Boolean(directBatch.identifier_verified) && Boolean(directBatch.verified_source);
+    const sourceBacked = strictVerified || evidenceStatus === 'source_backed' || (Boolean(directBatch.verified) && Boolean(directBatch.identifier_verified));
+    const exactLabBatch = strictVerified;
     return {
       productId: directBatch.product_id,
       batchId: directBatch.id,
@@ -211,6 +244,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       productType: directBatch.product_type,
       netContents: directBatch.net_contents,
       matchLevel: exactLabBatch ? 'exact_batch' : sourceBacked ? 'source_backed' : 'community_unverified',
+      evidenceStatus: exactLabBatch ? 'verified' : evidenceStatus || (sourceBacked ? 'source_backed' : 'unverified'),
       batchNumber: directBatch.batch_number,
       uid: directBatch.uid,
       coaNumber: directBatch.coa_number,
@@ -226,7 +260,7 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
       cannabinoids: analytes.filter(a => a.group_name === 'cannabinoid').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       terpenes: analytes.filter(a => a.group_name === 'terpene').map(a => ({ name: a.analyte_name, value: a.value, unit: a.unit, lod: a.lod, loq: a.loq })),
       safetyTests: analytes.filter(a => !['cannabinoid', 'terpene'].includes(a.group_name)).map(a => ({ category: a.group_name, analyte: a.analyte_name, status: a.status, value: a.value, unit: a.unit, limitValue: a.limit_value, limitUnit: a.limit_unit })),
-      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: sourceBacked },
+      source: { type: directBatch.source_type, name: directBatch.source_name, url: directBatch.source_url, verified: strictVerified },
     };
   }
 
@@ -247,11 +281,12 @@ export function lookupWeedoFacts(input: WeedoFactsLookup): WeedoFactsRecord | nu
     productType: productHit.product_type,
     netContents: productHit.net_contents,
     matchLevel: 'product_only',
+    evidenceStatus: 'unverified',
     batchNumber: null, uid: null, coaNumber: null, coaUrl: null,
     labName: null, labLicenseNumber: null, producerName: null, producerLicenseNumber: null,
     testedAt: null, collectedAt: null, receivedAt: null, overallStatus: null,
     cannabinoids: [], terpenes: [], safetyTests: [],
-    source: { type: 'product_identifier', name: null, url: null, verified: true },
+    source: { type: 'product_identifier', name: null, url: null, verified: false },
   };
 }
 

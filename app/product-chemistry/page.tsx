@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsProductLabel from '@/components/WeedoFactsProductLabel';
 import { getCultivarLinksForProduct } from '@/lib/kannapedia';
 import { getProductBrowseCatalog } from '@/lib/productBrowse';
@@ -52,8 +51,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
     const cultivarLinks = record?.productId ? getCultivarLinksForProduct(record.productId) : [];
     return (
       <main className="landing-shell">
-        <SiteHeader />
-        <div className="weedoFactsPage productChemistryPage">
+<div className="weedoFactsPage productChemistryPage">
           {!record ? (
             <section className="weedoFactsEmpty">
               <strong>Product not found.</strong>
@@ -128,8 +126,7 @@ export default async function ProductChemistryPage({ searchParams }: Props) {
 
   return (
     <main className="landing-shell">
-      <SiteHeader />
-      <div className="weedoFactsPage productChemistryPage">
+<div className="weedoFactsPage productChemistryPage">
         <section className="productBrowseHero">
           <div className="productBrowseHeroTop">
             <div>

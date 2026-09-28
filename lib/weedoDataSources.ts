@@ -10,6 +10,11 @@ export const CANNLYTICS_REGIONS = [
   ['ut','Utah',1230],['wa','Washington',202812],
 ] as const;
 
+export const CANNLYTICS_REGION_LIMITATIONS: Record<string,string> = {
+  mi: 'The current Michigan source provides product identity and chemistry but no stable source record, sample, batch, lot, package, METRC, or hash identifier. Import is blocked rather than inventing weak record identities.',
+  or: 'The current Oregon source provides lab identifiers and chemistry but no product identity GeoWeedo can safely promote. Import is blocked until a stronger source identity is available.',
+};
+
 export const WEEDO_DATA_SOURCES = [
   {
     id: 'sc-labs' as const,
@@ -218,6 +223,7 @@ function countCannlytics(db: any) {
       lastProgressAt: sync?.last_progress_at || null,
       lastError: sync?.last_error || null,
       resumable: Number(sync?.next_row_offset || 0) > 0 && !sync?.last_completed_at,
+      sourceLimitation: CANNLYTICS_REGION_LIMITATIONS[code] || null,
     };
   });
   return { records, products, primaryLabel:'products', secondaryCount:regions.filter(row => row.importedRecords > 0).length, secondaryLabel:'states imported', regions };

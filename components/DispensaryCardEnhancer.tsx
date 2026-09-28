@@ -47,7 +47,7 @@ export default function DispensaryCardEnhancer(){
    pool=[...approved,...candidates];scan();
   });
   async function enhance(card:HTMLElement){
-   if(disposed)return;const match=resolveCard(card,pool);if(!match)return;const identity=`${match.kind}:${match.id}:${match.latitude.toFixed(6)}:${match.longitude.toFixed(6)}`;if(card.dataset.enhancedIdentity===identity&&card.querySelector('.map-community-summary'))return;
+   if(disposed)return;const match=resolveCard(card,pool);if(!match)return;const identity=`${match.kind}:${match.id}:${match.latitude.toFixed(6)}:${match.longitude.toFixed(6)}`;if(card.dataset.pendingIdentity===identity||card.dataset.enhancedIdentity===identity)return;
    card.dataset.locationId=match.id;card.dataset.locationKind=match.kind;card.dataset.locationLat=String(match.latitude);card.dataset.locationLng=String(match.longitude);card.dataset.pendingIdentity=identity;
    try{
     const r=await fetch(`/api/dispensaries/${encodeURIComponent(match.id)}?kind=${match.kind}`,{cache:'no-store'});if(!r.ok)return;const data=await r.json();if(disposed||!card.isConnected||card.dataset.pendingIdentity!==identity)return;
@@ -55,7 +55,7 @@ export default function DispensaryCardEnhancer(){
     const location=data.location||{};const returnedKind=String(location.kind||'');if(returnedKind&&returnedKind!==match.kind)return;
     const returnedLat=Number(location.latitude),returnedLng=Number(location.longitude);if(Number.isFinite(returnedLat)&&Number.isFinite(returnedLng)&&distance({lat:returnedLat,lng:returnedLng},{lat:match.latitude,lng:match.longitude})>0.003)return;
     card.dataset.enhancedIdentity=identity;rewriteInfoRows(card,location);card.querySelector('.map-community-summary')?.remove();const wrap=document.createElement('div');wrap.className='map-community-summary';wrap.dataset.locationIdentity=identity;const rating=document.createElement('div');rating.className='map-community-rating';rating.textContent=data.ratings?.count?`${stars(Number(data.ratings.average||0))} ${Number(data.ratings.average||0).toFixed(1)} · ${data.ratings.count} reviews`:'☆☆☆☆☆ · No reviews yet';wrap.appendChild(rating);if(location.overview){const p=document.createElement('p');p.textContent=String(location.overview).slice(0,220);wrap.appendChild(p);}const contact=document.createElement('div');contact.className='map-community-contact';if(location.phone){const a=document.createElement('a');a.href=`tel:${String(location.phone).replace(/[^+\d]/g,'')}`;a.textContent=`☎ ${location.phone}`;contact.appendChild(a);}const website=safeWebsite(location.website);if(website){const a=document.createElement('a');a.href=website;a.target='_blank';a.rel='noreferrer';a.textContent='↗ Website';contact.appendChild(a);}if(contact.childNodes.length)wrap.appendChild(contact);const link=document.createElement('a');link.className='map-community-profile-link';link.href=`/dispensary/${encodeURIComponent(match.id)}?kind=${match.kind}`;link.textContent='View full profile · Reviews · Photos';wrap.appendChild(link);const focusButton=card.querySelector('.map-location-focus');if(focusButton)card.insertBefore(wrap,focusButton);else card.appendChild(wrap);
-   }catch{}
+   }catch{}finally{if(card.dataset.pendingIdentity===identity)delete card.dataset.pendingIdentity;}
   }
   function scan(){document.querySelectorAll<HTMLElement>('.map-location-card').forEach(card=>void enhance(card));}
   const observer=new MutationObserver(scan);observer.observe(document.body,{childList:true,subtree:true,characterData:true});scan();return()=>{disposed=true;observer.disconnect();};

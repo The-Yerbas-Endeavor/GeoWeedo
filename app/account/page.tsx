@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import SiteHeader from '@/components/SiteHeader';
 import AccountWorkspaceTabs from '@/components/AccountWorkspaceTabs';
 
 type Player={id:string;handle:string;email?:string|null;emailLoginEnabled?:boolean};
@@ -44,8 +43,7 @@ export default function AccountPage(){
   async function register(){setBusy(true);try{const r=await fetch('/api/account/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:handle,email,password,captchaChallenge,captchaAnswer,website})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Account creation failed.');setPassword('');setCaptchaAnswer('');await loadSummary();if(!(await claimPendingGame()))setStatus('GeoWeedo account created and signed in.');}catch(e){setStatus(e instanceof Error?e.message:'Account creation failed.');await loadCaptcha();}finally{setBusy(false);}}
 
   return <main className="info-shell">
-    <SiteHeader/>
-    <AccountWorkspaceTabs/>
+<AccountWorkspaceTabs/>
     <section className="account-card" style={{marginTop:28}}>
       <div className="account-status">{status}</div>
       {!summary?<>

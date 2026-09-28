@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import SiteHeader from '@/components/SiteHeader';
 import AccountWorkspaceTabs from '@/components/AccountWorkspaceTabs';
 
 type Session={
@@ -106,8 +105,7 @@ export default function AccountSecurityPage(){
   const otherSessions=useMemo(()=>data?.sessions.filter(session=>!session.current).length||0,[data]);
 
   return <>
-    <SiteHeader/>
-    <AccountWorkspaceTabs/>
+<AccountWorkspaceTabs/>
     <main className="account-security-shell">
       <header className="account-security-hero">
         <span className="eyebrow">LOGIN & SECURITY</span>

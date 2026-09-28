@@ -1,4 +1,3 @@
-import SiteHeader from '@/components/SiteHeader';
 import WeedoFactsLookup from '@/components/WeedoFactsLookup';
 import WeedoFactsNativeScanBridge from '@/components/WeedoFactsNativeScanBridge';
 import WeedoFactsReconstruction from '@/components/WeedoFactsReconstruction';
@@ -18,8 +17,7 @@ export const metadata = {
 export default function FactsPage() {
   return (
     <main className="landing-shell">
-      <SiteHeader />
-      <div className="weedoFactsPage">
+<div className="weedoFactsPage">
         <section className="weedoScannerCockpit">
           <div className="weedoScannerHero">
             <div>

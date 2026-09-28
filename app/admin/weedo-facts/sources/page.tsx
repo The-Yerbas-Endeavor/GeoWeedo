@@ -16,6 +16,29 @@ type Region = {
   lastCompletedAt: string | null;
   lastProgressAt: string | null;
   lastError: string | null;
+  sourceLimitation?: string | null;
+};
+
+type Diagnostic = {
+  state: string;
+  configuredUpstreamRecords: number;
+  sourceFile: string;
+  usedCache: boolean;
+  sampleLimit: number;
+  sampledRows: number;
+  rowsWithProductName: number;
+  rowsWithIdentifier: number;
+  rowsWithAnalytes: number;
+  eligibleRows: number;
+  missingProductName: number;
+  missingIdentifier: number;
+  missingAnalytes: number;
+  duplicateEligibleKeys: number;
+  eligiblePercent: number;
+  diagnosis: string;
+  headers: string[];
+  identifierCandidates: Array<{ field: string; normalizedField: string; nonEmpty: number; unique: number; coveragePercent: number; uniquePercent: number }>;
+  examples: Array<{ productName: string; identifier: string; analytes: number; producer?: string | null }>;
 };
 
 type Source = {
@@ -75,6 +98,37 @@ function stateClass(source: Source) {
   return '';
 }
 
+function regionHealth(region: Region, diagnostic?: Diagnostic) {
+  if (region.sourceLimitation) {
+    return { label: 'SOURCE LIMITATION', className: styles.regionSourceLimit, note: region.sourceLimitation };
+  }
+  if (diagnostic?.diagnosis === 'source-missing-product-identity') {
+    return { label: 'SOURCE LIMITATION', className: styles.regionSourceLimit, note: 'The current source does not provide a product identity GeoWeedo can safely promote. Chemistry is preserved at the source level, but this state should not create canonical products until stronger identity data is available.' };
+  }
+  if (diagnostic?.diagnosis === 'parser-healthy' && (region.nextRowOffset > 0 || (region.processedRecords > 0 && region.progressPercent < 100))) {
+    return { label: 'READY TO RESUME', className: styles.regionReady, note: `Parser validated: ${diagnostic.eligiblePercent.toFixed(1)}% of the sampled rows are eligible. Continue from the saved raw-row checkpoint.` };
+  }
+  if (region.processedRecords === 0 && region.importedRecords > 0) {
+    return { label: 'LEGACY CHECKPOINT', className: styles.regionLegacy, note: 'Tracked records exist, but this import predates the resumable processed-row checkpoint.' };
+  }
+  if (region.progressPercent >= 100 && region.importedRecords === 0 && region.upstreamRecords > 0) {
+    return { label: 'REVIEW', className: styles.regionReview, note: 'The source was traversed but no Cannlytics records are currently tracked. Review this state before treating it as complete.' };
+  }
+  if (region.processedRecords > 0 && region.progressPercent < 100 && region.importedRecords === 0) {
+    return { label: 'REVIEW', className: styles.regionReview, note: 'Checkpoint progress exists but no Cannlytics records are currently tracked.' };
+  }
+  if (region.importedRecords > region.upstreamRecords && region.upstreamRecords > 0) {
+    return { label: 'HISTORICAL > CURRENT', className: styles.regionHistorical, note: 'GeoWeedo retains tracked source history; the current upstream file is smaller than the accumulated tracked set.' };
+  }
+  if (region.progressPercent >= 100) {
+    return { label: 'COMPLETE', className: styles.regionComplete, note: 'The current source file has been traversed to the end.' };
+  }
+  if (region.nextRowOffset > 0 || region.processedRecords > 0) {
+    return { label: 'RESUMABLE', className: styles.regionPartial, note: 'The state is partially processed and can continue from its saved raw-row checkpoint.' };
+  }
+  return { label: 'NOT STARTED', className: styles.regionIdle, note: 'No resumable source-row checkpoint has been recorded yet.' };
+}
+
 export default function WeedoFactsSourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +136,8 @@ export default function WeedoFactsSourcesPage() {
   const [refreshWarning, setRefreshWarning] = useState('');
   const [busy, setBusy] = useState('');
   const [selectedRegions, setSelectedRegions] = useState<Record<string,string>>({});
+  const [diagnostics, setDiagnostics] = useState<Record<string, Diagnostic>>({});
+  const [diagnosing, setDiagnosing] = useState('');
   const hasSources = useRef(false);
 
   const load = useCallback(async () => {
@@ -90,7 +146,7 @@ export default function WeedoFactsSourcesPage() {
       if (response.status === 401) { window.location.href = '/admin/login'; return; }
       const body = await responseJson(response);
       if (!response.ok) throw new Error(body?.error || 'Unable to load data sources.');
-      const nextSources = Array.isArray(body?.sources) ? body.sources : [];
+      const nextSources = Array.isArray(body?.sources) ? body.sources.filter((source: Source) => source.id === 'cannlytics') : [];
       setSources(nextSources);
       hasSources.current = true;
       setError('');
@@ -138,6 +194,27 @@ export default function WeedoFactsSourcesPage() {
     }
   }
 
+  async function diagnoseRegion(region: string) {
+    setDiagnosing(region);
+    setError('');
+    setRefreshWarning('');
+    try {
+      const response = await fetch('/api/admin/weedo-facts/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'diagnose', sourceId: 'cannlytics', region }),
+      });
+      if (response.status === 401) { window.location.href = '/admin/login'; return; }
+      const body = await responseJson(response);
+      if (!response.ok) throw new Error(body?.error || 'Unable to diagnose Cannlytics state.');
+      if (body?.diagnostic) setDiagnostics(current => ({ ...current, [region]: body.diagnostic }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to diagnose Cannlytics state.');
+    } finally {
+      setDiagnosing('');
+    }
+  }
+
   async function stopCannlytics() {
     if (!window.confirm('Stop the Cannlytics importer? The active chunk will be terminated and the last saved checkpoint will be preserved for Resume.')) return;
     setBusy('cannlytics:stop');
@@ -168,7 +245,7 @@ export default function WeedoFactsSourcesPage() {
         <a href="/admin/weedo-facts" className={styles.back}>← GeoWeedo Facts admin</a>
         <span className={styles.eyebrow}>GEOWEEDO FACTS DATA SOURCES</span>
         <h1>Source updates</h1>
-        <p>Manage GeoWeedo's external product and laboratory data here. Cannlytics Product & Lab Data is the single supported Cannlytics importer; large states run in durable chunks, save checkpoints, and can resume safely.</p>
+        <p>Manage GeoWeedo's Cannlytics product and laboratory data here. Large state imports run in durable chunks, save checkpoints, and can resume safely.</p>
       </div>
       <button type="button" className={styles.refresh} onClick={load}>Refresh status</button>
     </header>
@@ -221,19 +298,78 @@ export default function WeedoFactsSourcesPage() {
                   </option>)}
                 </select>
               </label>
-              {selected ? <p>
-                {selected.label}: <strong>{selected.importedRecords.toLocaleString()}</strong> records currently tracked in GeoWeedo · <strong>{selected.progressPercent.toFixed(1)}%</strong> checkpoint progress
-                {selected.nextRowOffset > 0 ? <> · resume row <strong>{selected.nextRowOffset.toLocaleString()}</strong></> : null}
-                {' · '}current upstream <strong>{selected.upstreamRecords.toLocaleString()}</strong>
-                {' · '}last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.
-              </p> : <p>Choose one state at a time. GeoWeedo caches the source file, saves progress between chunks, upserts changed records, skips unchanged rows, and preserves stronger direct-lab evidence.</p>}
+              {selected ? (() => {
+                const health = regionHealth(selected, diagnostics[selected.code]);
+                return <div className={styles.regionSummary}>
+                  <div className={styles.regionSummaryHead}>
+                    <strong>{selected.label}</strong>
+                    <span className={health.className}>{health.label}</span>
+                  </div>
+                  <div className={styles.regionMetrics}>
+                    <div><span>Source rows</span><strong>{selected.upstreamRecords.toLocaleString()}</strong></div>
+                    <div><span>Processed</span><strong>{selected.processedRecords.toLocaleString()}</strong></div>
+                    <div><span>Tracked</span><strong>{selected.importedRecords.toLocaleString()}</strong></div>
+                    <div><span>Progress</span><strong>{selected.progressPercent.toFixed(1)}%</strong></div>
+                  </div>
+                  <p>{health.note}{selected.nextRowOffset > 0 ? <> Resume at raw row <strong>{selected.nextRowOffset.toLocaleString()}</strong>.</> : null}</p>
+                  <p>Last progress {formatDate(selected.lastProgressAt)} · last completed {formatDate(selected.lastCompletedAt)}.</p>
+                  <button
+                    type="button"
+                    className={styles.diagnose}
+                    disabled={sourceBusy || diagnosing === selected.code}
+                    onClick={() => diagnoseRegion(selected.code)}
+                  >{diagnosing === selected.code ? 'Diagnosing source…' : 'Diagnose source parser'}</button>
+                  {diagnostics[selected.code] ? (() => {
+                    const diagnostic = diagnostics[selected.code];
+                    return <div className={styles.diagnostic}>
+                      <div className={styles.diagnosticHead}>
+                        <strong>{
+                          diagnostic.diagnosis === 'parser-healthy'
+                            ? 'Parser sample looks healthy'
+                            : diagnostic.diagnosis === 'source-missing-product-identity'
+                              ? 'Source does not provide product identity'
+                              : diagnostic.diagnosis === 'product-identity-unresolved'
+                                ? 'Product identity field unresolved'
+                                : diagnostic.diagnosis === 'source-missing-record-identifier'
+                                  ? 'Source does not provide a stable record identifier'
+                                  : 'No eligible rows found in sample'
+                        }</strong>
+                        <span>{diagnostic.sampledRows.toLocaleString()} rows sampled</span>
+                      </div>
+                      <div className={styles.diagnosticMetrics}>
+                        <div><span>Product name</span><strong>{diagnostic.rowsWithProductName.toLocaleString()}</strong></div>
+                        <div><span>Identifier</span><strong>{diagnostic.rowsWithIdentifier.toLocaleString()}</strong></div>
+                        <div><span>Analytes</span><strong>{diagnostic.rowsWithAnalytes.toLocaleString()}</strong></div>
+                        <div><span>Eligible</span><strong>{diagnostic.eligibleRows.toLocaleString()} · {diagnostic.eligiblePercent.toFixed(1)}%</strong></div>
+                      </div>
+                      {diagnostic.diagnosis === 'source-missing-product-identity' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture product names from product type, sample IDs, or other weak fields. This state needs a stronger product-identity source before its chemistry can create canonical products.</p> : null}
+                      {diagnostic.diagnosis === 'source-missing-record-identifier' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture batch/test identities from dates, product names, or other weak combinations. This state needs a stable source record, sample, batch, lot, package, METRC, or hash identifier before importing canonical batch evidence.</p> : null}
+                      <p>Missing product name: <strong>{diagnostic.missingProductName.toLocaleString()}</strong> · missing identifier: <strong>{diagnostic.missingIdentifier.toLocaleString()}</strong> · missing analytes: <strong>{diagnostic.missingAnalytes.toLocaleString()}</strong> · duplicate eligible keys: <strong>{diagnostic.duplicateEligibleKeys.toLocaleString()}</strong>.</p>
+                      <p>Source file: <strong>{diagnostic.sourceFile}</strong>{diagnostic.usedCache ? ' · cached copy' : ' · refreshed copy'}.</p>
+                      {diagnostic.identifierCandidates?.length ? <details open={diagnostic.diagnosis !== 'parser-healthy'}><summary>Candidate source identifier fields</summary><div className={styles.candidateFields}>{diagnostic.identifierCandidates.map(candidate=><div key={candidate.normalizedField}><strong>{candidate.field}</strong><span>{candidate.nonEmpty.toLocaleString()} populated · {candidate.coveragePercent.toFixed(1)}% coverage · {candidate.unique.toLocaleString()} unique · {candidate.uniquePercent.toFixed(1)}% unique</span></div>)}</div></details> : null}
+                      <details><summary>Show source columns</summary><div className={styles.sourceColumns}>{diagnostic.headers.map(header=><code key={header}>{header}</code>)}</div></details>
+                      {diagnostic.examples.length ? <details><summary>Show eligible examples</summary>{diagnostic.examples.map((example,index)=><div className={styles.diagnosticExample} key={example.identifier + '-' + index}><strong>{example.productName}</strong><span>{example.producer || 'Producer not reported'} · {example.identifier} · {example.analytes} analytes</span></div>)}</details> : null}
+                    </div>;
+                  })() : null}
+                </div>;
+              })() : <p>Choose one state at a time. <strong>Processed</strong> is how many raw source rows GeoWeedo has traversed; <strong>tracked</strong> is how many eligible Cannlytics source records are currently stored. Those numbers are not expected to match.</p>}
             </div>
             <details className={styles.regionStatus}>
               <summary>View all Cannlytics state checkpoints</summary>
               <div className={styles.regionTable}>
-                {source.regions.map(region => <div key={region.code}>
-                  <strong>{region.code.toUpperCase()}</strong><span>{region.label}</span><span>{region.importedRecords.toLocaleString()} tracked / {region.upstreamRecords.toLocaleString()} upstream · {region.progressPercent.toFixed(1)}%</span><span>{region.lastProgressAt ? formatDate(region.lastProgressAt) : formatDate(region.lastCompletedAt)}</span>
-                </div>)}
+                <div className={styles.regionTableHead}><span>State</span><span>Source rows</span><span>Processed</span><span>Tracked</span><span>Progress</span><span>Status</span><span>Last activity</span></div>
+                {source.regions.map(region => {
+                  const health = regionHealth(region, diagnostics[region.code]);
+                  return <div key={region.code}>
+                    <span><strong>{region.code.toUpperCase()}</strong><small>{region.label}</small></span>
+                    <span>{region.upstreamRecords.toLocaleString()}</span>
+                    <span>{region.processedRecords.toLocaleString()}</span>
+                    <span>{region.importedRecords.toLocaleString()}</span>
+                    <span>{region.progressPercent.toFixed(1)}%</span>
+                    <span className={health.className}>{health.label}</span>
+                    <span>{region.lastProgressAt ? formatDate(region.lastProgressAt) : formatDate(region.lastCompletedAt)}</span>
+                  </div>;
+                })}
               </div>
             </details>
           </> : null}
@@ -242,10 +378,20 @@ export default function WeedoFactsSourcesPage() {
             <button
               type="button"
               className={styles.update}
-              disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion)}
+              disabled={sourceBusy || Boolean(source.regions?.length && !selectedRegion) || Boolean(selected?.sourceLimitation) || diagnostics[selectedRegion]?.diagnosis === 'source-missing-product-identity'}
               onClick={() => updateSource(source.id, selectedRegion || undefined)}
             >
-              {sourceBusy ? 'Updating…' : source.regions?.length && selected ? `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}` : `Update ${source.label}`}
+              {sourceBusy
+                ? 'Updating…'
+                : source.regions?.length && selected
+                  ? diagnostics[selected.code]?.diagnosis === 'parser-healthy' && selected.nextRowOffset > 0
+                    ? `Resume ${selected.label} from row ${selected.nextRowOffset.toLocaleString()}`
+                    : selected.sourceLimitation || diagnostics[selected.code]?.diagnosis === 'source-missing-product-identity' || diagnostics[selected.code]?.diagnosis === 'source-missing-record-identifier'
+                      ? diagnostics[selected.code]?.diagnosis === 'source-missing-record-identifier' || selected.code === 'mi'
+                        ? `${selected.label} source needs stable record identifier`
+                        : `${selected.label} source needs product identity`
+                      : `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}`
+                  : `Update ${source.label}`}
             </button>
             {source.id === 'cannlytics' && source.state === 'running' ? <button
               type="button"
@@ -262,8 +408,8 @@ export default function WeedoFactsSourcesPage() {
     </section>
 
     <section className={styles.evidence}>
-      <h2>Evidence separation</h2>
-      <p><strong>SC Labs</strong> feeds direct public laboratory batch chemistry. <strong>Cannlytics</strong> feeds normalized public laboratory and regulatory results under CC BY 4.0; GeoWeedo preserves the upstream source and does not overwrite stronger direct-lab evidence. <strong>Kannapedia</strong> remains a separate cultivar-genetics source, and its registrant-reported chemistry is never promoted to verified lab-batch evidence.</p>
+      <h2>Cannlytics evidence</h2>
+      <p>Cannlytics feeds normalized public laboratory and regulatory results under CC BY 4.0. GeoWeedo preserves source provenance and does not overwrite stronger direct-lab evidence.</p>
     </section>
   </main>;
 }
