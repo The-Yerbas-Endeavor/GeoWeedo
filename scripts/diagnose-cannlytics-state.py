@@ -67,9 +67,9 @@ def main():
 
         row = legacy.normalized_row(raw)
         product_name = legacy.source_product_name(row, state)
-        sample_id = legacy.pick(row, "sample_id", "lab_id")
+        sample_id = legacy.pick(row, "sample_id", "lab_id", "metrc_lab_id")
         batch_number = legacy.pick(row, "batch_number", "batch", "lot_number")
-        record_id = legacy.pick(row, "id", "sample_hash", "results_hash", "source_id")
+        record_id = legacy.pick(row, "id", "sample_hash", "results_hash", "source_id", "metrc_source_id", "metrc_lab_id")
         analytes = legacy.analytes_from_row(row)
 
         if product_name:
