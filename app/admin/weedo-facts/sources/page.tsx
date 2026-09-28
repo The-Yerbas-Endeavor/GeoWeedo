@@ -330,7 +330,9 @@ export default function WeedoFactsSourcesPage() {
                               ? 'Source does not provide product identity'
                               : diagnostic.diagnosis === 'product-identity-unresolved'
                                 ? 'Product identity field unresolved'
-                                : 'No eligible rows found in sample'
+                                : diagnostic.diagnosis === 'source-missing-record-identifier'
+                                  ? 'Source does not provide a stable record identifier'
+                                  : 'No eligible rows found in sample'
                         }</strong>
                         <span>{diagnostic.sampledRows.toLocaleString()} rows sampled</span>
                       </div>
@@ -341,6 +343,7 @@ export default function WeedoFactsSourcesPage() {
                         <div><span>Eligible</span><strong>{diagnostic.eligibleRows.toLocaleString()} · {diagnostic.eligiblePercent.toFixed(1)}%</strong></div>
                       </div>
                       {diagnostic.diagnosis === 'source-missing-product-identity' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture product names from product type, sample IDs, or other weak fields. This state needs a stronger product-identity source before its chemistry can create canonical products.</p> : null}
+                      {diagnostic.diagnosis === 'source-missing-record-identifier' ? <p><strong>Protected:</strong> GeoWeedo will not manufacture batch/test identities from dates, product names, or other weak combinations. This state needs a stable source record, sample, batch, lot, package, METRC, or hash identifier before importing canonical batch evidence.</p> : null}
                       <p>Missing product name: <strong>{diagnostic.missingProductName.toLocaleString()}</strong> · missing identifier: <strong>{diagnostic.missingIdentifier.toLocaleString()}</strong> · missing analytes: <strong>{diagnostic.missingAnalytes.toLocaleString()}</strong> · duplicate eligible keys: <strong>{diagnostic.duplicateEligibleKeys.toLocaleString()}</strong>.</p>
                       <p>Source file: <strong>{diagnostic.sourceFile}</strong>{diagnostic.usedCache ? ' · cached copy' : ' · refreshed copy'}.</p>
                       {diagnostic.identifierCandidates?.length ? <details open={diagnostic.diagnosis !== 'parser-healthy'}><summary>Candidate source identifier fields</summary><div className={styles.candidateFields}>{diagnostic.identifierCandidates.map(candidate=><div key={candidate.normalizedField}><strong>{candidate.field}</strong><span>{candidate.nonEmpty.toLocaleString()} populated · {candidate.coveragePercent.toFixed(1)}% coverage · {candidate.unique.toLocaleString()} unique · {candidate.uniquePercent.toFixed(1)}% unique</span></div>)}</div></details> : null}
