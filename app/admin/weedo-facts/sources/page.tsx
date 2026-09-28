@@ -386,8 +386,10 @@ export default function WeedoFactsSourcesPage() {
                 : source.regions?.length && selected
                   ? diagnostics[selected.code]?.diagnosis === 'parser-healthy' && selected.nextRowOffset > 0
                     ? `Resume ${selected.label} from row ${selected.nextRowOffset.toLocaleString()}`
-                    : selected.sourceLimitation || diagnostics[selected.code]?.diagnosis === 'source-missing-product-identity'
-                      ? `${selected.label} source needs product identity`
+                    : selected.sourceLimitation || diagnostics[selected.code]?.diagnosis === 'source-missing-product-identity' || diagnostics[selected.code]?.diagnosis === 'source-missing-record-identifier'
+                      ? diagnostics[selected.code]?.diagnosis === 'source-missing-record-identifier' || selected.code === 'mi'
+                        ? `${selected.label} source needs stable record identifier`
+                        : `${selected.label} source needs product identity`
                       : `${selectedResumable ? 'Resume' : 'Update'} ${selected.label}`
                   : `Update ${source.label}`}
             </button>
