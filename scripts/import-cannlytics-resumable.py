@@ -162,7 +162,7 @@ def main():
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
     args = parser.parse_args()
     state = args.state.lower()
-    chunk_size = max(1000, min(100000, args.chunk_size))
+    chunk_size = max(250, min(100000, args.chunk_size))
 
     if not CORRECT_DB.exists():
         raise SystemExit(f"GeoWeedo database not found at {CORRECT_DB}")
