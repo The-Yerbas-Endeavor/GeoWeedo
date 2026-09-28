@@ -54,16 +54,30 @@ def main():
         "missingAnalytes": 0,
         "duplicateEligibleKeys": 0,
         "headers": [],
+        "identifierCandidates": [],
         "examples": [],
     }
 
+    identifier_keywords = ("id", "sample", "batch", "lot", "package", "tag", "metrc", "hash", "test")
+    candidate_stats = {}
     seen = set()
     for raw in legacy.iter_rows(source_file):
         if result["sampledRows"] >= sample_limit:
             break
         result["sampledRows"] += 1
         if not result["headers"]:
-            result["headers"] = [str(key) for key in raw.keys()][:80]
+            result["headers"] = [str(key) for key in raw.keys()][:120]
+            for key in raw.keys():
+                normalized_key = legacy.key_name(key)
+                if any(word in normalized_key for word in identifier_keywords):
+                    candidate_stats[normalized_key] = {"field": str(key), "nonEmpty": 0, "values": set()}
+
+        for normalized_key, stats in candidate_stats.items():
+            value = legacy.clean(raw.get(stats["field"]))
+            if value is not None:
+                stats["nonEmpty"] += 1
+                if len(stats["values"]) < 10000:
+                    stats["values"].add(value)
 
         row = legacy.normalized_row(raw)
         product_name = legacy.source_product_name(row, state)
@@ -113,6 +127,25 @@ def main():
     sampled = result["sampledRows"]
     eligible = result["eligibleRows"]
     result["eligiblePercent"] = round((eligible / sampled) * 100, 1) if sampled else 0
+    candidates = []
+    for normalized_key, stats in candidate_stats.items():
+        non_empty = stats["nonEmpty"]
+        unique = len(stats["values"])
+        if non_empty <= 0:
+            continue
+        candidates.append({
+            "field": stats["field"],
+            "normalizedField": normalized_key,
+            "nonEmpty": non_empty,
+            "unique": unique,
+            "coveragePercent": round((non_empty / sampled) * 100, 1) if sampled else 0,
+            "uniquePercent": round((unique / non_empty) * 100, 1) if non_empty else 0,
+        })
+    result["identifierCandidates"] = sorted(
+        candidates,
+        key=lambda item: (item["uniquePercent"], item["coveragePercent"], item["unique"]),
+        reverse=True,
+    )[:20]
     if eligible > 0:
         result["diagnosis"] = "parser-healthy"
     elif result["rowsWithProductName"] == 0 and state == "or":
