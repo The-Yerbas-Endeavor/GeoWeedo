@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/adminAuth';
-import { beginSourceUpdate, CANNLYTICS_REGIONS, failSourceUpdate, getSourceSummaries, sourceCanStart, type WeedoDataSourceId } from '@/lib/weedoDataSources';
+import { beginSourceUpdate, CANNLYTICS_REGIONS, CANNLYTICS_REGION_LIMITATIONS, failSourceUpdate, getSourceSummaries, sourceCanStart, type WeedoDataSourceId } from '@/lib/weedoDataSources';
 import { signalSourceWorkerStop } from '@/lib/weedoSourceWorker';
 
 export const runtime = 'nodejs';
@@ -108,6 +108,9 @@ export async function POST(request: NextRequest) {
   }
   if (sourceId === 'cannlytics' && !CANNLYTICS_REGIONS.some(([code]) => code === region)) {
     return NextResponse.json({ error: 'Choose a Cannlytics state before starting the update.' }, { status: 400 });
+  }
+  if (sourceId === 'cannlytics' && CANNLYTICS_REGION_LIMITATIONS[region]) {
+    return NextResponse.json({ error: CANNLYTICS_REGION_LIMITATIONS[region] }, { status: 409 });
   }
 
   try {
