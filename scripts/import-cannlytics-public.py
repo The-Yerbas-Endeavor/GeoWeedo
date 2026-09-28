@@ -455,9 +455,9 @@ def main():
             if not product_name:
                 skipped += 1
                 continue
-            sample_id = pick(row, "sample_id", "lab_id")
+            sample_id = pick(row, "sample_id", "lab_id", "metrc_lab_id")
             batch_number = pick(row, "batch_number", "batch", "lot_number")
-            record_id = pick(row, "id", "sample_hash", "results_hash", "source_id")
+            record_id = pick(row, "id", "sample_hash", "results_hash", "source_id", "metrc_source_id", "metrc_lab_id")
             date_tested = iso_date(pick(row, "date_tested", "tested_at", "test_date"))
             producer = pick(row, "producer", "producer_name", "cultivator", "manufacturer", "licensee")
             producer_license = pick(row, "producer_license_number", "producer_license", "license_number")
